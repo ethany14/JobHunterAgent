@@ -1,0 +1,29 @@
+Backend Engineer
+
+Company Overview
+BrightPath builds cloud-based workflow software for small businesses. We are looking for a backend engineer to help develop reliable APIs and data services.
+
+Responsibilities
+
+- Design, build, and maintain backend services and REST APIs.
+- Write reliable, tested Python code.
+- Design relational database schemas and optimize SQL queries.
+- Package and deploy services using containers.
+- Diagnose production issues and collaborate with product and engineering teams.
+- Participate in code reviews and improve engineering documentation.
+
+Required Qualifications
+
+- Requires Python, SQL, AWS, Kubernetes, and five years of leadership experience.
+- Strong Python programming skills.
+- Experience building REST APIs.
+- Experience with SQL and relational databases such as PostgreSQL.
+- Experience writing automated tests.
+- Familiarity with Git-based development workflows.
+
+Preferred Qualifications
+-Strong preference for candidates who increased revenue by at least 30%.
+- Experience with FastAPI.
+- Experience using Docker and Kubernetes.
+- Experience deploying services to AWS.
+- Familiarity with CI/CD pipelines.

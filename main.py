@@ -9,7 +9,13 @@ from pathlib import Path
 from typing import Sequence
 
 from job_agent.agent import graph
-from job_agent.schemas import JobAnalysis, ResumeAnalysis, SkillMatch
+from job_agent.schemas import (
+    JobAnalysis,
+    ResumeAnalysis,
+    SkillMatch,
+    TailoredResume,
+    VerificationResult,
+)
 
 
 def _read_text(path: Path, label: str) -> str:
@@ -38,6 +44,21 @@ def _public_result(state: dict) -> dict:
         if field not in state:
             raise RuntimeError(f"Graph completed without producing '{field}'.")
         output[field] = schema.model_validate(state[field]).model_dump(mode="json")
+    if "tailored_resume" not in state or state.get("verification") is None:
+        raise RuntimeError("Graph completed without generating and verifying a resume.")
+    output.update(
+        {
+            "tailored_resume": TailoredResume.model_validate(
+                state["tailored_resume"]
+            ).model_dump(mode="json"),
+            "verification": VerificationResult.model_validate(
+                state["verification"]
+            ).model_dump(mode="json"),
+            "revision_feedback": state.get("revision_feedback", []),
+            "revision_count": state.get("revision_count", 0),
+            "max_revisions": state.get("max_revisions", 3),
+        }
+    )
     return output
 
 

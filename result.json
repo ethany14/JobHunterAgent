@@ -1,0 +1,458 @@
+{
+  "resume_analysis": {
+    "summary": "Backend software developer with 3 years of experience building and maintaining web APIs and data-processing services. Experienced with Python, FastAPI, PostgreSQL, automated testing, Docker, and Git-based development workflows.",
+    "skills": [
+      "Python",
+      "FastAPI",
+      "PostgreSQL",
+      "Automated Testing",
+      "Docker",
+      "Git",
+      "REST APIs",
+      "SQL",
+      "pytest",
+      "Tableau"
+    ],
+    "evidence": [
+      {
+        "evidence_id": "EXP-4a0d38ba",
+        "source_section": "Professional Summary",
+        "exact_text": "Backend software developer with 3 years of experience building and maintaining web APIs and data-processing services. Experienced with Python, FastAPI, PostgreSQL, automated testing, Docker, and Git-based development workflows."
+      },
+      {
+        "evidence_id": "EXP-c02353c8",
+        "source_section": "Experience",
+        "exact_text": "Built REST APIs in Python and FastAPI for internal reporting applications."
+      },
+      {
+        "evidence_id": "EXP-563c83d8",
+        "source_section": "Experience",
+        "exact_text": "Designed PostgreSQL tables and wrote SQL queries used in scheduled data-processing jobs."
+      },
+      {
+        "evidence_id": "EXP-bc689c43",
+        "source_section": "Experience",
+        "exact_text": "Added pytest test coverage for API endpoints and data validation logic."
+      },
+      {
+        "evidence_id": "EXP-79816a77",
+        "source_section": "Experience",
+        "exact_text": "Containerized two internal services with Docker and documented their local setup process."
+      },
+      {
+        "evidence_id": "EXP-d658ab7b",
+        "source_section": "Experience",
+        "exact_text": "Investigated production defects and worked with product managers to clarify requirements."
+      },
+      {
+        "evidence_id": "EXP-dbfeb14b",
+        "source_section": "Experience",
+        "exact_text": "Maintained Python scripts that imported customer data from CSV files."
+      },
+      {
+        "evidence_id": "EXP-b6bd0d0b",
+        "source_section": "Experience",
+        "exact_text": "Added input validation and logging to existing data workflows."
+      },
+      {
+        "evidence_id": "EXP-c6f34afe",
+        "source_section": "Experience",
+        "exact_text": "Reviewed code through GitHub pull requests and participated in weekly sprint planning."
+      },
+      {
+        "evidence_id": "EXP-0ab75d16",
+        "source_section": "Skills",
+        "exact_text": "Experience with Python, SQL, and Tableau."
+      },
+      {
+        "evidence_id": "EXP-d70d9cce",
+        "source_section": "Education",
+        "exact_text": "Bachelor of Science in Computer Science, Lakeside University, 2022"
+      }
+    ],
+    "education": [
+      "Bachelor of Science in Computer Science, Lakeside University, 2022"
+    ]
+  },
+  "job_analysis": {
+    "title": "Backend Engineer",
+    "summary": "BrightPath builds cloud-based workflow software for small businesses. We are looking for a backend engineer to help develop reliable APIs and data services.",
+    "requirements": [
+      {
+        "requirement_id": "REQ-001",
+        "canonical_name": "python",
+        "original_text": "Requires Python",
+        "level": "required"
+      },
+      {
+        "requirement_id": "REQ-002",
+        "canonical_name": "sql",
+        "original_text": "SQL",
+        "level": "required"
+      },
+      {
+        "requirement_id": "REQ-003",
+        "canonical_name": "aws",
+        "original_text": "AWS",
+        "level": "required"
+      },
+      {
+        "requirement_id": "REQ-004",
+        "canonical_name": "kubernetes",
+        "original_text": "Kubernetes",
+        "level": "required"
+      },
+      {
+        "requirement_id": "REQ-005",
+        "canonical_name": "leadership experience",
+        "original_text": "five years of leadership experience",
+        "level": "required"
+      },
+      {
+        "requirement_id": "REQ-006",
+        "canonical_name": "rest apis",
+        "original_text": "Experience building REST APIs",
+        "level": "required"
+      },
+      {
+        "requirement_id": "REQ-007",
+        "canonical_name": "relational databases",
+        "original_text": "relational databases",
+        "level": "required"
+      },
+      {
+        "requirement_id": "REQ-008",
+        "canonical_name": "postgresql",
+        "original_text": "PostgreSQL",
+        "level": "required"
+      },
+      {
+        "requirement_id": "REQ-009",
+        "canonical_name": "automated testing",
+        "original_text": "Experience writing automated tests",
+        "level": "required"
+      },
+      {
+        "requirement_id": "REQ-010",
+        "canonical_name": "git",
+        "original_text": "Familiarity with Git-based development workflows",
+        "level": "required"
+      },
+      {
+        "requirement_id": "REQ-011",
+        "canonical_name": "revenue growth",
+        "original_text": "Strong preference for candidates who increased revenue by at least 30%",
+        "level": "preferred"
+      },
+      {
+        "requirement_id": "REQ-012",
+        "canonical_name": "fastapi",
+        "original_text": "Experience with FastAPI",
+        "level": "preferred"
+      },
+      {
+        "requirement_id": "REQ-013",
+        "canonical_name": "docker",
+        "original_text": "Experience using Docker",
+        "level": "preferred"
+      },
+      {
+        "requirement_id": "REQ-014",
+        "canonical_name": "deploying services to aws",
+        "original_text": "Experience deploying services to AWS",
+        "level": "preferred"
+      },
+      {
+        "requirement_id": "REQ-015",
+        "canonical_name": "ci/cd",
+        "original_text": "Familiarity with CI/CD pipelines",
+        "level": "preferred"
+      }
+    ],
+    "responsibilities": [
+      "Design, build, and maintain backend services and REST APIs.",
+      "Write reliable, tested Python code.",
+      "Design relational database schemas and optimize SQL queries.",
+      "Package and deploy services using containers.",
+      "Diagnose production issues and collaborate with product and engineering teams.",
+      "Participate in code reviews and improve engineering documentation."
+    ]
+  },
+  "skill_match": {
+    "matches": [
+      {
+        "requirement_id": "REQ-001",
+        "job_skill": "python",
+        "requirement_level": "required",
+        "match_status": "matched",
+        "resume_evidence": [
+          "Backend software developer with 3 years of experience building and maintaining web APIs and data-processing services. Experienced with Python, FastAPI, PostgreSQL, automated testing, Docker, and Git-based development workflows.",
+          "Built REST APIs in Python and FastAPI for internal reporting applications.",
+          "Maintained Python scripts that imported customer data from CSV files.",
+          "Experience with Python, SQL, and Tableau."
+        ],
+        "confidence": 1.0
+      },
+      {
+        "requirement_id": "REQ-002",
+        "job_skill": "sql",
+        "requirement_level": "required",
+        "match_status": "matched",
+        "resume_evidence": [
+          "Designed PostgreSQL tables and wrote SQL queries used in scheduled data-processing jobs.",
+          "Experience with Python, SQL, and Tableau."
+        ],
+        "confidence": 1.0
+      },
+      {
+        "requirement_id": "REQ-003",
+        "job_skill": "aws",
+        "requirement_level": "required",
+        "match_status": "missing",
+        "resume_evidence": [],
+        "confidence": 0.95
+      },
+      {
+        "requirement_id": "REQ-004",
+        "job_skill": "kubernetes",
+        "requirement_level": "required",
+        "match_status": "missing",
+        "resume_evidence": [],
+        "confidence": 0.95
+      },
+      {
+        "requirement_id": "REQ-005",
+        "job_skill": "leadership experience",
+        "requirement_level": "required",
+        "match_status": "missing",
+        "resume_evidence": [],
+        "confidence": 0.9
+      },
+      {
+        "requirement_id": "REQ-006",
+        "job_skill": "rest apis",
+        "requirement_level": "required",
+        "match_status": "matched",
+        "resume_evidence": [
+          "Backend software developer with 3 years of experience building and maintaining web APIs and data-processing services. Experienced with Python, FastAPI, PostgreSQL, automated testing, Docker, and Git-based development workflows.",
+          "Built REST APIs in Python and FastAPI for internal reporting applications."
+        ],
+        "confidence": 1.0
+      },
+      {
+        "requirement_id": "REQ-007",
+        "job_skill": "relational databases",
+        "requirement_level": "required",
+        "match_status": "matched",
+        "resume_evidence": [
+          "Backend software developer with 3 years of experience building and maintaining web APIs and data-processing services. Experienced with Python, FastAPI, PostgreSQL, automated testing, Docker, and Git-based development workflows.",
+          "Designed PostgreSQL tables and wrote SQL queries used in scheduled data-processing jobs."
+        ],
+        "confidence": 0.95
+      },
+      {
+        "requirement_id": "REQ-008",
+        "job_skill": "postgresql",
+        "requirement_level": "required",
+        "match_status": "matched",
+        "resume_evidence": [
+          "Backend software developer with 3 years of experience building and maintaining web APIs and data-processing services. Experienced with Python, FastAPI, PostgreSQL, automated testing, Docker, and Git-based development workflows.",
+          "Designed PostgreSQL tables and wrote SQL queries used in scheduled data-processing jobs."
+        ],
+        "confidence": 1.0
+      },
+      {
+        "requirement_id": "REQ-009",
+        "job_skill": "automated testing",
+        "requirement_level": "required",
+        "match_status": "matched",
+        "resume_evidence": [
+          "Backend software developer with 3 years of experience building and maintaining web APIs and data-processing services. Experienced with Python, FastAPI, PostgreSQL, automated testing, Docker, and Git-based development workflows.",
+          "Added pytest test coverage for API endpoints and data validation logic."
+        ],
+        "confidence": 1.0
+      },
+      {
+        "requirement_id": "REQ-010",
+        "job_skill": "git",
+        "requirement_level": "required",
+        "match_status": "matched",
+        "resume_evidence": [
+          "Reviewed code through GitHub pull requests and participated in weekly sprint planning."
+        ],
+        "confidence": 1.0
+      },
+      {
+        "requirement_id": "REQ-011",
+        "job_skill": "revenue growth",
+        "requirement_level": "preferred",
+        "match_status": "missing",
+        "resume_evidence": [],
+        "confidence": 0.95
+      },
+      {
+        "requirement_id": "REQ-012",
+        "job_skill": "fastapi",
+        "requirement_level": "preferred",
+        "match_status": "matched",
+        "resume_evidence": [
+          "Backend software developer with 3 years of experience building and maintaining web APIs and data-processing services. Experienced with Python, FastAPI, PostgreSQL, automated testing, Docker, and Git-based development workflows.",
+          "Built REST APIs in Python and FastAPI for internal reporting applications."
+        ],
+        "confidence": 1.0
+      },
+      {
+        "requirement_id": "REQ-013",
+        "job_skill": "docker",
+        "requirement_level": "preferred",
+        "match_status": "matched",
+        "resume_evidence": [
+          "Backend software developer with 3 years of experience building and maintaining web APIs and data-processing services. Experienced with Python, FastAPI, PostgreSQL, automated testing, Docker, and Git-based development workflows.",
+          "Containerized two internal services with Docker and documented their local setup process."
+        ],
+        "confidence": 1.0
+      },
+      {
+        "requirement_id": "REQ-014",
+        "job_skill": "deploying services to aws",
+        "requirement_level": "preferred",
+        "match_status": "missing",
+        "resume_evidence": [],
+        "confidence": 0.95
+      },
+      {
+        "requirement_id": "REQ-015",
+        "job_skill": "ci/cd",
+        "requirement_level": "preferred",
+        "match_status": "missing",
+        "resume_evidence": [],
+        "confidence": 0.95
+      }
+    ],
+    "explanation": "The candidate has strong alignment with core backend development skills including Python, FastAPI, PostgreSQL, SQL, REST APIs, automated testing, and Docker. However, the resume lacks evidence for cloud infrastructure (AWS), container orchestration (Kubernetes), CI/CD workflows, and formal leadership experience.",
+    "recommendations": [
+      "Highlight any hands-on experience with AWS cloud deployments or cloud-native infrastructure if applicable.",
+      "Add details regarding experience with CI/CD automation tools or deployment pipelines.",
+      "Mention any background with Kubernetes or container orchestration platforms if experienced.",
+      "Include examples of leadership, mentoring, or technical project ownership to address the leadership requirement."
+    ],
+    "missing_required_skills": [
+      "aws",
+      "kubernetes",
+      "leadership experience"
+    ],
+    "missing_preferred_skills": [
+      "revenue growth",
+      "deploying services to aws",
+      "ci/cd"
+    ],
+    "overall_score": 64.0
+  },
+  "tailored_resume": {
+    "professional_summary": [
+      {
+        "text": "Backend software developer with 3 years of experience building and maintaining web APIs and data-processing services, with expertise in Python, FastAPI, PostgreSQL, automated testing, Docker, and Git-based workflows.",
+        "evidence_ids": [
+          "EXP-4a0d38ba"
+        ]
+      }
+    ],
+    "experience_bullets": [
+      {
+        "text": "Built REST APIs in Python and FastAPI for internal reporting applications.",
+        "evidence_ids": [
+          "EXP-c02353c8"
+        ]
+      },
+      {
+        "text": "Designed PostgreSQL tables and wrote SQL queries used in scheduled data-processing jobs.",
+        "evidence_ids": [
+          "EXP-563c83d8"
+        ]
+      },
+      {
+        "text": "Added pytest test coverage for API endpoints and data validation logic.",
+        "evidence_ids": [
+          "EXP-bc689c43"
+        ]
+      },
+      {
+        "text": "Containerized two internal services with Docker and documented their local setup process.",
+        "evidence_ids": [
+          "EXP-79816a77"
+        ]
+      },
+      {
+        "text": "Investigated production defects and worked with product managers to clarify requirements.",
+        "evidence_ids": [
+          "EXP-d658ab7b"
+        ]
+      },
+      {
+        "text": "Maintained Python scripts importing customer data from CSV files, incorporating input validation and logging into data workflows.",
+        "evidence_ids": [
+          "EXP-dbfeb14b",
+          "EXP-b6bd0d0b"
+        ]
+      },
+      {
+        "text": "Reviewed code via GitHub pull requests and participated in weekly sprint planning.",
+        "evidence_ids": [
+          "EXP-c6f34afe"
+        ]
+      }
+    ],
+    "highlighted_skills": [
+      {
+        "text": "Python",
+        "evidence_ids": [
+          "EXP-4a0d38ba",
+          "EXP-0ab75d16"
+        ]
+      },
+      {
+        "text": "FastAPI",
+        "evidence_ids": [
+          "EXP-4a0d38ba",
+          "EXP-c02353c8"
+        ]
+      },
+      {
+        "text": "PostgreSQL",
+        "evidence_ids": [
+          "EXP-4a0d38ba",
+          "EXP-563c83d8"
+        ]
+      },
+      {
+        "text": "SQL",
+        "evidence_ids": [
+          "EXP-563c83d8",
+          "EXP-0ab75d16"
+        ]
+      },
+      {
+        "text": "Docker",
+        "evidence_ids": [
+          "EXP-4a0d38ba",
+          "EXP-79816a77"
+        ]
+      },
+      {
+        "text": "Automated Testing & pytest",
+        "evidence_ids": [
+          "EXP-4a0d38ba",
+          "EXP-bc689c43"
+        ]
+      }
+    ]
+  },
+  "verification": {
+    "passed": true,
+    "unsupported_claims": [],
+    "revision_feedback": []
+  },
+  "revision_feedback": [],
+  "revision_count": 1,
+  "max_revisions": 3
+}

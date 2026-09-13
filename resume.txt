@@ -1,0 +1,29 @@
+Jordan Lee
+Backend Software Developer
+
+Professional Summary
+Backend software developer with 3 years of experience building and maintaining web APIs and data-processing services. Experienced with Python, FastAPI, PostgreSQL, automated testing, Docker, and Git-based development workflows.
+
+Experience
+Software Developer, Northstar Analytics
+June 2023 - Present
+
+- Built REST APIs in Python and FastAPI for internal reporting applications.
+- Designed PostgreSQL tables and wrote SQL queries used in scheduled data-processing jobs.
+- Added pytest test coverage for API endpoints and data validation logic.
+- Containerized two internal services with Docker and documented their local setup process.
+- Investigated production defects and worked with product managers to clarify requirements.
+
+Junior Software Developer, Lakeview Systems
+August 2022 - May 2023
+
+- Maintained Python scripts that imported customer data from CSV files.
+- Added input validation and logging to existing data workflows.
+- Reviewed code through GitHub pull requests and participated in weekly sprint planning.
+
+Skills
+
+Experience with Python, SQL, and Tableau.
+
+Education
+Bachelor of Science in Computer Science, Lakeside University, 2022
