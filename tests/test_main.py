@@ -40,7 +40,7 @@ def graph_result():
             matches=[SkillEvidence(requirement_id="REQ-001", job_skill="python",
                                    requirement_level="required", match_status="matched",
                                    resume_evidence=[FACT], confidence=1)],
-            missing_required_skills=[], missing_preferred_skills=[], overall_score=100,
+            missing_required_requirements=[], missing_preferred_requirements=[], overall_score=100,
             explanation="Python is supported.", recommendations=[],
         ),
         "tailored_resume": TailoredResume(
@@ -64,7 +64,7 @@ def test_analyze_files_serializes_supported_claims(tmp_path):
     with patch("main.graph.invoke", return_value=graph_result()):
         result = analyze_files(resume, job, thread_id="test-001")
     assert result["tailored_resume"]["professional_summary"][0]["evidence_ids"] == [FACT_ID]
-    assert result["skill_match"]["missing_preferred_skills"] == []
+    assert result["skill_match"]["missing_preferred_requirements"] == []
 
 
 def test_main_writes_json_output(tmp_path):

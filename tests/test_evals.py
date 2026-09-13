@@ -1,0 +1,101 @@
+from evals.metrics import (
+    EvaluationResult,
+    MissingRequirement,
+    ReflectionEvaluationResult,
+    calculate_recall,
+    calculate_requirement_recall,
+    count_requirement_matches,
+    count_strict_matches,
+    count_forbidden_claims,
+)
+from evals.run_evals import summarize, summarize_reflection, tailored_resume_text
+from job_agent.schemas import SupportedClaim, TailoredResume
+from job_agent.nodes import canonicalize_requirement, extract_minimum_years
+
+
+def workflow_result(case_id: str, *, case_type="valid_workflow", strict=None,
+                    canonical=None, latency=2, reached=True) -> EvaluationResult:
+    return EvaluationResult(
+        case_id=case_id, case_type=case_type, expected_behavior_achieved=True,
+        reached_human_review=reached,
+        input_validation_passed=True if case_type == "input_validation" else None,
+        strict_missing_requirement_recall=strict,
+        canonical_missing_requirement_recall=canonical,
+        expected_missing_requirement_count=1 if strict is not None else 0,
+        strict_matched_requirement_count=int(strict or 0),
+        canonical_matched_requirement_count=int(canonical or 0),
+        actual_missing_requirements=[], forbidden_claim_count=0,
+        verification_passed=True if reached else None, revision_count=0,
+        latency_seconds=latency, error=None,
+    )
+
+
+def test_empty_expected_recall_is_not_applicable():
+    assert calculate_recall([], ["anything"]) is None
+    assert calculate_recall(["AWS", "Kubernetes"], ["aws"]) == 0.5
+    assert count_strict_matches(["AWS", "Kubernetes"], ["aws"]) == 1
+
+
+def test_canonical_recall_includes_numeric_constraint():
+    expected = [MissingRequirement(canonical_name="leadership_experience", minimum_years=5)]
+    assert calculate_requirement_recall(
+        expected, [MissingRequirement(canonical_name="LEADERSHIP_EXPERIENCE", minimum_years=5)]
+    ) == 1.0
+    assert calculate_requirement_recall(
+        expected, [MissingRequirement(canonical_name="leadership_experience", minimum_years=2)]
+    ) == 0.0
+    assert count_requirement_matches(expected, expected) == 1
+
+
+def test_requirement_normalization_and_year_extraction_are_deterministic():
+    text = "Requires at least five years of engineering leadership experience."
+    assert canonicalize_requirement("technical leadership", text) == "leadership_experience"
+    assert extract_minimum_years(text) == 5
+
+
+def test_count_forbidden_claims_is_case_insensitive():
+    assert count_forbidden_claims(
+        "Deployed to AWS but did not use kubernetes.",
+        ["deployed to aws", "used Kubernetes"],
+    ) == 1
+
+
+def test_tailored_resume_text_includes_every_claim_group():
+    resume = TailoredResume(
+        professional_summary=[SupportedClaim(text="Summary", evidence_ids=["EXP-1"])],
+        experience_bullets=[SupportedClaim(text="Bullet", evidence_ids=["EXP-2"])],
+        highlighted_skills=[SupportedClaim(text="Python", evidence_ids=["EXP-3"])],
+    )
+    assert tailored_resume_text(resume) == "Summary\nBullet\nPython"
+
+
+def test_summary_excludes_na_and_invalid_input_from_recall_and_latency():
+    results = [
+        workflow_result("positive-a", strict=1, canonical=1, latency=8),
+        workflow_result("positive-b", strict=0, canonical=1, latency=12),
+        workflow_result("no-missing", strict=None, canonical=None, latency=10),
+        workflow_result("invalid", case_type="input_validation", latency=.01, reached=False),
+    ]
+    summary = summarize(results)
+    assert summary["macro_strict_missing_requirement_recall"] == 0.5
+    assert summary["micro_strict_missing_requirement_recall"] == 0.5
+    assert summary["macro_canonical_missing_requirement_recall"] == 1.0
+    assert summary["micro_canonical_missing_requirement_recall"] == 1.0
+    assert summary["positive_recall_cases"] == 2
+    assert summary["average_valid_workflow_latency_seconds"] == 10
+    assert summary["average_invalid_input_rejection_latency_seconds"] == .01
+
+
+def test_reflection_summary_uses_claim_level_denominators():
+    results = [
+        ReflectionEvaluationResult(
+            case_id="a", injected_unsupported_claims=2, detected_unsupported_claims=1,
+            supported_claims=2, supported_claims_incorrectly_rejected=1,
+            initial_verification_passed=False, revision_successful=True,
+            remaining_unsupported_claims=0, revision_count=1, latency_seconds=2, error=None,
+        )
+    ]
+    summary = summarize_reflection(results)
+    assert summary["unsupported_claim_detection_recall"] == .5
+    assert summary["supported_claim_false_positive_rate"] == .5
+    assert summary["revision_success_rate"] == 1

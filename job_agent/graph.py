@@ -1,5 +1,6 @@
 """Build and compile the job matching graph."""
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.graph import StateGraph
 from job_agent.nodes import (
     analyze_job,
@@ -32,5 +33,7 @@ def build_graph() -> StateGraph:
 
 
 builder = build_graph()
-checkpointer = InMemorySaver()
+checkpointer = InMemorySaver(
+    serde=JsonPlusSerializer(allowed_msgpack_modules=None)
+)
 graph = builder.compile(checkpointer=checkpointer)

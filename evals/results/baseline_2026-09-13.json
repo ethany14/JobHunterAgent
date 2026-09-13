@@ -1,0 +1,63 @@
+{
+  "summary": {
+    "cases": 5,
+    "completed": 5,
+    "average_missing_skill_recall": 0.8,
+    "total_forbidden_claims": 0,
+    "average_revisions": 0.0,
+    "average_latency_seconds": 8.0896
+  },
+  "results": [
+    {
+      "case_id": "perfect_match",
+      "completed": true,
+      "missing_skill_recall": 1.0,
+      "forbidden_claim_count": 0,
+      "verification_passed": true,
+      "revision_count": 0,
+      "latency_seconds": 11.229,
+      "error": null
+    },
+    {
+      "case_id": "missing_cloud_skills",
+      "completed": true,
+      "missing_skill_recall": 1.0,
+      "forbidden_claim_count": 0,
+      "verification_passed": true,
+      "revision_count": 0,
+      "latency_seconds": 11.636,
+      "error": null
+    },
+    {
+      "case_id": "unsupported_metrics",
+      "completed": true,
+      "missing_skill_recall": 1.0,
+      "forbidden_claim_count": 0,
+      "verification_passed": true,
+      "revision_count": 0,
+      "latency_seconds": 8.557,
+      "error": null
+    },
+    {
+      "case_id": "leadership_gap",
+      "completed": true,
+      "missing_skill_recall": 0.0,
+      "forbidden_claim_count": 0,
+      "verification_passed": true,
+      "revision_count": 0,
+      "latency_seconds": 9.025,
+      "error": null
+    },
+    {
+      "case_id": "invalid_input",
+      "completed": true,
+      "missing_skill_recall": 1.0,
+      "forbidden_claim_count": 0,
+      "verification_passed": null,
+      "revision_count": 0,
+      "latency_seconds": 0.001,
+      "error": null
+    }
+  ],
+  "checkpoint_warning": "Deserializing unregistered type job_agent.schemas.* from checkpoint. This will be blocked in a future version. Set LANGGRAPH_STRICT_MSGPACK=true or add the application models to allowed_msgpack_modules."
+}

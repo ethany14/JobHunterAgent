@@ -134,12 +134,16 @@ def test_full_workflow_grounds_all_claims_and_scores_in_python(tmp_path, monkeyp
             {"resume_text": FACT, "job_description": "Python and SQL required"},
             config=run_config,
         )
-    assert result["resume_analysis"].evidence[0].evidence_id == FACT_ID
-    assert result["skill_match"].overall_score == 50.0
-    assert result["skill_match"].missing_required_skills == ["sql"]
-    assert result["skill_match"].missing_preferred_skills == []
-    assert all(item.evidence_ids for item in result["tailored_resume"].professional_summary)
-    assert result["verification"].passed is True
+    resume_result = ResumeAnalysis.model_validate(result["resume_analysis"])
+    match_result = SkillMatch.model_validate(result["skill_match"])
+    tailored_result = TailoredResume.model_validate(result["tailored_resume"])
+    verification_result = VerificationResult.model_validate(result["verification"])
+    assert resume_result.evidence[0].evidence_id == FACT_ID
+    assert match_result.overall_score == 50.0
+    assert [item.canonical_name for item in match_result.missing_required_requirements] == ["sql"]
+    assert match_result.missing_preferred_requirements == []
+    assert all(item.evidence_ids for item in tailored_result.professional_summary)
+    assert verification_result.passed is True
     assert result["__interrupt__"][0].value["question"].startswith("Do you approve")
     completed = test_graph.invoke(
         Command(resume={"approved": True, "feedback": None}), config=run_config
@@ -166,6 +170,8 @@ def test_python_assigns_stable_evidence_ids_and_deduplicates():
     with patch("job_agent.nodes._analyze", return_value=analysis):
         first = analyze_resume({"resume_text": FACT}, {})["resume_analysis"]
         second = analyze_resume({"resume_text": FACT}, {})["resume_analysis"]
+    first = ResumeAnalysis.model_validate(first)
+    second = ResumeAnalysis.model_validate(second)
     assert len(first.evidence) == 1
     assert first.evidence[0].evidence_id == second.evidence[0].evidence_id == FACT_ID
 
@@ -186,6 +192,7 @@ def test_job_requirements_are_deduplicated_and_required_wins():
     )
     with patch("job_agent.nodes._analyze", return_value=raw):
         result = analyze_job({"job_description": "Role"}, {})["job_analysis"]
+    result = JobAnalysis.model_validate(result)
     assert [(item.canonical_name, item.level) for item in result.requirements] == [
         ("python", "required"), ("kubernetes", "required")
     ]
@@ -217,8 +224,9 @@ def test_match_downgrades_evidence_not_in_extracted_source():
     with patch("job_agent.nodes._analyze", return_value=assessment):
         result = match_skills({"resume_analysis": resume,
                                "job_analysis": job_analysis()}, {})["skill_match"]
+    result = SkillMatch.model_validate(result)
     assert result.matches[0].match_status == "missing"
-    assert result.missing_required_skills == ["python", "sql"]
+    assert [item.canonical_name for item in result.missing_required_requirements] == ["python", "sql"]
 
 
 def test_unknown_evidence_id_in_summary_forces_failure():
@@ -230,8 +238,9 @@ def test_unknown_evidence_id_in_summary_forces_failure():
             {"resume_text": FACT, "job_description": "AWS role",
              "resume_analysis": resume, "tailored_resume": fake}, {}
         )
-    assert result["verification"].passed is False
-    assert "EXP-unknown" in result["verification"].unsupported_claims[0].reason
+    verification = VerificationResult.model_validate(result["verification"])
+    assert verification.passed is False
+    assert "EXP-unknown" in verification.unsupported_claims[0].reason
 
 
 def test_deliberately_false_resume_is_rejected_with_specific_claims():
@@ -264,7 +273,7 @@ def test_deliberately_false_resume_is_rejected_with_specific_claims():
     content = analyze.call_args.args[2]
     assert "SOURCE OF TRUTH - ORIGINAL RESUME" in content
     assert "JOB DESCRIPTION (NOT EVIDENCE)" in content
-    assert result["verification"].unsupported_claims == expected.unsupported_claims
+    assert VerificationResult.model_validate(result["verification"]).unsupported_claims == expected.unsupported_claims
 
 
 @pytest.mark.parametrize("inputs", [
@@ -307,7 +316,7 @@ def test_graph_revises_then_passes(tmp_path, monkeypatch):
                                "job_description": "Python and SQL required"},
                               config=run_config)
     assert result["revision_count"] == 1
-    assert result["verification"].passed is True
+    assert VerificationResult.model_validate(result["verification"]).passed is True
     assert "__interrupt__" in result
 
 
@@ -328,7 +337,7 @@ def test_graph_stops_after_three_revisions(tmp_path, monkeypatch):
             config=run_config,
         )
     assert result["revision_count"] == 3
-    assert result["verification"].passed is False
+    assert VerificationResult.model_validate(result["verification"]).passed is False
     assert "__interrupt__" in result
 
 
@@ -372,7 +381,7 @@ def test_human_feedback_revises_and_runs_verifier_again(tmp_path, monkeypatch):
             config=run_config,
         )
     assert result["revision_count"] == 1
-    assert result["verification"].passed is True
+    assert VerificationResult.model_validate(result["verification"]).passed is True
     assert result["approved"] is None
     assert result["human_feedback"] is None
     assert "__interrupt__" in result

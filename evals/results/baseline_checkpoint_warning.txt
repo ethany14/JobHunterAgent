@@ -1,0 +1,9 @@
+Captured with langgraph 1.2.11 and langgraph-checkpoint 4.2.0 before business
+models were converted to JSON-compatible dictionaries at checkpoint boundaries.
+
+Deserializing unregistered type job_agent.schemas.ResumeAnalysis from checkpoint. This will be blocked in a future version. Set LANGGRAPH_STRICT_MSGPACK=true to block now, or add to allowed_msgpack_modules to allow explicitly: [('job_agent.schemas', 'ResumeAnalysis')]
+
+The same warning format was emitted for other job_agent.schemas Pydantic models
+stored in the checkpoint. The source format in this installed version is:
+
+Deserializing unregistered type %s.%s from checkpoint. This will be blocked in a future version. Set LANGGRAPH_STRICT_MSGPACK=true to block now, or add to allowed_msgpack_modules to allow explicitly: [(%r, %r)]

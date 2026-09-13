@@ -1,0 +1,46 @@
+[
+  {
+    "id": "perfect_match",
+    "resume_text": "Python backend developer with experience building FastAPI services, PostgreSQL databases, Docker containers, and pytest test suites.",
+    "job_description": "Seeking a backend engineer with Python, FastAPI, PostgreSQL, Docker, and automated testing experience.",
+    "expected_missing_required": [],
+    "expected_missing_requirements": [],
+    "forbidden_claims": ["AWS", "Kubernetes", "leadership"]
+  },
+  {
+    "id": "missing_cloud_skills",
+    "resume_text": "Built Python REST APIs and wrote SQL queries for PostgreSQL databases.",
+    "job_description": "Requires Python, PostgreSQL, AWS, Kubernetes, and CI/CD experience.",
+    "expected_missing_required": ["AWS", "Kubernetes", "CI/CD"],
+    "expected_missing_requirements": [
+      {"canonical_name": "aws", "minimum_years": null},
+      {"canonical_name": "kubernetes", "minimum_years": null},
+      {"canonical_name": "ci/cd", "minimum_years": null}
+    ],
+    "forbidden_claims": ["deployed to AWS", "used Kubernetes", "built CI/CD pipelines"]
+  },
+  {
+    "id": "unsupported_metrics",
+    "resume_text": "Analyzed customer data using SQL and Tableau.",
+    "job_description": "Preference for candidates who increased revenue by at least 30%.",
+    "expected_missing_required": [],
+    "expected_missing_requirements": [],
+    "forbidden_claims": ["increased revenue by 30%", "generated 30% revenue growth"]
+  },
+  {
+    "id": "leadership_gap",
+    "resume_text": "Junior developer with two years of experience maintaining Python services.",
+    "job_description": "Requires five years of engineering leadership experience.",
+    "expected_missing_required": ["five years of engineering leadership"],
+    "expected_missing_requirements": [
+      {"canonical_name": "leadership_experience", "minimum_years": 5}
+    ],
+    "forbidden_claims": ["five years of leadership", "led an engineering team"]
+  },
+  {
+    "id": "invalid_input",
+    "resume_text": "",
+    "job_description": "Seeking a Python developer.",
+    "expected_error": "resume_text must be a non-empty string"
+  }
+]

@@ -23,6 +23,7 @@ from job_agent.prompts import (
 from job_agent.schemas import (
     JobAnalysis,
     JobRequirement,
+    MissingRequirement,
     ResumeAnalysis,
     ResumeEvidence,
     SkillAssessment,
@@ -44,7 +45,7 @@ def _create_model() -> ChatOpenAI:
     model_id = (settings.get("LLM_MODEL_ID") or "").strip()
     if not model_id:
         raise ValueError("Set LLM_MODEL_ID in the environment or project's .env file.")
-    options = {"model": model_id}
+    options = {"model": model_id, "temperature": 0}
     api_key = settings.get("LLM_API_KEY")
     base_url = settings.get("LLM_BASE_URL")
     timeout = settings.get("LLM_TIMEOUT")
@@ -91,6 +92,42 @@ def make_evidence_id(text: str) -> str:
     return f"EXP-{digest}"
 
 
+_NUMBER_WORDS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+}
+
+
+def extract_minimum_years(text: str) -> int | None:
+    match = re.search(
+        r"\b(?:at\s+least\s+)?(\d+|one|two|three|four|five|six|seven|eight|nine|ten)"
+        r"\s*\+?\s+years?\b",
+        normalize_text(text),
+    )
+    if not match:
+        return None
+    value = match.group(1)
+    return int(value) if value.isdigit() else _NUMBER_WORDS[value]
+
+
+def canonicalize_requirement(name: str, original_text: str) -> str:
+    normalized = normalize_text(name).replace("ci / cd", "ci/cd")
+    combined = f"{normalized} {normalize_text(original_text)}"
+    if "leadership" in combined:
+        return "leadership_experience"
+    if "kubernetes" in combined:
+        return "kubernetes"
+    if re.search(r"\baws\b", combined):
+        return "aws"
+    if "ci/cd" in combined or "continuous integration" in combined:
+        return "ci/cd"
+    if "postgres" in combined:
+        return "postgresql"
+    if re.search(r"\bpython\b", combined):
+        return "python"
+    return normalized.replace(" ", "_")
+
+
 def validate_input(state: JobAgentState) -> dict:
     """Reject invalid workflow inputs before the first paid model call."""
     _require_text(state, "resume_text")
@@ -124,11 +161,10 @@ def analyze_resume(state: JobAgentState, config: RunnableConfig) -> dict:
                 source_section=item.source_section,
                 exact_text=exact_text,
             )
-    return {
-        "resume_analysis": analysis.model_copy(
-            update={"evidence": list(evidence_by_text.values())}
-        )
-    }
+    grounded = analysis.model_copy(
+        update={"evidence": list(evidence_by_text.values())}
+    )
+    return {"resume_analysis": grounded.model_dump(mode="json")}
 
 
 def validate_extracted_evidence(state: JobAgentState) -> dict:
@@ -151,10 +187,17 @@ def analyze_job(state: JobAgentState, config: RunnableConfig) -> dict:
     analysis = _analyze(JobAnalysis, JOB_PROMPT, job, config)
     requirements_by_name = {}
     for item in analysis.requirements:
-        canonical_name = normalize_text(item.canonical_name)
+        canonical_name = canonicalize_requirement(
+            item.canonical_name, item.original_text
+        )
         if not canonical_name:
             continue
-        normalized_item = item.model_copy(update={"canonical_name": canonical_name})
+        normalized_item = item.model_copy(
+            update={
+                "canonical_name": canonical_name,
+                "minimum_years": extract_minimum_years(item.original_text),
+            }
+        )
         existing = requirements_by_name.get(canonical_name)
         if existing is None or (
             existing.level == "preferred" and normalized_item.level == "required"
@@ -166,11 +209,14 @@ def analyze_job(state: JobAgentState, config: RunnableConfig) -> dict:
             canonical_name=item.canonical_name,
             original_text=item.original_text,
             level=item.level,
+            minimum_years=item.minimum_years,
         )
         for index, item in enumerate(requirements_by_name.values(), start=1)
     ]
     return {
-        "job_analysis": analysis.model_copy(update={"requirements": requirements})
+        "job_analysis": analysis.model_copy(
+            update={"requirements": requirements}
+        ).model_dump(mode="json")
     }
 
 
@@ -223,22 +269,33 @@ def match_skills(state: JobAgentState, config: RunnableConfig) -> dict:
                 }
             )
         )
+    requirement_by_id = {item.requirement_id: item for item in job.requirements}
+
+    def missing_requirement(item: SkillEvidence) -> MissingRequirement:
+        requirement = requirement_by_id[item.requirement_id]
+        return MissingRequirement(
+            canonical_name=requirement.canonical_name,
+            original_text=requirement.original_text,
+            minimum_years=requirement.minimum_years,
+        )
+
     missing_required = [
-        item.job_skill for item in matches
+        missing_requirement(item) for item in matches
         if item.requirement_level == "required" and item.match_status != "matched"
     ]
     missing_preferred = [
-        item.job_skill for item in matches
+        missing_requirement(item) for item in matches
         if item.requirement_level == "preferred" and item.match_status != "matched"
     ]
+    skill_match = SkillMatch(
+        **assessment.model_dump(exclude={"matches"}),
+        matches=matches,
+        missing_required_requirements=missing_required,
+        missing_preferred_requirements=missing_preferred,
+        overall_score=calculate_match_score(matches),
+    )
     return {
-        "skill_match": SkillMatch(
-            **assessment.model_dump(exclude={"matches"}),
-            matches=matches,
-            missing_required_skills=missing_required,
-            missing_preferred_skills=missing_preferred,
-            overall_score=calculate_match_score(matches),
-        )
+        "skill_match": skill_match.model_dump(mode="json")
     }
 
 
@@ -267,7 +324,7 @@ def write_resume(state: JobAgentState, config: RunnableConfig) -> dict:
         f"SKILL MATCH:\n{SkillMatch.model_validate(state['skill_match']).model_dump_json()}"
     )
     draft = _analyze(TailoredResume, WRITE_RESUME_PROMPT, content, config)
-    return {"tailored_resume": draft}
+    return {"tailored_resume": draft.model_dump(mode="json")}
 
 
 def verify_resume(state: JobAgentState, config: RunnableConfig) -> dict:
@@ -313,7 +370,7 @@ def verify_resume(state: JobAgentState, config: RunnableConfig) -> dict:
             revision_feedback=feedback,
         )
     return {
-        "verification": verification,
+        "verification": verification.model_dump(mode="json"),
         "revision_feedback": verification.revision_feedback,
     }
 
@@ -338,7 +395,7 @@ def revise_resume(state: JobAgentState, config: RunnableConfig) -> dict:
     )
     revised = _analyze(TailoredResume, REVISE_RESUME_PROMPT, content, config)
     return {
-        "tailored_resume": revised,
+        "tailored_resume": revised.model_dump(mode="json"),
         "revision_count": state["revision_count"] + 1,
         "approved": None,
         "human_feedback": None,

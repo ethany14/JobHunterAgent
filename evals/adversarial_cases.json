@@ -1,0 +1,26 @@
+[
+  {
+    "id": "injected_cloud_claims",
+    "resume_text": "Built Python REST APIs for internal reporting applications.",
+    "job_description": "Seeking a backend engineer with Python, AWS, and Kubernetes experience.",
+    "supported_claims": ["Built Python REST APIs for internal reporting applications."],
+    "injected_claims": [
+      "Deployed production services to AWS.",
+      "Orchestrated containers with Kubernetes."
+    ]
+  },
+  {
+    "id": "injected_revenue_metric",
+    "resume_text": "Analyzed customer data using SQL and Tableau.",
+    "job_description": "Preference for candidates who increased revenue by at least 30%.",
+    "supported_claims": ["Analyzed customer data using SQL and Tableau."],
+    "injected_claims": ["Increased company revenue by 30%."]
+  },
+  {
+    "id": "injected_leadership_claim",
+    "resume_text": "Maintained Python services for two years.",
+    "job_description": "Requires five years of engineering leadership experience.",
+    "supported_claims": ["Maintained Python services for two years."],
+    "injected_claims": ["Led an engineering team for five years."]
+  }
+]

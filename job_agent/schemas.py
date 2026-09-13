@@ -33,6 +33,13 @@ class JobRequirement(AnalysisModel):
     canonical_name: str
     original_text: str
     level: Literal["required", "preferred"]
+    minimum_years: int | None = Field(default=None, ge=0)
+
+
+class MissingRequirement(AnalysisModel):
+    canonical_name: str
+    original_text: str
+    minimum_years: int | None = Field(default=None, ge=0)
 
 
 class SkillEvidence(AnalysisModel):
@@ -55,11 +62,11 @@ class SkillAssessment(AnalysisModel):
 
 
 class SkillMatch(SkillAssessment):
-    missing_required_skills: list[str] = Field(
-        description="Required skills that are missing or only partially supported."
+    missing_required_requirements: list[MissingRequirement] = Field(
+        description="Required requirements that are missing or only partially supported."
     )
-    missing_preferred_skills: list[str] = Field(
-        description="Preferred skills that are missing or only partially supported."
+    missing_preferred_requirements: list[MissingRequirement] = Field(
+        description="Preferred requirements that are missing or only partially supported."
     )
     overall_score: float = Field(
         ge=0, le=100,
