@@ -137,23 +137,49 @@ def test_writer_only_graph_omits_verifier_nodes():
 
 def test_ablation_comparison_reports_quality_and_cost_deltas():
     writer = {
-        "total_evaluated_unsupported_claims": 4,
+        "adversarial_case_count": 3,
+        "injected_unsupported_claims": 4,
+        "detected_unsupported_claims": 0,
+        "remaining_unsupported_claims": 4,
+        "unsupported_claim_detection_recall": None,
+        "unsupported_claim_removal_rate": 0.0,
+        "supported_claim_false_positive_rate": None,
         "average_valid_workflow_latency_seconds": 8.0,
-        "workflow_usage": {"model_calls": 16, "total_tokens": 8000,
-                           "estimated_cost_usd": .014},
-        "total_usage": {"model_calls": 16, "total_tokens": 8000,
-                        "estimated_cost_usd": .014},
+        "workflow_usage": {
+            "valid_workflow_count": 4,
+            "totals": {"model_calls": 16, "total_tokens": 8000,
+                       "estimated_cost_usd": .014},
+            "per_workflow_average": {"model_calls": 4, "total_tokens": 2000,
+                                     "estimated_cost_usd": .0035},
+        },
+        "total_evaluation_usage": {"model_calls": 16, "total_tokens": 8000,
+                                   "estimated_cost_usd": .014},
     }
     full = {
-        "total_evaluated_unsupported_claims": 0,
+        "adversarial_case_count": 3,
+        "injected_unsupported_claims": 4,
+        "detected_unsupported_claims": 4,
+        "remaining_unsupported_claims": 0,
+        "unsupported_claim_detection_recall": 1.0,
+        "unsupported_claim_removal_rate": 1.0,
+        "supported_claim_false_positive_rate": 0.0,
         "average_valid_workflow_latency_seconds": 10.0,
-        "workflow_usage": {"model_calls": 20, "total_tokens": 10000,
-                           "estimated_cost_usd": .016},
-        "total_usage": {"model_calls": 29, "total_tokens": 14000,
-                        "estimated_cost_usd": .021},
+        "workflow_usage": {
+            "valid_workflow_count": 4,
+            "totals": {"model_calls": 20, "total_tokens": 10000,
+                       "estimated_cost_usd": .016},
+            "per_workflow_average": {"model_calls": 5, "total_tokens": 2500,
+                                     "estimated_cost_usd": .004},
+        },
+        "adversarial_usage": {"model_calls": 9, "total_tokens": 4000,
+                              "estimated_cost_usd": .005},
+        "total_evaluation_usage": {"model_calls": 29, "total_tokens": 14000,
+                                   "estimated_cost_usd": .021},
     }
     comparison = build_comparison(writer, full)
-    assert comparison["unsupported_claim_reduction_rate"] == 1.0
-    assert comparison["workflow_latency_overhead_seconds"] == 2.0
-    assert comparison["workflow_model_call_overhead"] == 4
-    assert comparison["total_suite_model_call_overhead"] == 13
+    per_case = comparison["normal_workflow_per_case"]
+    assert per_case["average_increase"]["latency_seconds"] == 2.0
+    assert per_case["average_increase"]["model_calls"] == 1
+    assert comparison["four_workflow_evaluation_totals"]["increase"]["model_calls"] == 4
+    assert comparison["adversarial_suite"]["full_agent_removal_rate"] == 1.0
+    assert comparison["all_evaluation_overhead"]["model_calls"] == 13

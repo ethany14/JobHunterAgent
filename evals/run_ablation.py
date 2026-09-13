@@ -232,52 +232,100 @@ def usage_report(usage: UsageCollector, model_name: str) -> dict[str, Any]:
     }
 
 
+def average_usage(usage: dict[str, Any], workflow_count: int) -> dict[str, float]:
+    if not workflow_count:
+        return {
+            "model_calls": 0.0,
+            "input_tokens": 0.0,
+            "output_tokens": 0.0,
+            "total_tokens": 0.0,
+            "estimated_cost_usd": 0.0,
+        }
+    cost = usage["estimated_cost_usd"]
+    return {
+        "model_calls": usage["model_calls"] / workflow_count,
+        "input_tokens": usage["input_tokens"] / workflow_count,
+        "output_tokens": usage["output_tokens"] / workflow_count,
+        "total_tokens": usage["total_tokens"] / workflow_count,
+        "estimated_cost_usd": (
+            round(cost / workflow_count, 8) if cost is not None else None
+        ),
+    }
+
+
 def build_comparison(writer: dict[str, Any], full: dict[str, Any]) -> dict[str, Any]:
     def change(new: float, old: float) -> float | None:
         return (new - old) / old if old else None
 
     writer_workflow = writer["workflow_usage"]
     full_workflow = full["workflow_usage"]
-    writer_total = writer["total_usage"]
-    full_total = full["total_usage"]
-    unsupported_before = writer["total_evaluated_unsupported_claims"]
-    unsupported_after = full["total_evaluated_unsupported_claims"]
+    writer_average = writer_workflow["per_workflow_average"]
+    full_average = full_workflow["per_workflow_average"]
+    writer_total = writer["total_evaluation_usage"]
+    full_total = full["total_evaluation_usage"]
+    unsupported_before = writer["remaining_unsupported_claims"]
+    unsupported_after = full["remaining_unsupported_claims"]
     return {
-        "unsupported_claim_reduction": unsupported_before - unsupported_after,
-        "unsupported_claim_reduction_rate": (
-            (unsupported_before - unsupported_after) / unsupported_before
-            if unsupported_before else 0.0
-        ),
-        "workflow_latency_overhead_seconds": round(
-            full["average_valid_workflow_latency_seconds"]
-            - writer["average_valid_workflow_latency_seconds"], 4
-        ),
-        "workflow_latency_overhead_rate": round(
-            change(
-                full["average_valid_workflow_latency_seconds"],
-                writer["average_valid_workflow_latency_seconds"],
-            ) or 0.0,
-            6,
-        ),
-        "workflow_model_call_overhead": (
-            full_workflow["model_calls"] - writer_workflow["model_calls"]
-        ),
-        "workflow_token_overhead": (
-            full_workflow["total_tokens"] - writer_workflow["total_tokens"]
-        ),
-        "workflow_estimated_cost_overhead_usd": round(
-            full_workflow["estimated_cost_usd"]
-            - writer_workflow["estimated_cost_usd"], 8
-        ),
-        "total_suite_model_call_overhead": (
-            full_total["model_calls"] - writer_total["model_calls"]
-        ),
-        "total_suite_token_overhead": (
-            full_total["total_tokens"] - writer_total["total_tokens"]
-        ),
-        "total_suite_estimated_cost_overhead_usd": round(
-            full_total["estimated_cost_usd"] - writer_total["estimated_cost_usd"], 8
-        ),
+        "normal_workflow_per_case": {
+            "valid_workflow_count": writer_workflow["valid_workflow_count"],
+            "writer_only": {
+                "latency_seconds": writer["average_valid_workflow_latency_seconds"],
+                **writer_average,
+            },
+            "full_agent": {
+                "latency_seconds": full["average_valid_workflow_latency_seconds"],
+                **full_average,
+            },
+            "average_increase": {
+                "latency_seconds": round(
+                    full["average_valid_workflow_latency_seconds"]
+                    - writer["average_valid_workflow_latency_seconds"], 4
+                ),
+                "latency_rate": round(
+                    change(
+                        full["average_valid_workflow_latency_seconds"],
+                        writer["average_valid_workflow_latency_seconds"],
+                    ) or 0.0,
+                    6,
+                ),
+                "model_calls": full_average["model_calls"] - writer_average["model_calls"],
+                "total_tokens": full_average["total_tokens"] - writer_average["total_tokens"],
+                "estimated_cost_usd": round(
+                    full_average["estimated_cost_usd"]
+                    - writer_average["estimated_cost_usd"], 8
+                ),
+            },
+        },
+        "four_workflow_evaluation_totals": {
+            "writer_only": writer_workflow["totals"],
+            "full_agent": full_workflow["totals"],
+            "increase": {
+                "model_calls": full_workflow["totals"]["model_calls"] - writer_workflow["totals"]["model_calls"],
+                "total_tokens": full_workflow["totals"]["total_tokens"] - writer_workflow["totals"]["total_tokens"],
+                "estimated_cost_usd": round(
+                    full_workflow["totals"]["estimated_cost_usd"]
+                    - writer_workflow["totals"]["estimated_cost_usd"], 8
+                ),
+            },
+        },
+        "adversarial_suite": {
+            "case_count": full["adversarial_case_count"],
+            "injected_unsupported_claims": full["injected_unsupported_claims"],
+            "writer_only_remaining_unsupported_claims": unsupported_before,
+            "full_agent_detected_unsupported_claims": full["detected_unsupported_claims"],
+            "full_agent_remaining_unsupported_claims": unsupported_after,
+            "full_agent_detection_recall": full["unsupported_claim_detection_recall"],
+            "full_agent_removal_rate": full["unsupported_claim_removal_rate"],
+            "full_agent_supported_claim_false_positive_rate": full["supported_claim_false_positive_rate"],
+            "full_agent_usage": full["adversarial_usage"],
+        },
+        "all_evaluation_overhead": {
+            "model_calls": full_total["model_calls"] - writer_total["model_calls"],
+            "total_tokens": full_total["total_tokens"] - writer_total["total_tokens"],
+            "estimated_cost_usd": round(
+                full_total["estimated_cost_usd"] - writer_total["estimated_cost_usd"], 8
+            ),
+        },
     }
 
 
@@ -301,28 +349,56 @@ def run_ablation(cases_path: Path, adversarial_path: Path, output_path: Path) ->
     ]
     reflection = summarize_reflection(reflection_results)
     injected = sum(len(case["injected_claims"]) for case in adversarial_cases)
+    valid_workflow_count = writer["valid_workflows_reaching_human_review"]
+    writer_workflow_usage = usage_report(writer_usage, model_name)
+    full_workflow_usage_report = usage_report(full_workflow_usage, model_name)
+    writer_total_usage = usage_report(writer_usage, model_name)
+    full_total_usage = usage_report(
+        combine_usage(full_workflow_usage, full_reflection_usage), model_name
+    )
     writer.update(
         {
-            "adversarial_remaining_unsupported_claims": injected,
-            "total_evaluated_unsupported_claims": writer["workflow_forbidden_claims"] + injected,
+            "adversarial_case_count": len(adversarial_cases),
+            "injected_unsupported_claims": injected,
+            "detected_unsupported_claims": 0,
+            "remaining_unsupported_claims": injected,
             "unsupported_claim_detection_recall": None,
+            "unsupported_claim_removal_rate": 0.0,
+            "supported_claim_false_positive_rate": None,
             "revision_success_rate": None,
-            "workflow_usage": usage_report(writer_usage, model_name),
+            "workflow_usage": {
+                "valid_workflow_count": valid_workflow_count,
+                "totals": writer_workflow_usage,
+                "per_workflow_average": average_usage(
+                    writer_workflow_usage, valid_workflow_count
+                ),
+            },
             "adversarial_usage": usage_report(UsageCollector(), model_name),
-            "total_usage": usage_report(writer_usage, model_name),
+            "total_evaluation_usage": writer_total_usage,
         }
     )
     full.update(
         {
-            "adversarial_remaining_unsupported_claims": reflection["remaining_unsupported_claims"],
-            "total_evaluated_unsupported_claims": full["workflow_forbidden_claims"] + reflection["remaining_unsupported_claims"],
+            "adversarial_case_count": len(adversarial_cases),
+            "injected_unsupported_claims": injected,
+            "detected_unsupported_claims": reflection["detected_unsupported_claims"],
+            "remaining_unsupported_claims": reflection["remaining_unsupported_claims"],
             "unsupported_claim_detection_recall": reflection["unsupported_claim_detection_recall"],
-            "revision_success_rate": reflection["revision_success_rate"],
-            "workflow_usage": usage_report(full_workflow_usage, model_name),
-            "adversarial_usage": usage_report(full_reflection_usage, model_name),
-            "total_usage": usage_report(
-                combine_usage(full_workflow_usage, full_reflection_usage), model_name
+            "unsupported_claim_removal_rate": (
+                (injected - reflection["remaining_unsupported_claims"]) / injected
+                if injected else 0.0
             ),
+            "supported_claim_false_positive_rate": reflection["supported_claim_false_positive_rate"],
+            "revision_success_rate": reflection["revision_success_rate"],
+            "workflow_usage": {
+                "valid_workflow_count": valid_workflow_count,
+                "totals": full_workflow_usage_report,
+                "per_workflow_average": average_usage(
+                    full_workflow_usage_report, valid_workflow_count
+                ),
+            },
+            "adversarial_usage": usage_report(full_reflection_usage, model_name),
+            "total_evaluation_usage": full_total_usage,
             "reflection_results": [item.model_dump(mode="json") for item in reflection_results],
         }
     )
@@ -362,12 +438,11 @@ def main() -> int:
     ):
         result = report[key]
         print(label)
-        print(f"  Unsupported claims remaining: {result['total_evaluated_unsupported_claims']}")
+        print(f"  Unsupported claims remaining: {result['remaining_unsupported_claims']}")
         print(f"  Average valid-workflow latency: {result['average_valid_workflow_latency_seconds']:.2f}s")
-        print(f"  Workflow model calls: {result['workflow_usage']['model_calls']}")
-        print(f"  Total model calls: {result['total_usage']['model_calls']}")
-        print(f"  Total tokens: {result['total_usage']['total_tokens']}")
-        print(f"  Estimated cost: ${result['total_usage']['estimated_cost_usd']:.6f}")
+        print(f"  Model calls per workflow: {result['workflow_usage']['per_workflow_average']['model_calls']:.1f}")
+        print(f"  Tokens per workflow: {result['workflow_usage']['per_workflow_average']['total_tokens']:.1f}")
+        print(f"  Estimated cost per workflow: ${result['workflow_usage']['per_workflow_average']['estimated_cost_usd']:.6f}")
     print(f"Results saved to: {args.output}")
     return 0
 
