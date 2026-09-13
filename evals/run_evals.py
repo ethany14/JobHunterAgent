@@ -194,9 +194,15 @@ def _adversarial_state(case: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def run_adversarial_case(case: dict[str, Any]) -> ReflectionEvaluationResult:
+def run_adversarial_case(
+    case: dict[str, Any], callbacks: list[Any] | None = None
+) -> ReflectionEvaluationResult:
     state = _adversarial_state(case)
-    config = {"configurable": {"thread_id": f"adversarial-{case['id']}"}}
+    config: dict[str, Any] = {
+        "configurable": {"thread_id": f"adversarial-{case['id']}"}
+    }
+    if callbacks:
+        config["callbacks"] = callbacks
     started = perf_counter()
     try:
         state.update(verify_resume(state, config))

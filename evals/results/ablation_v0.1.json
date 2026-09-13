@@ -1,0 +1,262 @@
+{
+  "run_metadata": {
+    "timestamp": "2026-09-13T23:23:36.694328+00:00",
+    "git_commit": "8b8c1afc941a0d7fd0e4ad894b99e56e85b0bb43",
+    "model": "gemini-3.7-flash",
+    "temperature": 0.0,
+    "prompt_version": "v1",
+    "dataset_version": "v1",
+    "runs_per_case": 1
+  },
+  "version_a_writer_only": {
+    "results": [
+      {
+        "case_id": "perfect_match",
+        "case_type": "valid_workflow",
+        "expected_behavior_achieved": true,
+        "reached_human_review": true,
+        "forbidden_claim_count": 0,
+        "latency_seconds": 7.891,
+        "error": null
+      },
+      {
+        "case_id": "missing_cloud_skills",
+        "case_type": "valid_workflow",
+        "expected_behavior_achieved": true,
+        "reached_human_review": true,
+        "forbidden_claim_count": 0,
+        "latency_seconds": 8.285,
+        "error": null
+      },
+      {
+        "case_id": "unsupported_metrics",
+        "case_type": "valid_workflow",
+        "expected_behavior_achieved": true,
+        "reached_human_review": true,
+        "forbidden_claim_count": 0,
+        "latency_seconds": 6.931,
+        "error": null
+      },
+      {
+        "case_id": "leadership_gap",
+        "case_type": "valid_workflow",
+        "expected_behavior_achieved": true,
+        "reached_human_review": true,
+        "forbidden_claim_count": 0,
+        "latency_seconds": 8.017,
+        "error": null
+      },
+      {
+        "case_id": "invalid_input",
+        "case_type": "input_validation",
+        "expected_behavior_achieved": true,
+        "reached_human_review": false,
+        "forbidden_claim_count": 0,
+        "latency_seconds": 0.002,
+        "error": null
+      }
+    ],
+    "expected_behavior_achieved": 5,
+    "valid_workflows_reaching_human_review": 4,
+    "workflow_forbidden_claims": 0,
+    "average_valid_workflow_latency_seconds": 7.781,
+    "adversarial_remaining_unsupported_claims": 4,
+    "total_evaluated_unsupported_claims": 4,
+    "unsupported_claim_detection_recall": null,
+    "revision_success_rate": null,
+    "workflow_usage": {
+      "model_calls": 16,
+      "input_tokens": 5488,
+      "output_tokens": 2727,
+      "total_tokens": 8215,
+      "estimated_cost_usd": 0.01434225,
+      "cost_basis": "official_paid_tier_list_price",
+      "pricing": {
+        "input_per_million_usd": 0.75,
+        "output_per_million_usd": 3.75,
+        "effective_through": "2026-12-31",
+        "source": "https://ai.google.dev/gemini-api/docs/pricing"
+      }
+    },
+    "adversarial_usage": {
+      "model_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "estimated_cost_usd": 0.0,
+      "cost_basis": "official_paid_tier_list_price",
+      "pricing": {
+        "input_per_million_usd": 0.75,
+        "output_per_million_usd": 3.75,
+        "effective_through": "2026-12-31",
+        "source": "https://ai.google.dev/gemini-api/docs/pricing"
+      }
+    },
+    "total_usage": {
+      "model_calls": 16,
+      "input_tokens": 5488,
+      "output_tokens": 2727,
+      "total_tokens": 8215,
+      "estimated_cost_usd": 0.01434225,
+      "cost_basis": "official_paid_tier_list_price",
+      "pricing": {
+        "input_per_million_usd": 0.75,
+        "output_per_million_usd": 3.75,
+        "effective_through": "2026-12-31",
+        "source": "https://ai.google.dev/gemini-api/docs/pricing"
+      }
+    }
+  },
+  "version_b_full_agent": {
+    "results": [
+      {
+        "case_id": "perfect_match",
+        "case_type": "valid_workflow",
+        "expected_behavior_achieved": true,
+        "reached_human_review": true,
+        "forbidden_claim_count": 0,
+        "latency_seconds": 10.099,
+        "error": null
+      },
+      {
+        "case_id": "missing_cloud_skills",
+        "case_type": "valid_workflow",
+        "expected_behavior_achieved": true,
+        "reached_human_review": true,
+        "forbidden_claim_count": 0,
+        "latency_seconds": 9.478,
+        "error": null
+      },
+      {
+        "case_id": "unsupported_metrics",
+        "case_type": "valid_workflow",
+        "expected_behavior_achieved": true,
+        "reached_human_review": true,
+        "forbidden_claim_count": 0,
+        "latency_seconds": 9.36,
+        "error": null
+      },
+      {
+        "case_id": "leadership_gap",
+        "case_type": "valid_workflow",
+        "expected_behavior_achieved": true,
+        "reached_human_review": true,
+        "forbidden_claim_count": 0,
+        "latency_seconds": 8.785,
+        "error": null
+      },
+      {
+        "case_id": "invalid_input",
+        "case_type": "input_validation",
+        "expected_behavior_achieved": true,
+        "reached_human_review": false,
+        "forbidden_claim_count": 0,
+        "latency_seconds": 0.002,
+        "error": null
+      }
+    ],
+    "expected_behavior_achieved": 5,
+    "valid_workflows_reaching_human_review": 4,
+    "workflow_forbidden_claims": 0,
+    "average_valid_workflow_latency_seconds": 9.4305,
+    "adversarial_remaining_unsupported_claims": 0,
+    "total_evaluated_unsupported_claims": 0,
+    "unsupported_claim_detection_recall": 1.0,
+    "revision_success_rate": 1.0,
+    "workflow_usage": {
+      "model_calls": 20,
+      "input_tokens": 7437,
+      "output_tokens": 2476,
+      "total_tokens": 9913,
+      "estimated_cost_usd": 0.01486275,
+      "cost_basis": "official_paid_tier_list_price",
+      "pricing": {
+        "input_per_million_usd": 0.75,
+        "output_per_million_usd": 3.75,
+        "effective_through": "2026-12-31",
+        "source": "https://ai.google.dev/gemini-api/docs/pricing"
+      }
+    },
+    "adversarial_usage": {
+      "model_calls": 9,
+      "input_tokens": 3431,
+      "output_tokens": 655,
+      "total_tokens": 4086,
+      "estimated_cost_usd": 0.0050295,
+      "cost_basis": "official_paid_tier_list_price",
+      "pricing": {
+        "input_per_million_usd": 0.75,
+        "output_per_million_usd": 3.75,
+        "effective_through": "2026-12-31",
+        "source": "https://ai.google.dev/gemini-api/docs/pricing"
+      }
+    },
+    "total_usage": {
+      "model_calls": 29,
+      "input_tokens": 10868,
+      "output_tokens": 3131,
+      "total_tokens": 13999,
+      "estimated_cost_usd": 0.01989225,
+      "cost_basis": "official_paid_tier_list_price",
+      "pricing": {
+        "input_per_million_usd": 0.75,
+        "output_per_million_usd": 3.75,
+        "effective_through": "2026-12-31",
+        "source": "https://ai.google.dev/gemini-api/docs/pricing"
+      }
+    },
+    "reflection_results": [
+      {
+        "case_id": "injected_cloud_claims",
+        "injected_unsupported_claims": 2,
+        "detected_unsupported_claims": 2,
+        "supported_claims": 1,
+        "supported_claims_incorrectly_rejected": 0,
+        "initial_verification_passed": false,
+        "revision_successful": true,
+        "remaining_unsupported_claims": 0,
+        "revision_count": 1,
+        "latency_seconds": 5.269,
+        "error": null
+      },
+      {
+        "case_id": "injected_revenue_metric",
+        "injected_unsupported_claims": 1,
+        "detected_unsupported_claims": 1,
+        "supported_claims": 1,
+        "supported_claims_incorrectly_rejected": 0,
+        "initial_verification_passed": false,
+        "revision_successful": true,
+        "remaining_unsupported_claims": 0,
+        "revision_count": 1,
+        "latency_seconds": 5.152,
+        "error": null
+      },
+      {
+        "case_id": "injected_leadership_claim",
+        "injected_unsupported_claims": 1,
+        "detected_unsupported_claims": 1,
+        "supported_claims": 1,
+        "supported_claims_incorrectly_rejected": 0,
+        "initial_verification_passed": false,
+        "revision_successful": true,
+        "remaining_unsupported_claims": 0,
+        "revision_count": 1,
+        "latency_seconds": 10.202,
+        "error": null
+      }
+    ]
+  },
+  "comparison": {
+    "unsupported_claim_reduction": 4,
+    "unsupported_claim_reduction_rate": 1.0,
+    "workflow_latency_overhead_seconds": 1.6495,
+    "workflow_latency_overhead_rate": 0.211991,
+    "workflow_model_call_overhead": 4,
+    "workflow_token_overhead": 1698,
+    "workflow_estimated_cost_overhead_usd": 0.0005205,
+    "total_suite_model_call_overhead": 13,
+    "total_suite_token_overhead": 5784,
+    "total_suite_estimated_cost_overhead_usd": 0.00555
+  }
+}

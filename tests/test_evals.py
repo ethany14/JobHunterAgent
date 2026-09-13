@@ -9,6 +9,9 @@ from evals.metrics import (
     count_forbidden_claims,
 )
 from evals.run_evals import summarize, summarize_reflection, tailored_resume_text
+from evals.run_ablation import UsageCollector, build_comparison, build_writer_only_graph
+from langchain_core.messages import AIMessage
+from langchain_core.outputs import ChatGeneration, LLMResult
 from job_agent.schemas import SupportedClaim, TailoredResume
 from job_agent.nodes import canonicalize_requirement, extract_minimum_years
 
@@ -99,3 +102,58 @@ def test_reflection_summary_uses_claim_level_denominators():
     assert summary["unsupported_claim_detection_recall"] == .5
     assert summary["supported_claim_false_positive_rate"] == .5
     assert summary["revision_success_rate"] == 1
+
+
+def test_usage_collector_counts_provider_tokens():
+    collector = UsageCollector()
+    response = LLMResult(
+        generations=[[
+            ChatGeneration(
+                message=AIMessage(
+                    content="{}",
+                    usage_metadata={
+                        "input_tokens": 10,
+                        "output_tokens": 4,
+                        "total_tokens": 14,
+                    },
+                )
+            )
+        ]]
+    )
+    collector.on_llm_end(response)
+    assert collector.model_calls == 1
+    assert collector.input_tokens == 10
+    assert collector.output_tokens == 4
+    assert collector.total_tokens == 14
+
+
+def test_writer_only_graph_omits_verifier_nodes():
+    nodes = build_writer_only_graph().nodes
+    assert "write_resume" in nodes
+    assert "human_review" in nodes
+    assert "verify_resume" not in nodes
+    assert "revise_resume" not in nodes
+
+
+def test_ablation_comparison_reports_quality_and_cost_deltas():
+    writer = {
+        "total_evaluated_unsupported_claims": 4,
+        "average_valid_workflow_latency_seconds": 8.0,
+        "workflow_usage": {"model_calls": 16, "total_tokens": 8000,
+                           "estimated_cost_usd": .014},
+        "total_usage": {"model_calls": 16, "total_tokens": 8000,
+                        "estimated_cost_usd": .014},
+    }
+    full = {
+        "total_evaluated_unsupported_claims": 0,
+        "average_valid_workflow_latency_seconds": 10.0,
+        "workflow_usage": {"model_calls": 20, "total_tokens": 10000,
+                           "estimated_cost_usd": .016},
+        "total_usage": {"model_calls": 29, "total_tokens": 14000,
+                        "estimated_cost_usd": .021},
+    }
+    comparison = build_comparison(writer, full)
+    assert comparison["unsupported_claim_reduction_rate"] == 1.0
+    assert comparison["workflow_latency_overhead_seconds"] == 2.0
+    assert comparison["workflow_model_call_overhead"] == 4
+    assert comparison["total_suite_model_call_overhead"] == 13
