@@ -1,5 +1,6 @@
 """Analysis nodes; the model is initialized only when a node runs."""
 import hashlib
+import json
 import os
 import re
 from pathlib import Path
@@ -8,6 +9,7 @@ from typing import TypeVar
 from dotenv import dotenv_values
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
+from langgraph.types import interrupt
 from pydantic import BaseModel
 
 from job_agent.prompts import (
@@ -103,6 +105,9 @@ def validate_input(state: JobAgentState) -> dict:
         "revision_feedback": [],
         "revision_count": 0,
         "max_revisions": max_revisions,
+        "approved": None,
+        "human_feedback": None,
+        "workflow_status": "running",
     }
 
 
@@ -318,13 +323,16 @@ def revise_resume(state: JobAgentState, config: RunnableConfig) -> dict:
     if verification is None:
         raise ValueError("Verification result is required before revision.")
     verification = VerificationResult.model_validate(verification)
+    feedback = list(verification.revision_feedback)
+    if state.get("human_feedback"):
+        feedback.append(state["human_feedback"])
     content = (
         f"SOURCE OF TRUTH - ORIGINAL RESUME:\n{state['resume_text']}\n\n"
         f"GROUNDED EVIDENCE WITH IDS:\n"
         f"{ResumeAnalysis.model_validate(state['resume_analysis']).model_dump_json()}\n\n"
         f"CURRENT TAILORED RESUME:\n"
         f"{TailoredResume.model_validate(state['tailored_resume']).model_dump_json()}\n\n"
-        f"VERIFICATION FEEDBACK:\n{verification.model_dump_json()}\n\n"
+        f"REVISION FEEDBACK:\n{json.dumps(feedback, ensure_ascii=False)}\n\n"
         f"TARGET REQUIREMENTS - JOB ANALYSIS (NOT EVIDENCE):\n"
         f"{JobAnalysis.model_validate(state['job_analysis']).model_dump_json()}"
     )
@@ -332,4 +340,35 @@ def revise_resume(state: JobAgentState, config: RunnableConfig) -> dict:
     return {
         "tailored_resume": revised,
         "revision_count": state["revision_count"] + 1,
+        "approved": None,
+        "human_feedback": None,
+        "workflow_status": "running",
+    }
+
+
+def human_review(state: JobAgentState) -> dict:
+    tailored_resume = TailoredResume.model_validate(state["tailored_resume"])
+    verification = VerificationResult.model_validate(state["verification"])
+    decision = interrupt(
+        {
+            "question": "Do you approve this tailored resume?",
+            "tailored_resume": tailored_resume.model_dump(mode="json"),
+            "verification": verification.model_dump(mode="json"),
+            "revision_count": state["revision_count"],
+        }
+    )
+    if not isinstance(decision, dict):
+        raise ValueError("Human review decision must be an object.")
+    approved = bool(decision.get("approved"))
+    feedback = decision.get("feedback")
+    if feedback is not None and not isinstance(feedback, str):
+        raise ValueError("Human feedback must be a string or null.")
+    if isinstance(feedback, str):
+        feedback = feedback.strip() or None
+    if not approved and not feedback:
+        raise ValueError("Feedback is required when the resume is rejected.")
+    return {
+        "approved": approved,
+        "human_feedback": feedback,
+        "workflow_status": "approved" if approved else "revision_requested",
     }

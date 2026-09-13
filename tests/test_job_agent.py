@@ -1,9 +1,13 @@
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from pydantic import ValidationError
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import Command
 
 from job_agent.agent import graph
+from job_agent.graph import builder
 from job_agent.nodes import (
     _create_model,
     analyze_job,
@@ -15,7 +19,7 @@ from job_agent.nodes import (
     validate_input,
     verify_resume,
 )
-from job_agent.routes import route_after_verification
+from job_agent.routes import route_after_human_review, route_after_verification
 from job_agent.schemas import (
     JobAnalysis,
     JobRequirement,
@@ -32,6 +36,14 @@ from job_agent.schemas import (
 
 FACT = "Built REST APIs in Python and FastAPI."
 FACT_ID = make_evidence_id(FACT)
+
+
+def config() -> dict:
+    return {"configurable": {"thread_id": str(uuid4())}}
+
+
+def checkpointed_test_graph():
+    return builder.compile(checkpointer=InMemorySaver())
 
 
 def resume_analysis(exact_text: str = FACT) -> ResumeAnalysis:
@@ -116,14 +128,25 @@ def test_full_workflow_grounds_all_claims_and_scores_in_python(tmp_path, monkeyp
     )
     with patch("job_agent.nodes.ChatOpenAI") as model:
         model.return_value.with_structured_output.return_value = structured
-        result = graph.invoke({"resume_text": FACT,
-                               "job_description": "Python and SQL required"})
+        run_config = config()
+        test_graph = checkpointed_test_graph()
+        result = test_graph.invoke(
+            {"resume_text": FACT, "job_description": "Python and SQL required"},
+            config=run_config,
+        )
     assert result["resume_analysis"].evidence[0].evidence_id == FACT_ID
     assert result["skill_match"].overall_score == 50.0
     assert result["skill_match"].missing_required_skills == ["sql"]
     assert result["skill_match"].missing_preferred_skills == []
     assert all(item.evidence_ids for item in result["tailored_resume"].professional_summary)
     assert result["verification"].passed is True
+    assert result["__interrupt__"][0].value["question"].startswith("Do you approve")
+    completed = test_graph.invoke(
+        Command(resume={"approved": True, "feedback": None}), config=run_config
+    )
+    assert completed["approved"] is True
+    assert completed["workflow_status"] == "approved"
+    assert test_graph.get_state(run_config).next == ()
     schemas = [call.args[0] for call in model.return_value.with_structured_output.call_args_list]
     assert schemas == [ResumeAnalysis, JobAnalysis, SkillAssessment,
                        TailoredResume, VerificationResult]
@@ -251,20 +274,22 @@ def test_deliberately_false_resume_is_rejected_with_specific_claims():
 def test_invalid_inputs_do_not_call_model(inputs):
     with patch("job_agent.nodes.ChatOpenAI") as model:
         with pytest.raises(ValueError, match="non-empty string"):
-            graph.invoke(inputs)
+            graph.invoke(inputs, config=config())
         model.assert_not_called()
 
 
 def test_route_after_verification():
     assert route_after_verification(
         {"verification": passing_verification(), "revision_count": 0, "max_revisions": 3}
-    ) == "end"
+    ) == "human_review"
     assert route_after_verification(
         {"verification": failed_verification(), "revision_count": 0, "max_revisions": 3}
     ) == "revise"
     assert route_after_verification(
         {"verification": failed_verification(), "revision_count": 3, "max_revisions": 3}
-    ) == "end"
+    ) == "human_review"
+    assert route_after_human_review({"approved": True}) == "end"
+    assert route_after_human_review({"approved": False}) == "revise"
 
 
 def test_graph_revises_then_passes(tmp_path, monkeypatch):
@@ -277,10 +302,13 @@ def test_graph_revises_then_passes(tmp_path, monkeypatch):
     )
     with patch("job_agent.nodes.ChatOpenAI") as model:
         model.return_value.with_structured_output.return_value = structured
+        run_config = config()
         result = graph.invoke({"resume_text": FACT,
-                               "job_description": "Python and SQL required"})
+                               "job_description": "Python and SQL required"},
+                              config=run_config)
     assert result["revision_count"] == 1
     assert result["verification"].passed is True
+    assert "__interrupt__" in result
 
 
 def test_graph_stops_after_three_revisions(tmp_path, monkeypatch):
@@ -293,10 +321,88 @@ def test_graph_stops_after_three_revisions(tmp_path, monkeypatch):
     )
     with patch("job_agent.nodes.ChatOpenAI") as model:
         model.return_value.with_structured_output.return_value = structured
-        result = graph.invoke({"resume_text": FACT,
-                               "job_description": "Python and SQL required"})
+        run_config = config()
+        test_graph = checkpointed_test_graph()
+        result = test_graph.invoke(
+            {"resume_text": FACT, "job_description": "Python and SQL required"},
+            config=run_config,
+        )
     assert result["revision_count"] == 3
     assert result["verification"].passed is False
+    assert "__interrupt__" in result
+
+
+def test_rejection_without_feedback_errors(tmp_path, monkeypatch):
+    structured = configure_model(
+        tmp_path, monkeypatch,
+        [resume_analysis(), job_analysis(), skill_assessment(), tailored(),
+         passing_verification()],
+    )
+    run_config = config()
+    with patch("job_agent.nodes.ChatOpenAI") as model:
+        model.return_value.with_structured_output.return_value = structured
+        test_graph = checkpointed_test_graph()
+        test_graph.invoke({"resume_text": FACT,
+                           "job_description": "Python and SQL required"},
+                          config=run_config)
+        with pytest.raises(ValueError, match="Feedback is required"):
+            test_graph.invoke(
+                Command(resume={"approved": False, "feedback": None}),
+                config=run_config,
+            )
+
+
+def test_human_feedback_revises_and_runs_verifier_again(tmp_path, monkeypatch):
+    revised = tailored(summary="Concise Python developer")
+    structured = configure_model(
+        tmp_path, monkeypatch,
+        [resume_analysis(), job_analysis(), skill_assessment(), tailored(),
+         passing_verification(), revised, passing_verification()],
+    )
+    run_config = config()
+    with patch("job_agent.nodes.ChatOpenAI") as model:
+        model.return_value.with_structured_output.return_value = structured
+        test_graph = checkpointed_test_graph()
+        test_graph.invoke({"resume_text": FACT,
+                           "job_description": "Python and SQL required"},
+                          config=run_config)
+        result = test_graph.invoke(
+            Command(resume={"approved": False,
+                            "feedback": "Shorten the summary and emphasize Python."}),
+            config=run_config,
+        )
+    assert result["revision_count"] == 1
+    assert result["verification"].passed is True
+    assert result["approved"] is None
+    assert result["human_feedback"] is None
+    assert "__interrupt__" in result
+    revision_content = structured.invoke.call_args_list[5].args[0][1][1]
+    assert "Shorten the summary and emphasize Python." in revision_content
+    schemas = [call.args[0] for call in model.return_value.with_structured_output.call_args_list]
+    assert schemas[-2:] == [TailoredResume, VerificationResult]
+
+
+def test_wrong_thread_id_cannot_resume_checkpoint(tmp_path, monkeypatch):
+    structured = configure_model(
+        tmp_path, monkeypatch,
+        [resume_analysis(), job_analysis(), skill_assessment(), tailored(),
+         passing_verification()],
+    )
+    original_config = config()
+    wrong_config = config()
+    with patch("job_agent.nodes.ChatOpenAI") as model:
+        model.return_value.with_structured_output.return_value = structured
+        graph.invoke({"resume_text": FACT,
+                      "job_description": "Python and SQL required"},
+                     config=original_config)
+        with pytest.raises(ValueError, match="resume_text must be a non-empty string"):
+            graph.invoke(
+                Command(resume={"approved": True, "feedback": None}),
+                config=wrong_config,
+            )
+    original_snapshot = graph.get_state(original_config)
+    assert original_snapshot.values["approved"] is None
+    assert original_snapshot.next == ("human_review",)
 
 
 def test_model_environment_overrides_dotenv(tmp_path, monkeypatch):

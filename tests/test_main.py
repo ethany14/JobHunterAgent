@@ -52,6 +52,7 @@ def graph_result():
             passed=True, unsupported_claims=[], revision_feedback=[]
         ),
         "revision_feedback": [], "revision_count": 0, "max_revisions": 3,
+        "approved": True, "human_feedback": None, "workflow_status": "approved",
     }
 
 
@@ -61,7 +62,7 @@ def test_analyze_files_serializes_supported_claims(tmp_path):
     resume.write_text(FACT, encoding="utf-8")
     job.write_text("Requires Python", encoding="utf-8")
     with patch("main.graph.invoke", return_value=graph_result()):
-        result = analyze_files(resume, job)
+        result = analyze_files(resume, job, thread_id="test-001")
     assert result["tailored_resume"]["professional_summary"][0]["evidence_ids"] == [FACT_ID]
     assert result["skill_match"]["missing_preferred_skills"] == []
 
@@ -73,10 +74,12 @@ def test_main_writes_json_output(tmp_path):
     resume.write_text(FACT, encoding="utf-8")
     job.write_text("Requires Python", encoding="utf-8")
     with patch("main.graph.invoke", return_value=graph_result()):
-        assert main([str(resume), str(job), "--output", str(output)]) == 0
+        assert main([str(resume), str(job), "--thread-id", "test-002",
+                     "--output", str(output)]) == 0
     assert json.loads(output.read_text(encoding="utf-8"))["verification"]["passed"] is True
 
 
 def test_main_reports_missing_input(capsys, tmp_path):
-    assert main([str(tmp_path / "missing.txt"), str(tmp_path / "job.txt")]) == 1
+    assert main([str(tmp_path / "missing.txt"), str(tmp_path / "job.txt"),
+                 "--thread-id", "test-003"]) == 1
     assert "Resume file does not exist" in capsys.readouterr().err

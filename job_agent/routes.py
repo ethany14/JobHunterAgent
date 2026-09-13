@@ -9,14 +9,22 @@ from job_agent.state import JobAgentState
 
 def route_after_verification(
     state: JobAgentState,
-) -> Literal["revise", "end"]:
+) -> Literal["revise", "human_review"]:
     verification = state.get("verification")
     if verification is None:
         raise ValueError("Verification result is missing.")
     verification = VerificationResult.model_validate(verification)
     if verification.passed:
-        return "end"
+        return "human_review"
     if state["revision_count"] >= state["max_revisions"]:
+        return "human_review"
+    return "revise"
+
+
+def route_after_human_review(
+    state: JobAgentState,
+) -> Literal["end", "revise"]:
+    if state.get("approved"):
         return "end"
     return "revise"
 
@@ -32,6 +40,11 @@ def add_routes(builder: StateGraph) -> None:
     builder.add_conditional_edges(
         "verify_resume",
         route_after_verification,
-        {"revise": "revise_resume", "end": END},
+        {"revise": "revise_resume", "human_review": "human_review"},
     )
     builder.add_edge("revise_resume", "verify_resume")
+    builder.add_conditional_edges(
+        "human_review",
+        route_after_human_review,
+        {"revise": "revise_resume", "end": END},
+    )
