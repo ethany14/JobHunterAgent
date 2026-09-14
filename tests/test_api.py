@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -58,6 +59,16 @@ def api_client():
     app.dependency_overrides.clear()
 
 
+@contextmanager
+def client_for_service(service):
+    app.dependency_overrides[get_run_service] = lambda: service
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_health(api_client):
     client, _ = api_client
     assert client.get("/health").json() == {"status": "ok"}
@@ -78,10 +89,25 @@ def test_create_run_uses_fake_service_without_llm(api_client):
     model.assert_not_called()
 
 
-def test_create_run_rejects_whitespace_input(api_client):
+@pytest.mark.parametrize(
+    ("resume_text", "job_description"),
+    [
+        ("", "Requires Python"),
+        ("Built Python APIs.", ""),
+        ("  ", "Requires Python"),
+        ("Built Python APIs.", "  "),
+    ],
+)
+def test_create_run_rejects_empty_resume_or_job_description(
+    api_client, resume_text, job_description
+):
     client, _ = api_client
     response = client.post(
-        "/runs", json={"resume_text": "  ", "job_description": "Python"}
+        "/runs",
+        json={
+            "resume_text": resume_text,
+            "job_description": job_description,
+        },
     )
     assert response.status_code == 422
 
@@ -274,3 +300,43 @@ def test_run_service_preserves_failed_status_and_error():
     assert stored.status == "failed"
     assert stored.result is None
     assert stored.error == "provider unavailable"
+
+
+def test_api_rejects_second_review_after_run_is_approved():
+    service = RunService(graph=FakeGraph())
+    with client_for_service(service) as client:
+        created = client.post(
+            "/runs",
+            json={"resume_text": FACT, "job_description": "Requires Python"},
+        )
+        run_id = created.json()["run_id"]
+        approved = client.post(
+            f"/runs/{run_id}/review", json={"approved": True}
+        )
+        repeated = client.post(
+            f"/runs/{run_id}/review", json={"approved": True}
+        )
+    assert approved.status_code == 200
+    assert approved.json()["status"] == "approved"
+    assert repeated.status_code == 409
+    assert "not awaiting review" in repeated.json()["detail"]
+
+
+def test_api_exposes_understandable_failed_run_status():
+    service = RunService(graph=FailingGraph())
+    with client_for_service(service) as client:
+        created = client.post(
+            "/runs",
+            json={"resume_text": FACT, "job_description": "Requires Python"},
+        )
+        run_id = created.json()["run_id"]
+        stored = client.get(f"/runs/{run_id}")
+    assert created.status_code == 201
+    assert created.json()["status"] == "failed"
+    assert stored.status_code == 200
+    assert stored.json() == {
+        "run_id": run_id,
+        "status": "failed",
+        "result": None,
+        "error": "provider unavailable",
+    }
