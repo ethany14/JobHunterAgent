@@ -10,6 +10,13 @@ from evals.metrics import (
 )
 from evals.run_evals import summarize, summarize_reflection, tailored_resume_text
 from evals.run_ablation import UsageCollector, build_comparison, build_writer_only_graph
+from evals.run_stability_evals import (
+    consistency_summary,
+    percentile,
+    tag_summary,
+    validate_dataset,
+)
+from evals.run_evals import EVALS_DIR, load_cases
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, LLMResult
 from job_agent.schemas import SupportedClaim, TailoredResume
@@ -183,3 +190,57 @@ def test_ablation_comparison_reports_quality_and_cost_deltas():
     assert comparison["four_workflow_evaluation_totals"]["increase"]["model_calls"] == 4
     assert comparison["adversarial_suite"]["full_agent_removal_rate"] == 1.0
     assert comparison["all_evaluation_overhead"]["model_calls"] == 13
+
+
+def test_stability_dataset_has_required_coverage():
+    summary = validate_dataset(
+        load_cases(EVALS_DIR / "stability_cases.json"),
+        load_cases(EVALS_DIR / "stability_adversarial_cases.json"),
+    )
+    assert summary["workflow_cases"] == 20
+    assert set(summary["cases_by_role"].values()) == {5}
+    assert summary["tag_counts"]["prompt_injection"] >= 3
+    assert summary["tag_counts"]["synonym"] >= 3
+    assert summary["tag_counts"]["numeric_constraint"] >= 3
+    assert 15 <= summary["unique_injected_unsupported_claims"] <= 20
+
+
+def test_percentile_uses_linear_interpolation():
+    assert percentile([1, 2, 3, 4, 5], 0.5) == 3
+    assert percentile([1, 2, 3, 4, 5], 0.95) == 4.8
+
+
+def test_consistency_reports_exact_and_modal_agreement():
+    records = [
+        {"case_id": "a", "signature": "x"},
+        {"case_id": "a", "signature": "x"},
+        {"case_id": "a", "signature": "y"},
+        {"case_id": "b", "signature": "z"},
+        {"case_id": "b", "signature": "z"},
+        {"case_id": "b", "signature": "z"},
+    ]
+    summary = consistency_summary(records, "signature", 3)
+    assert summary["cases_with_all_runs_identical"] == 1
+    assert summary["all_runs_identical_rate"] == .5
+    assert summary["mean_modal_agreement_rate"] == (2 / 3 + 1) / 2
+
+
+def test_tag_summary_reports_recall_and_unexpected_missing_requirements():
+    records = [
+        {
+            "tags": ["prompt_injection"], "reached_human_review": True,
+            "forbidden_claim_count": 0, "expected_missing_requirement_count": 1,
+            "canonical_matched_requirement_count": 1,
+            "actual_missing_requirements": [{"canonical_name": "aws"}],
+        },
+        {
+            "tags": ["synonym"], "reached_human_review": True,
+            "forbidden_claim_count": 0, "expected_missing_requirement_count": 0,
+            "canonical_matched_requirement_count": 0,
+            "actual_missing_requirements": [],
+        },
+    ]
+    summary = tag_summary(records)
+    assert summary["prompt_injection"]["canonical_recall"] == 1.0
+    assert summary["synonym"]["canonical_recall"] is None
+    assert summary["synonym"]["unexpected_missing_requirements"] == 0

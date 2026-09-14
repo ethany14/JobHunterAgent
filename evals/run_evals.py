@@ -61,10 +61,20 @@ def _expected_requirements(case: dict[str, Any]) -> list[MissingRequirement]:
     return [MissingRequirement.model_validate(item) for item in case.get("expected_missing_requirements", [])]
 
 
-def run_case(case: dict[str, Any], graph: Any) -> EvaluationResult:
+def run_case(
+    case: dict[str, Any],
+    graph: Any,
+    *,
+    callbacks: list[Any] | None = None,
+    thread_id: str | None = None,
+) -> EvaluationResult:
     case_id = case["id"]
     is_input_validation = "expected_error" in case
-    config = {"configurable": {"thread_id": f"eval-{case_id}"}}
+    config: dict[str, Any] = {
+        "configurable": {"thread_id": thread_id or f"eval-{case_id}"}
+    }
+    if callbacks:
+        config["callbacks"] = callbacks
     started = perf_counter()
     try:
         result = graph.invoke(

@@ -123,6 +123,8 @@ def canonicalize_requirement(name: str, original_text: str) -> str:
         return "ci/cd"
     if "postgres" in combined:
         return "postgresql"
+    if re.search(r"\bsql\b", combined):
+        return "sql"
     if re.search(r"\bpython\b", combined):
         return "python"
     return normalized.replace(" ", "_")

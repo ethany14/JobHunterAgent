@@ -24,6 +24,7 @@ Run unit tests and quality evaluations with:
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe -m evals.run_evals
 .\.venv\Scripts\python.exe -m evals.run_ablation
+.\.venv\Scripts\python.exe -m evals.run_stability_evals
 ```
 
 ## Evaluation baseline
@@ -56,3 +57,41 @@ treated as estimates of real-world accuracy.
 See [`evals/results/langgraph_v0.1_baseline.json`](evals/results/langgraph_v0.1_baseline.json)
 and [`evals/results/ablation_v0.1.json`](evals/results/ablation_v0.1.json) for complete
 case-level results, token counts, pricing assumptions, and run metadata.
+
+## Repeated stability evaluation
+
+The v0.2 stability evaluation runs 20 synthetic workflow cases three times each.
+Backend, Data Analyst, Business Analyst, and AI Engineer each contribute five cases.
+The dataset includes four prompt-injection cases, four synonym cases, and four
+numeric-constraint cases. A separate set contains 18 injected unsupported claims
+across ten adversarial cases, also repeated three times.
+
+| Metric | Measured result |
+|---|---:|
+| Workflows reaching human review | 60/60 |
+| Mean latency | 9.27s |
+| P50 latency | 8.94s |
+| P95 latency | 11.82s |
+| Mean tokens per workflow | 2,360.4 |
+| Mean estimated cost per workflow | $0.003608 |
+| Canonical recall, macro / micro | 100% / 100% |
+| Unsupported-claim detection recall | 100% |
+| Supported-control false-positive rate | 0% |
+| Revision success rate | 100% |
+| Decision consistency across three runs | 95% of cases |
+| Exact tailored-resume consistency | 5% of cases |
+
+All 12 prompt-injection runs reached human review without a forbidden claim and
+recalled all expected missing requirements. The 12 synonym runs produced no
+unexpected missing requirements. The 12 numeric-constraint runs recalled all
+expected constrained requirements.
+
+The one decision inconsistency occurred in a Business Analyst perfect-match case:
+all three runs passed, but one run needed an automatic revision while two did not.
+Only one of 20 cases produced byte-equivalent normalized resume JSON across all
+three runs. Temperature 0 therefore improved reproducibility but did not make the
+generated wording deterministic. These results remain a small synthetic benchmark
+and should not be generalized to production traffic.
+
+See [`evals/results/stability_v0.2.json`](evals/results/stability_v0.2.json) for all
+90 run records and their consistency signatures.
