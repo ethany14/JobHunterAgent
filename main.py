@@ -10,13 +10,7 @@ from typing import Callable, Sequence
 
 from langgraph.types import Command
 from job_agent.agent import graph
-from job_agent.schemas import (
-    JobAnalysis,
-    ResumeAnalysis,
-    SkillMatch,
-    TailoredResume,
-    VerificationResult,
-)
+from job_agent.results import interrupt_payload, public_result
 
 
 def _read_text(path: Path, label: str) -> str:
@@ -31,49 +25,6 @@ def _read_text(path: Path, label: str) -> str:
     if not content.strip():
         raise ValueError(f"{label} file is empty: {path}")
     return content
-
-
-def _public_result(state: dict) -> dict:
-    """Validate the graph result and omit the raw resume and job text."""
-    required_outputs = {
-        "resume_analysis": ResumeAnalysis,
-        "job_analysis": JobAnalysis,
-        "skill_match": SkillMatch,
-    }
-    output = {}
-    for field, schema in required_outputs.items():
-        if field not in state:
-            raise RuntimeError(f"Graph completed without producing '{field}'.")
-        output[field] = schema.model_validate(state[field]).model_dump(mode="json")
-    if "tailored_resume" not in state or state.get("verification") is None:
-        raise RuntimeError("Graph completed without generating and verifying a resume.")
-    output.update(
-        {
-            "tailored_resume": TailoredResume.model_validate(
-                state["tailored_resume"]
-            ).model_dump(mode="json"),
-            "verification": VerificationResult.model_validate(
-                state["verification"]
-            ).model_dump(mode="json"),
-            "revision_feedback": state.get("revision_feedback", []),
-            "revision_count": state.get("revision_count", 0),
-            "max_revisions": state.get("max_revisions", 3),
-            "approved": state.get("approved"),
-            "human_feedback": state.get("human_feedback"),
-            "workflow_status": state.get("workflow_status", "running"),
-        }
-    )
-    return output
-
-
-def _interrupt_payload(state: dict) -> dict | None:
-    interruptions = state.get("__interrupt__", ())
-    if not interruptions:
-        return None
-    payload = interruptions[0].value
-    if not isinstance(payload, dict):
-        raise RuntimeError("Human review interrupt returned an invalid payload.")
-    return payload
 
 
 def analyze_files(
@@ -93,11 +44,11 @@ def analyze_files(
         },
         config=config,
     )
-    payload = _interrupt_payload(result)
+    payload = interrupt_payload(result)
     while payload is not None and reviewer is not None:
         result = graph.invoke(Command(resume=reviewer(payload)), config=config)
-        payload = _interrupt_payload(result)
-    return _public_result(result)
+        payload = interrupt_payload(result)
+    return public_result(result)
 
 
 def _console_review(payload: dict) -> dict:

@@ -27,6 +27,30 @@ Run unit tests and quality evaluations with:
 .\.venv\Scripts\python.exe -m evals.run_stability_evals
 ```
 
+## FastAPI v0.3
+
+Install dependencies and start the synchronous development API:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m uvicorn api.main:app --reload
+```
+
+The OpenAPI UI is available at `http://127.0.0.1:8000/docs`. The first version
+keeps run records and LangGraph checkpoints in process memory.
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/health` | Check service health |
+| `POST` | `/runs` | Run the graph until human review |
+| `GET` | `/runs/{run_id}` | Read status and generated result |
+| `POST` | `/runs/{run_id}/review` | Approve or request a revision |
+
+`POST /runs` waits for the graph to reach human review and returns
+`awaiting_review`. A rejected review requires feedback, runs the revision and
+verification loop, and returns to `awaiting_review`. The API uses `run_id` as the
+LangGraph `thread_id` so review requests resume the correct checkpoint.
+
 ## Evaluation baseline
 
 The current baseline uses Gemini 3.7 Flash at temperature 0, five synthetic workflow
