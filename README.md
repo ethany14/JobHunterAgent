@@ -27,7 +27,7 @@ Run unit tests and quality evaluations with:
 .\.venv\Scripts\python.exe -m evals.run_stability_evals
 ```
 
-## FastAPI v0.3
+## FastAPI v0.4
 
 Install dependencies and start the synchronous development API:
 
@@ -36,8 +36,9 @@ Install dependencies and start the synchronous development API:
 .\.venv\Scripts\python.exe -m uvicorn api.main:app --reload
 ```
 
-The OpenAPI UI is available at `http://127.0.0.1:8000/docs`. The first version
-keeps run records and LangGraph checkpoints in process memory.
+The OpenAPI UI is available at `http://127.0.0.1:8000/docs`. The API
+stores run records and LangGraph checkpoints in SQLite so interrupted reviews can
+resume after the API process restarts.
 
 | Method | Endpoint | Purpose |
 |---|---|---|
@@ -50,6 +51,11 @@ keeps run records and LangGraph checkpoints in process memory.
 `awaiting_review`. A rejected review requires feedback, runs the revision and
 verification loop, and returns to `awaiting_review`. The API uses `run_id` as the
 LangGraph `thread_id` so review requests resume the correct checkpoint.
+
+By default, API run metadata is stored in `job_agent.db` and LangGraph checkpoints
+are stored in `job_agent_checkpoints.sqlite`. Override them with
+`JOB_AGENT_DATABASE_URL` and `JOB_AGENT_CHECKPOINT_PATH` when needed. SQLite is
+intended for a single API process; use one shared service instance per process.
 
 ## Evaluation baseline
 
@@ -72,6 +78,43 @@ unsupported claims with no false positives among the supported control claims.
 The four-workflow total increase was 4 model calls, 1,698 tokens, and $0.0005205.
 Running the additional adversarial suite cost approximately $0.00503. These are
 evaluation expenses; the adversarial-suite cost is not a per-request production cost.
+
+## Custom agent v0.1
+
+`custom_agent` contains a persisted sequential loop that does not import LangGraph.
+It supports the existing analysis, writing, verification, bounded revision, and
+human-review transitions. State snapshots, audit events, and the `runs` projection
+are committed in one SQLAlchemy transaction with optimistic version checks.
+
+Apply the database schema with:
+
+```powershell
+.\.venv\Scripts\python.exe -m alembic upgrade head
+```
+
+For a v0.4 SQLite database that already has the `runs` table but no
+`alembic_version`, first verify that its schema matches migration `0001`, then run:
+
+```powershell
+.\.venv\Scripts\python.exe -m alembic stamp 0001_create_runs
+.\.venv\Scripts\python.exe -m alembic upgrade head
+```
+
+Application startup applies Alembic migrations before opening repositories.
+`create_all()` is exposed only through the explicit `create_schema_for_tests=True`
+option used by isolated tests.
+
+The API continues to use the LangGraph backend in v0.1. Backend selection, leases,
+abort, timeout, and automatic crash recovery remain outside this version.
+
+The v0.1.1 parity evaluation ran the same 20 synthetic workflow cases once through
+each backend with Gemini 3.7 Flash, temperature 0, prompt v1, and dataset v2. Both
+backends reached human review in 20/20 cases, achieved 100% canonical missing-
+requirement recall, and generated zero configured forbidden claims. Nineteen cases
+matched on every recorded behavior check. In one case LangGraph performed one
+successful verification revision while the independent custom-agent model call
+passed immediately; both final verification results passed. Generated text is not
+used as a parity criterion.
 
 The cost estimate uses the Gemini 3.7 Flash paid-tier list price through December 31,
 2026. Provider charges may differ. Results are based on a small synthetic dataset and

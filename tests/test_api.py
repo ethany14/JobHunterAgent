@@ -8,9 +8,16 @@ from fastapi.testclient import TestClient
 from langgraph.types import Command
 
 from api.main import app
+from api.db import create_database
+from api.repositories.run_repository import RunRepository
 from api.routes.runs import get_run_service
 from api.schemas.runs import CreateRunResponse, RunResponse
-from api.services.run_service import InvalidRunStateError, RunNotFoundError, RunService
+from api.services.run_service import (
+    SAFE_RUN_ERROR,
+    InvalidRunStateError,
+    RunNotFoundError,
+    RunService,
+)
 from job_agent.nodes import make_evidence_id
 from job_agent.schemas import (
     JobAnalysis,
@@ -67,6 +74,18 @@ def client_for_service(service):
             yield client
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def run_repository(tmp_path):
+    database = create_database(
+        f"sqlite:///{(tmp_path / 'runs.sqlite').as_posix()}",
+        create_schema_for_tests=True,
+    )
+    try:
+        yield RunRepository(database.session_factory)
+    finally:
+        database.close()
 
 
 def test_health(api_client):
@@ -229,9 +248,9 @@ class FailingGraph:
         raise RuntimeError("provider unavailable")
 
 
-def test_run_service_uses_run_id_as_thread_id_and_resumes_approval():
+def test_run_service_uses_run_id_as_thread_id_and_resumes_approval(run_repository):
     fake_graph = FakeGraph()
-    service = RunService(graph=fake_graph)
+    service = RunService(repository=run_repository, graph=fake_graph)
     created = asyncio.run(
         service.create_run(
             SimpleNamespace(resume_text=FACT, job_description="Requires Python")
@@ -249,8 +268,8 @@ def test_run_service_uses_run_id_as_thread_id_and_resumes_approval():
     assert fake_graph.calls[1][1]["configurable"]["thread_id"] == created.run_id
 
 
-def test_run_service_rejection_revises_and_pauses_again():
-    service = RunService(graph=FakeGraph())
+def test_run_service_rejection_revises_and_pauses_again(run_repository):
+    service = RunService(repository=run_repository, graph=FakeGraph())
     created = asyncio.run(
         service.create_run(
             SimpleNamespace(resume_text=FACT, job_description="Requires Python")
@@ -266,8 +285,8 @@ def test_run_service_rejection_revises_and_pauses_again():
     assert reviewed.result["revision_count"] == 1
 
 
-def test_run_service_rejects_review_after_approval():
-    service = RunService(graph=FakeGraph())
+def test_run_service_rejects_review_after_approval(run_repository):
+    service = RunService(repository=run_repository, graph=FakeGraph())
     created = asyncio.run(
         service.create_run(
             SimpleNamespace(resume_text=FACT, job_description="Requires Python")
@@ -288,8 +307,8 @@ def test_run_service_rejects_review_after_approval():
         )
 
 
-def test_run_service_preserves_failed_status_and_error():
-    service = RunService(graph=FailingGraph())
+def test_run_service_preserves_failed_status_and_error(run_repository):
+    service = RunService(repository=run_repository, graph=FailingGraph())
     created = asyncio.run(
         service.create_run(
             SimpleNamespace(resume_text=FACT, job_description="Requires Python")
@@ -299,11 +318,11 @@ def test_run_service_preserves_failed_status_and_error():
     stored = asyncio.run(service.get_run(created.run_id))
     assert stored.status == "failed"
     assert stored.result is None
-    assert stored.error == "provider unavailable"
+    assert stored.error == SAFE_RUN_ERROR
 
 
-def test_api_rejects_second_review_after_run_is_approved():
-    service = RunService(graph=FakeGraph())
+def test_api_rejects_second_review_after_run_is_approved(run_repository):
+    service = RunService(repository=run_repository, graph=FakeGraph())
     with client_for_service(service) as client:
         created = client.post(
             "/runs",
@@ -322,8 +341,8 @@ def test_api_rejects_second_review_after_run_is_approved():
     assert "not awaiting review" in repeated.json()["detail"]
 
 
-def test_api_exposes_understandable_failed_run_status():
-    service = RunService(graph=FailingGraph())
+def test_api_exposes_understandable_failed_run_status(run_repository):
+    service = RunService(repository=run_repository, graph=FailingGraph())
     with client_for_service(service) as client:
         created = client.post(
             "/runs",
@@ -338,5 +357,5 @@ def test_api_exposes_understandable_failed_run_status():
         "run_id": run_id,
         "status": "failed",
         "result": None,
-        "error": "provider unavailable",
+        "error": SAFE_RUN_ERROR,
     }

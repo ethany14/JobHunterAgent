@@ -1,12 +1,8 @@
 """Analysis nodes; the model is initialized only when a node runs."""
-import hashlib
 import json
-import os
-import re
 from pathlib import Path
 from typing import TypeVar
 
-from dotenv import dotenv_values
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.types import interrupt
@@ -19,6 +15,14 @@ from job_agent.prompts import (
     REVISE_RESUME_PROMPT,
     VERIFY_RESUME_PROMPT,
     WRITE_RESUME_PROMPT,
+)
+from job_agent.model import create_model, invoke_structured
+from job_agent.domain import (
+    calculate_match_score,
+    canonicalize_requirement,
+    extract_minimum_years,
+    make_evidence_id,
+    normalize_text,
 )
 from job_agent.schemas import (
     JobAnalysis,
@@ -40,40 +44,13 @@ ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 
 
 def _create_model() -> ChatOpenAI:
-    # Read the project's .env on each call so edits take effect without restarting.
-    settings = {**dotenv_values(ENV_PATH), **os.environ}
-    model_id = (settings.get("LLM_MODEL_ID") or "").strip()
-    if not model_id:
-        raise ValueError("Set LLM_MODEL_ID in the environment or project's .env file.")
-    options = {"model": model_id, "temperature": 0}
-    api_key = settings.get("LLM_API_KEY")
-    base_url = settings.get("LLM_BASE_URL")
-    timeout = settings.get("LLM_TIMEOUT")
-    if api_key:
-        options["api_key"] = api_key
-    if base_url:
-        options["base_url"] = base_url
-    if timeout:
-        try:
-            seconds = float(timeout)
-        except ValueError as exc:
-            raise ValueError("LLM_TIMEOUT must be a positive number of seconds.") from exc
-        if not 0 < seconds < float("inf"):
-            raise ValueError("LLM_TIMEOUT must be a positive number of seconds.")
-        options["timeout"] = seconds
-    return ChatOpenAI(**options)
+    # Preserve the patch point used by baseline tests while sharing configuration.
+    return create_model(env_path=ENV_PATH, model_factory=ChatOpenAI)
 
 
 def _analyze(schema: type[Result], prompt: str, content: str,
              config: RunnableConfig | None = None) -> Result:
-    model = _create_model()
-    structured_model = model.with_structured_output(schema)
-    result = structured_model.invoke(
-        [("system", prompt), ("human", content)], config=config
-    )
-    if isinstance(result, schema):
-        return result
-    return schema.model_validate(result)
+    return invoke_structured(_create_model(), schema, prompt, content, config)
 
 
 def _require_text(state: JobAgentState, key: str) -> str:
@@ -81,53 +58,6 @@ def _require_text(state: JobAgentState, key: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{key} must be a non-empty string.")
     return value.strip()
-
-
-def normalize_text(text: str) -> str:
-    return re.sub(r"\s+", " ", text).strip().casefold()
-
-
-def make_evidence_id(text: str) -> str:
-    digest = hashlib.sha256(normalize_text(text).encode("utf-8")).hexdigest()[:8]
-    return f"EXP-{digest}"
-
-
-_NUMBER_WORDS = {
-    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
-    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
-}
-
-
-def extract_minimum_years(text: str) -> int | None:
-    match = re.search(
-        r"\b(?:at\s+least\s+)?(\d+|one|two|three|four|five|six|seven|eight|nine|ten)"
-        r"\s*\+?\s+years?\b",
-        normalize_text(text),
-    )
-    if not match:
-        return None
-    value = match.group(1)
-    return int(value) if value.isdigit() else _NUMBER_WORDS[value]
-
-
-def canonicalize_requirement(name: str, original_text: str) -> str:
-    normalized = normalize_text(name).replace("ci / cd", "ci/cd")
-    combined = f"{normalized} {normalize_text(original_text)}"
-    if "leadership" in combined:
-        return "leadership_experience"
-    if "kubernetes" in combined:
-        return "kubernetes"
-    if re.search(r"\baws\b", combined):
-        return "aws"
-    if "ci/cd" in combined or "continuous integration" in combined:
-        return "ci/cd"
-    if "postgres" in combined:
-        return "postgresql"
-    if re.search(r"\bsql\b", combined):
-        return "sql"
-    if re.search(r"\bpython\b", combined):
-        return "python"
-    return normalized.replace(" ", "_")
 
 
 def validate_input(state: JobAgentState) -> dict:
@@ -299,19 +229,6 @@ def match_skills(state: JobAgentState, config: RunnableConfig) -> dict:
     return {
         "skill_match": skill_match.model_dump(mode="json")
     }
-
-
-def calculate_match_score(matches: list[SkillEvidence]) -> float:
-    weights = {"required": 2.0, "preferred": 1.0}
-    values = {"matched": 1.0, "partial": 0.5, "missing": 0.0}
-    possible = sum(weights[item.requirement_level] for item in matches)
-    if not possible:
-        return 0.0
-    earned = sum(
-        weights[item.requirement_level] * values[item.match_status]
-        for item in matches
-    )
-    return round(earned / possible * 100, 1)
 
 
 def write_resume(state: JobAgentState, config: RunnableConfig) -> dict:

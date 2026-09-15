@@ -1,16 +1,27 @@
 """Run creation, lookup, and human-review routes."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from threading import Lock
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from api.schemas.runs import CreateRunRequest, CreateRunResponse, ReviewRequest, RunResponse
 from api.services.run_service import InvalidRunStateError, RunNotFoundError, RunService
 
 router = APIRouter(prefix="/runs", tags=["runs"])
-_run_service = RunService()
+_service_initialization_lock = Lock()
 
 
-def get_run_service() -> RunService:
-    return _run_service
+def get_run_service(request: Request) -> RunService:
+    service = getattr(request.app.state, "run_service", None)
+    if service is None:
+        with _service_initialization_lock:
+            service = getattr(request.app.state, "run_service", None)
+            if service is None:
+                from api.runtime import create_run_service
+
+                service = create_run_service()
+                request.app.state.run_service = service
+    return service
 
 
 def _http_error(exc: Exception) -> HTTPException:
@@ -18,7 +29,10 @@ def _http_error(exc: Exception) -> HTTPException:
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     if isinstance(exc, InvalidRunStateError):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
-    return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+    return HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="The request could not be completed.",
+    )
 
 
 @router.post("", response_model=CreateRunResponse, status_code=status.HTTP_201_CREATED)

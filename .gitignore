@@ -4,4 +4,8 @@ __pycache__/
 .pytest_cache/
 *.pyc
 *.db
+*.sqlite
+*.sqlite3
+.pytest-tmp*/
+.release-local/
 uploads/
