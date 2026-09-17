@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Job Agent</title>
+    <link rel="stylesheet" href="sidepanel.css">
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Evidence-grounded tailoring</p>
+        <h1>Job Agent</h1>
+      </div>
+      <button id="health-button" class="health" type="button" aria-label="Check backend health">
+        <span id="health-dot" class="health-dot" aria-hidden="true"></span>
+        <span id="health-text">Checking backend…</span>
+      </button>
+    </header>
+
+    <main>
+      <section class="card">
+        <div class="section-heading">
+          <div>
+            <p class="step-label">Step 1</p>
+            <h2>Resume</h2>
+          </div>
+          <button id="clear-resume-button" class="text-button" type="button">Clear saved resume</button>
+        </div>
+        <label class="sr-only" for="resume-text">Resume text</label>
+        <textarea id="resume-text" rows="10" maxlength="50001" placeholder="Paste your resume here"></textarea>
+        <div class="field-footer">
+          <label class="checkbox-label">
+            <input id="save-resume" type="checkbox">
+            Save this resume in this browser
+          </label>
+          <span id="resume-count" class="character-count">0 / 50,000</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-heading">
+          <div>
+            <p class="step-label">Step 2</p>
+            <h2>Job description</h2>
+          </div>
+          <button id="extract-button" class="secondary-button" type="button">Extract Job Description</button>
+        </div>
+        <p class="hint">Select the job description on the page first for the cleanest extraction.</p>
+        <label class="sr-only" for="job-description">Job description</label>
+        <textarea id="job-description" rows="12" maxlength="50001" placeholder="Extract from the current page or paste the job description"></textarea>
+        <div class="field-footer">
+          <span id="extraction-source" class="muted"></span>
+          <span id="job-count" class="character-count">0 / 50,000</span>
+        </div>
+      </section>
+
+      <button id="analyze-button" class="primary-button full-width" type="button">Analyze and Tailor Resume</button>
+
+      <div id="message" class="message" role="status" aria-live="polite" hidden></div>
+
+      <section id="results" class="results" hidden>
+        <div class="card result-summary">
+          <div>
+            <p class="step-label">Run status</p>
+            <h2 id="run-status">—</h2>
+          </div>
+          <div class="score-block">
+            <span id="match-score" class="score">—</span>
+            <span class="score-label">Match score</span>
+          </div>
+        </div>
+
+        <section class="card">
+          <h2>Requirement match</h2>
+          <div class="requirement-grid">
+            <div>
+              <h3 class="matched-heading">Matched</h3>
+              <ul id="matched-list" class="requirement-list"></ul>
+            </div>
+            <div>
+              <h3 class="partial-heading">Partial</h3>
+              <ul id="partial-list" class="requirement-list"></ul>
+            </div>
+            <div>
+              <h3 class="missing-heading">Missing evidence</h3>
+              <ul id="missing-list" class="requirement-list"></ul>
+            </div>
+            <div>
+              <h3 class="confirmation-heading">Needs your confirmation</h3>
+              <ul id="confirmation-list" class="requirement-list"></ul>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="section-heading">
+            <h2>Tailored resume</h2>
+            <button id="copy-button" class="secondary-button" type="button">Copy Resume</button>
+          </div>
+          <div id="tailored-resume" class="resume-output"></div>
+          <div id="verification" class="verification"></div>
+        </section>
+
+        <section id="review-panel" class="card review-panel" hidden>
+          <h2>Human review</h2>
+          <p class="hint">Approve this version, or explain what should change. Requested changes must remain supported by the original resume.</p>
+          <div class="review-actions">
+            <button id="approve-button" class="primary-button" type="button">Approve</button>
+          </div>
+          <label for="review-feedback">Revision feedback</label>
+          <textarea id="review-feedback" rows="4" placeholder="Example: Shorten the summary and emphasize PostgreSQL."></textarea>
+          <button id="reject-button" class="secondary-button full-width" type="button">Request Revision</button>
+        </section>
+      </section>
+    </main>
+
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>

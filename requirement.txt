@@ -1,6 +1,1 @@
-langgraph
-langchain
-langchain-openai
-pydantic
-python-dotenv
-pytest
+-r requirements.txt
