@@ -11,10 +11,9 @@ from pydantic import BaseModel
 from custom_agent.state import AgentState, Step
 from custom_agent.steps import StepOutcome
 from job_agent.domain import (
-    calculate_match_score,
-    canonicalize_requirement,
-    extract_minimum_years,
     make_evidence_id,
+    normalize_job_analysis,
+    normalize_skill_match,
     normalize_text,
 )
 from job_agent.model import DEFAULT_ENV_PATH, create_model, invoke_structured
@@ -28,13 +27,9 @@ from job_agent.prompts import (
 )
 from job_agent.schemas import (
     JobAnalysis,
-    JobRequirement,
-    MissingRequirement,
     ResumeAnalysis,
     ResumeEvidence,
     SkillAssessment,
-    SkillEvidence,
-    SkillMatch,
     TailoredResume,
     UnsupportedClaim,
     VerificationResult,
@@ -100,7 +95,7 @@ class JobAgentStepHandler:
         )
         evidence_by_text: dict[str, ResumeEvidence] = {}
         for item in analysis.evidence:
-            exact_text = item.exact_text.strip()
+            exact_text = item.exact_text
             normalized = normalize_text(exact_text)
             if normalized and normalized not in evidence_by_text:
                 evidence_by_text[normalized] = ResumeEvidence(
@@ -109,8 +104,11 @@ class JobAgentStepHandler:
                     exact_text=exact_text,
                 )
         return {
-            "resume_analysis": analysis.model_copy(
-                update={"evidence": list(evidence_by_text.values())}
+            "resume_analysis": ResumeAnalysis.model_validate(
+                {
+                    **analysis.model_dump(mode="python"),
+                    "evidence": list(evidence_by_text.values()),
+                }
             )
         }
 
@@ -132,36 +130,11 @@ class JobAgentStepHandler:
         analysis = JobAnalysis.model_validate(
             self._analyze(JobAnalysis, JOB_PROMPT, state.job_description.strip())
         )
-        by_name: dict[str, JobRequirement] = {}
-        for item in analysis.requirements:
-            canonical_name = canonicalize_requirement(
-                item.canonical_name, item.original_text
-            )
-            if not canonical_name:
-                continue
-            normalized = item.model_copy(
-                update={
-                    "canonical_name": canonical_name,
-                    "minimum_years": extract_minimum_years(item.original_text),
-                }
-            )
-            existing = by_name.get(canonical_name)
-            if existing is None or (
-                existing.level == "preferred" and normalized.level == "required"
-            ):
-                by_name[canonical_name] = normalized
-        requirements = [
-            JobRequirement(
-                requirement_id=f"REQ-{index:03d}",
-                canonical_name=item.canonical_name,
-                original_text=item.original_text,
-                level=item.level,
-                minimum_years=item.minimum_years,
-            )
-            for index, item in enumerate(by_name.values(), start=1)
-        ]
         return {
-            "job_analysis": analysis.model_copy(update={"requirements": requirements})
+            "job_analysis": normalize_job_analysis(
+                analysis,
+                state.job_description.strip(),
+            )
         }
 
     def _match_skills(self, state: AgentState) -> dict:
@@ -176,74 +149,7 @@ class JobAgentStepHandler:
         assessment = SkillAssessment.model_validate(
             self._analyze(SkillAssessment, MATCH_PROMPT, content)
         )
-        allowed_evidence = {item.exact_text for item in resume.evidence}
-        supplied_by_id = {item.requirement_id: item for item in assessment.matches}
-        supplied_by_name = {
-            normalize_text(item.job_skill): item for item in assessment.matches
-        }
-        matches: list[SkillEvidence] = []
-        for requirement in job.requirements:
-            item = supplied_by_id.get(requirement.requirement_id)
-            if item is None:
-                item = supplied_by_name.get(normalize_text(requirement.canonical_name))
-            if item is None:
-                item = SkillEvidence(
-                    requirement_id=requirement.requirement_id,
-                    job_skill=requirement.canonical_name,
-                    requirement_level=requirement.level,
-                    match_status="missing",
-                    resume_evidence=[],
-                    confidence=1,
-                )
-            valid_evidence = [
-                evidence
-                for evidence in item.resume_evidence
-                if evidence in allowed_evidence
-            ]
-            status = item.match_status
-            confidence = item.confidence
-            if status != "missing" and not valid_evidence:
-                status = "missing"
-                confidence = 0
-            matches.append(
-                item.model_copy(
-                    update={
-                        "requirement_id": requirement.requirement_id,
-                        "job_skill": requirement.canonical_name,
-                        "requirement_level": requirement.level,
-                        "match_status": status,
-                        "resume_evidence": valid_evidence,
-                        "confidence": confidence,
-                    }
-                )
-            )
-        requirement_by_id = {item.requirement_id: item for item in job.requirements}
-
-        def missing(item: SkillEvidence) -> MissingRequirement:
-            requirement = requirement_by_id[item.requirement_id]
-            return MissingRequirement(
-                canonical_name=requirement.canonical_name,
-                original_text=requirement.original_text,
-                minimum_years=requirement.minimum_years,
-            )
-
-        skill_match = SkillMatch(
-            **assessment.model_dump(exclude={"matches"}),
-            matches=matches,
-            missing_required_requirements=[
-                missing(item)
-                for item in matches
-                if item.requirement_level == "required"
-                and item.match_status != "matched"
-            ],
-            missing_preferred_requirements=[
-                missing(item)
-                for item in matches
-                if item.requirement_level == "preferred"
-                and item.match_status != "matched"
-            ],
-            overall_score=calculate_match_score(matches),
-        )
+        skill_match = normalize_skill_match(resume, job, assessment)
         return {"skill_match": skill_match}
 
     def _write_resume(self, state: AgentState) -> dict:
@@ -287,6 +193,17 @@ class JobAgentStepHandler:
             + state.tailored_resume.highlighted_skills
         )
         for claim in claims:
+            if not claim.evidence_ids:
+                unsupported.append(
+                    UnsupportedClaim(
+                        claim=claim.text,
+                        reason="The claim does not reference any resume evidence.",
+                    )
+                )
+                feedback.append(
+                    f"Remove or rewrite '{claim.text}' with resume evidence IDs."
+                )
+                continue
             unknown_ids = [item for item in claim.evidence_ids if item not in known_ids]
             if unknown_ids:
                 unsupported.append(

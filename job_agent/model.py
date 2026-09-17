@@ -15,6 +15,14 @@ Result = TypeVar("Result", bound=BaseModel)
 DEFAULT_ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 
 
+def optional_setting(settings: Mapping[str, Any], key: str) -> str | None:
+    value = settings.get(key)
+    if value is None:
+        return None
+    cleaned = str(value).strip()
+    return cleaned or None
+
+
 def create_model(
     *,
     env_path: Path = DEFAULT_ENV_PATH,
@@ -24,18 +32,23 @@ def create_model(
     """Create the configured chat model with environment values taking priority."""
     environment = os.environ if environ is None else environ
     settings = {**dotenv_values(env_path), **environment}
-    model_id = (settings.get("LLM_MODEL_ID") or "").strip()
+    model_id = optional_setting(settings, "LLM_MODEL_ID")
     if not model_id:
         raise ValueError("Set LLM_MODEL_ID in the environment or project's .env file.")
-    options: dict[str, Any] = {"model": model_id, "temperature": 0}
-    api_key = settings.get("LLM_API_KEY")
-    base_url = settings.get("LLM_BASE_URL")
-    timeout = settings.get("LLM_TIMEOUT")
-    if api_key:
+    options: dict[str, Any] = {
+        "model": model_id,
+        "temperature": 0,
+        "max_retries": 0,
+    }
+    api_key = optional_setting(settings, "LLM_API_KEY")
+    base_url = optional_setting(settings, "LLM_BASE_URL")
+    timeout = optional_setting(settings, "LLM_TIMEOUT")
+    max_retries = optional_setting(settings, "LLM_MAX_RETRIES")
+    if api_key is not None:
         options["api_key"] = api_key
-    if base_url:
+    if base_url is not None:
         options["base_url"] = base_url
-    if timeout:
+    if timeout is not None:
         try:
             seconds = float(timeout)
         except ValueError as exc:
@@ -43,6 +56,14 @@ def create_model(
         if not 0 < seconds < float("inf"):
             raise ValueError("LLM_TIMEOUT must be a positive number of seconds.")
         options["timeout"] = seconds
+    if max_retries is not None:
+        try:
+            retries = int(max_retries)
+        except ValueError as exc:
+            raise ValueError("LLM_MAX_RETRIES must be a non-negative integer.") from exc
+        if retries < 0:
+            raise ValueError("LLM_MAX_RETRIES must be a non-negative integer.")
+        options["max_retries"] = retries
     return model_factory(**options)
 
 

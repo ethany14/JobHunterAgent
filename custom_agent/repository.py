@@ -3,28 +3,30 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from api.models import Run
-from custom_agent.errors import StaleStateError, StateNotFoundError
-from custom_agent.events import AgentEvent
+from custom_agent.errors import RunAlreadyExistsError, StaleStateError, StateNotFoundError
+from custom_agent.events import AgentEvent, AgentEventType
 from custom_agent.models import CustomAgentEventRow, CustomAgentStateRow
 from custom_agent.state import AgentState, AgentStatus
 
+logger = logging.getLogger(__name__)
+
+
+def ensure_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
 
 def projection_status(status: AgentStatus) -> str:
-    if status == AgentStatus.AWAITING_REVIEW:
-        return "awaiting_review"
-    if status == AgentStatus.REVISING:
-        return "revising"
-    if status == AgentStatus.APPROVED:
-        return "approved"
-    if status == AgentStatus.FAILED:
-        return "failed"
-    return "running"
+    return status.value
 
 
 class StateRepository:
@@ -40,25 +42,40 @@ class StateRepository:
         *,
         result: dict | None = None,
     ) -> AgentState:
+        if state.run_id != event.run_id:
+            raise ValueError("State and event run IDs do not match.")
+        if event.step != state.step:
+            raise ValueError("Initial event step does not match the initial state.")
+        if event.event_type != AgentEventType.RUN_CREATED:
+            raise ValueError("Initial event must be RUN_CREATED.")
         if state.version != 0 or state.event_sequence != 0 or event.sequence != 1:
             raise ValueError("Initial state and event versions are invalid.")
-        persisted = state.model_copy(
-            update={"event_sequence": 1, "updated_at": datetime.now(UTC)}
+        persisted = self._updated_state(
+            state,
+            {"event_sequence": 1, "updated_at": datetime.now(UTC)},
         )
-        with self._session_factory.begin() as session:
-            session.add(
-                Run(
-                    run_id=state.run_id,
-                    thread_id=state.run_id,
-                    status=projection_status(state.status),
-                    resume_text=state.resume_text,
-                    job_description=state.job_description,
-                    result_json=self._encode(result),
-                    error_message=state.error_message,
+        try:
+            with self._session_factory.begin() as session:
+                session.add(
+                    Run(
+                        run_id=state.run_id,
+                        thread_id=state.run_id,
+                        status=projection_status(state.status),
+                        resume_text=state.resume_text,
+                        job_description=state.job_description,
+                        result_json=self._encode(result),
+                        error_message=state.error_message,
+                    )
                 )
-            )
-            session.add(self._state_row(persisted))
-            session.add(self._event_row(event))
+                session.add(self._state_row(persisted))
+                session.add(self._event_row(event))
+        except IntegrityError as exc:
+            if self._is_duplicate_run_error(exc):
+                raise RunAlreadyExistsError(
+                    f"Custom agent run '{state.run_id}' already exists."
+                ) from exc
+            logger.exception("Failed to create custom agent run %s", state.run_id)
+            raise
         return persisted
 
     def get(self, run_id: str) -> AgentState | None:
@@ -82,6 +99,7 @@ class StateRepository:
         expected_version: int,
         result: dict | None,
     ) -> AgentState:
+        """Atomically save state/event/status; None retains the last public result."""
         if state.run_id != event.run_id:
             raise ValueError("State and event run IDs do not match.")
         if state.version != expected_version:
@@ -91,12 +109,13 @@ class StateRepository:
         if event.sequence != state.event_sequence + 1:
             raise ValueError("Event sequence does not follow the current state.")
         now = datetime.now(UTC)
-        persisted = state.model_copy(
-            update={
+        persisted = self._updated_state(
+            state,
+            {
                 "version": expected_version + 1,
                 "event_sequence": event.sequence,
                 "updated_at": now,
-            }
+            },
         )
         with self._session_factory.begin() as session:
             changed = session.execute(
@@ -127,15 +146,17 @@ class StateRepository:
                     f"Custom agent run '{state.run_id}' has a stale state version."
                 )
             session.add(self._event_row(event))
+            projection_values = {
+                "status": projection_status(persisted.status),
+                "error_message": persisted.error_message,
+                "updated_at": now,
+            }
+            if result is not None:
+                projection_values["result_json"] = self._encode(result)
             projected = session.execute(
                 update(Run)
                 .where(Run.run_id == state.run_id)
-                .values(
-                    status=projection_status(persisted.status),
-                    result_json=self._encode(result),
-                    error_message=persisted.error_message,
-                    updated_at=now,
-                )
+                .values(**projection_values)
             )
             if projected.rowcount != 1:
                 raise StateNotFoundError(
@@ -158,7 +179,7 @@ class StateRepository:
                     event_type=row.event_type,
                     step=row.step,
                     payload=json.loads(row.payload_json),
-                    occurred_at=row.occurred_at,
+                    occurred_at=ensure_utc(row.occurred_at),
                 )
                 for row in rows
             ]
@@ -168,6 +189,24 @@ class StateRepository:
         if value is None:
             return None
         return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+    @staticmethod
+    def _updated_state(state: AgentState, updates: dict) -> AgentState:
+        return AgentState.model_validate(
+            {**state.model_dump(mode="python"), **updates}
+        )
+
+    @staticmethod
+    def _is_duplicate_run_error(exc: IntegrityError) -> bool:
+        message = str(exc.orig).casefold()
+        return "unique constraint failed" in message and any(
+            constraint in message
+            for constraint in (
+                "runs.run_id",
+                "runs.thread_id",
+                "custom_agent_states.run_id",
+            )
+        )
 
     @staticmethod
     def _state_row(state: AgentState) -> CustomAgentStateRow:

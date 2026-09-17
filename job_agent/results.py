@@ -36,9 +36,6 @@ def public_result(state: dict[str, Any]) -> dict[str, Any]:
             "revision_feedback": state.get("revision_feedback", []),
             "revision_count": state.get("revision_count", 0),
             "max_revisions": state.get("max_revisions", 3),
-            "approved": state.get("approved"),
-            "human_feedback": state.get("human_feedback"),
-            "workflow_status": state.get("workflow_status", "running"),
         }
     )
     return output

@@ -63,12 +63,14 @@ class RunRepository:
         result: dict[str, Any] | None,
         error_message: str | None,
     ) -> RunRecord | None:
+        """Update status and retain the latest complete result when result is None."""
         with self._session_factory.begin() as session:
             row = session.get(Run, run_id)
             if row is None:
                 return None
             row.status = status
-            row.result_json = self._encode_result(result)
+            if result is not None:
+                row.result_json = self._encode_result(result)
             row.error_message = error_message
             row.updated_at = utc_now()
         return self._record(row)

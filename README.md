@@ -11,7 +11,9 @@ Analyze → Match → Write → Verify → Revise when needed → Human Review
 
 ## Run locally
 
-Create `.env` with `LLM_MODEL_ID`, `LLM_API_KEY`, and optionally `LLM_BASE_URL`, then run:
+Create `.env` with `LLM_MODEL_ID`, `LLM_API_KEY`, and optionally `LLM_BASE_URL`,
+`LLM_TIMEOUT`, and `LLM_MAX_RETRIES`, then run. Retry defaults to `0` so one
+logical model call corresponds to one provider request during evaluations.
 
 ```powershell
 .\.venv\Scripts\python.exe main.py resume.txt job.txt `
@@ -106,6 +108,18 @@ option used by isolated tests.
 
 The API continues to use the LangGraph backend in v0.1. Backend selection, leases,
 abort, timeout, and automatic crash recovery remain outside this version.
+
+`max_revisions` limits consecutive automatic verifier-driven revisions. Human
+feedback may initiate another revision after the automatic limit is reached; that
+revision must pass verification before it can be approved.
+
+The local SQLite MVP stores the full resume, job description, human feedback, and
+generated state in `state_json`. Before exposing this service to extension users,
+add user-scoped access control, deletion and retention policies, protected database
+storage, and logging rules that prevent raw resume content from being recorded.
+
+Custom-backend tracing context and API-level resume/JD size limits remain deferred.
+They should be added before accepting extracted full-page content from an extension.
 
 The v0.1.1 parity evaluation ran the same 20 synthetic workflow cases once through
 each backend with Gemini 3.7 Flash, temperature 0, prompt v1, and dataset v2. Both

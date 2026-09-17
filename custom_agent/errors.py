@@ -15,3 +15,7 @@ class StaleStateError(AgentLoopError):
 
 class InvalidTransitionError(AgentLoopError):
     pass
+
+
+class RunAlreadyExistsError(AgentLoopError):
+    pass

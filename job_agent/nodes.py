@@ -22,16 +22,15 @@ from job_agent.domain import (
     canonicalize_requirement,
     extract_minimum_years,
     make_evidence_id,
+    normalize_job_analysis,
+    normalize_skill_match,
     normalize_text,
 )
 from job_agent.schemas import (
     JobAnalysis,
-    JobRequirement,
-    MissingRequirement,
     ResumeAnalysis,
     ResumeEvidence,
     SkillAssessment,
-    SkillEvidence,
     SkillMatch,
     TailoredResume,
     UnsupportedClaim,
@@ -85,7 +84,7 @@ def analyze_resume(state: JobAgentState, config: RunnableConfig) -> dict:
     analysis = _analyze(ResumeAnalysis, RESUME_PROMPT, resume, config)
     evidence_by_text = {}
     for item in analysis.evidence:
-        exact_text = item.exact_text.strip()
+        exact_text = item.exact_text
         normalized = normalize_text(exact_text)
         if normalized and normalized not in evidence_by_text:
             evidence_by_text[normalized] = ResumeEvidence(
@@ -117,39 +116,7 @@ def validate_extracted_evidence(state: JobAgentState) -> dict:
 def analyze_job(state: JobAgentState, config: RunnableConfig) -> dict:
     job = state["job_description"].strip()
     analysis = _analyze(JobAnalysis, JOB_PROMPT, job, config)
-    requirements_by_name = {}
-    for item in analysis.requirements:
-        canonical_name = canonicalize_requirement(
-            item.canonical_name, item.original_text
-        )
-        if not canonical_name:
-            continue
-        normalized_item = item.model_copy(
-            update={
-                "canonical_name": canonical_name,
-                "minimum_years": extract_minimum_years(item.original_text),
-            }
-        )
-        existing = requirements_by_name.get(canonical_name)
-        if existing is None or (
-            existing.level == "preferred" and normalized_item.level == "required"
-        ):
-            requirements_by_name[canonical_name] = normalized_item
-    requirements = [
-        JobRequirement(
-            requirement_id=f"REQ-{index:03d}",
-            canonical_name=item.canonical_name,
-            original_text=item.original_text,
-            level=item.level,
-            minimum_years=item.minimum_years,
-        )
-        for index, item in enumerate(requirements_by_name.values(), start=1)
-    ]
-    return {
-        "job_analysis": analysis.model_copy(
-            update={"requirements": requirements}
-        ).model_dump(mode="json")
-    }
+    return {"job_analysis": normalize_job_analysis(analysis, job).model_dump(mode="json")}
 
 
 def match_skills(state: JobAgentState, config: RunnableConfig) -> dict:
@@ -162,70 +129,7 @@ def match_skills(state: JobAgentState, config: RunnableConfig) -> dict:
         f"Job analysis:\n{job.model_dump_json()}"
     )
     assessment = _analyze(SkillAssessment, MATCH_PROMPT, content, config)
-    allowed_evidence = {item.exact_text for item in resume.evidence}
-    supplied_by_id = {item.requirement_id: item for item in assessment.matches}
-    supplied_by_name = {
-        normalize_text(item.job_skill): item for item in assessment.matches
-    }
-    matches = []
-    for requirement in job.requirements:
-        item = supplied_by_id.get(requirement.requirement_id)
-        if item is None:
-            item = supplied_by_name.get(normalize_text(requirement.canonical_name))
-        if item is None:
-            item = SkillEvidence(
-                requirement_id=requirement.requirement_id,
-                job_skill=requirement.canonical_name,
-                requirement_level=requirement.level,
-                match_status="missing",
-                resume_evidence=[],
-                confidence=1,
-            )
-        valid_evidence = [
-            evidence for evidence in item.resume_evidence if evidence in allowed_evidence
-        ]
-        status = item.match_status
-        confidence = item.confidence
-        if status != "missing" and not valid_evidence:
-            status = "missing"
-            confidence = 0
-        matches.append(
-            item.model_copy(
-                update={
-                    "requirement_id": requirement.requirement_id,
-                    "job_skill": requirement.canonical_name,
-                    "requirement_level": requirement.level,
-                    "match_status": status,
-                    "resume_evidence": valid_evidence,
-                    "confidence": confidence,
-                }
-            )
-        )
-    requirement_by_id = {item.requirement_id: item for item in job.requirements}
-
-    def missing_requirement(item: SkillEvidence) -> MissingRequirement:
-        requirement = requirement_by_id[item.requirement_id]
-        return MissingRequirement(
-            canonical_name=requirement.canonical_name,
-            original_text=requirement.original_text,
-            minimum_years=requirement.minimum_years,
-        )
-
-    missing_required = [
-        missing_requirement(item) for item in matches
-        if item.requirement_level == "required" and item.match_status != "matched"
-    ]
-    missing_preferred = [
-        missing_requirement(item) for item in matches
-        if item.requirement_level == "preferred" and item.match_status != "matched"
-    ]
-    skill_match = SkillMatch(
-        **assessment.model_dump(exclude={"matches"}),
-        matches=matches,
-        missing_required_requirements=missing_required,
-        missing_preferred_requirements=missing_preferred,
-        overall_score=calculate_match_score(matches),
-    )
+    skill_match = normalize_skill_match(resume, job, assessment)
     return {
         "skill_match": skill_match.model_dump(mode="json")
     }

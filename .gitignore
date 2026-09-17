@@ -5,6 +5,7 @@ __pycache__/
 *.pyc
 *.db
 *.sqlite
+*.sqlite-*
 *.sqlite3
 .pytest-tmp*/
 .release-local/

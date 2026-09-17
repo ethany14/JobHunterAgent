@@ -54,6 +54,7 @@ class AgentLoop:
         while state.step != Step.HUMAN_REVIEW:
             try:
                 outcome = self._handler.execute(state.step, state)
+                produced_fields = set(outcome.updates)
                 updates = dict(outcome.updates)
                 if state.step == Step.REVISE_RESUME:
                     updates.update(
@@ -61,16 +62,23 @@ class AgentLoop:
                             "revision_count": state.revision_count + 1,
                             "approved": None,
                             "human_feedback": None,
+                            "verification": None,
                         }
                     )
                 computed = self._updated(state, updates)
-                transition = self._policy.after_step(computed)
+                transition = self._policy.after_step(
+                    computed,
+                    produced_fields=produced_fields,
+                )
                 next_state = self._transitioned(computed, transition)
                 event = self._event(
                     next_state,
                     transition.event_type,
                     state.step,
-                    {"next_step": transition.step.value},
+                    {
+                        "next_step": transition.step.value,
+                        **transition.event_payload,
+                    },
                 )
                 state = self._repository.save(
                     next_state,
@@ -121,7 +129,12 @@ class AgentLoop:
             state, approved=approved, feedback=feedback
         )
         reviewed = self._transitioned(state, transition)
-        event = self._event(reviewed, transition.event_type, Step.HUMAN_REVIEW)
+        event = self._event(
+            reviewed,
+            transition.event_type,
+            Step.HUMAN_REVIEW,
+            dict(transition.event_payload),
+        )
         reviewed = self._repository.save(
             reviewed,
             event,
@@ -163,6 +176,11 @@ class AgentLoop:
         )
 
     def _project(self, state: AgentState) -> dict | None:
+        if state.status not in {
+            AgentStatus.AWAITING_REVIEW,
+            AgentStatus.APPROVED,
+        }:
+            return None
         if (
             state.resume_analysis is None
             or state.job_analysis is None
@@ -171,8 +189,4 @@ class AgentLoop:
             or state.verification is None
         ):
             return None
-        job_state = state.job_state()
-        job_state["workflow_status"] = (
-            "approved" if state.status == AgentStatus.APPROVED else "running"
-        )
-        return self._result_projector(job_state)
+        return self._result_projector(state.job_state())
