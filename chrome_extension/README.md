@@ -48,12 +48,54 @@ The API base URL is fixed at `http://localhost:8000`. The extension calls:
 - `POST /runs` with `resume_text` and `job_description`
 - `GET /runs/{run_id}`
 - `POST /runs/{run_id}/review` with `approved` and `feedback`
+- `POST /sessions` with the fixed `job_assistant_readonly` capability profile
+- `GET /sessions` for safe recent-conversation summaries
+- `GET /sessions/{session_id}` and `/messages`
+- `POST /sessions/{session_id}/messages`
+- `POST /sessions/{session_id}/tool-calls/{tool_call_id}/approve` or `/reject`
+- `POST /sessions/{session_id}/cancel` and `/recover`
+- Memory management under `/memories`
+- Skill discovery and lifecycle management under `/skills` and `/skill-versions`
+- `GET /sessions/{session_id}/context` for a privacy-filtered snapshot summary
 
 It handles `running`, `awaiting_review`, `revising`, `approved`, and `failed` run states. A rejection requires feedback. The tailored resume can be copied after the run reaches a reviewable result.
+
+The Assistant tab handles `active`, `running`, `awaiting_user`,
+`awaiting_tool_approval`, `completed`, `failed`, `cancelled`, and `timed_out`
+sessions. **Ask Agent About This Run** starts a session linked to the displayed
+run. Tool approval cards display only metadata and arguments already redacted by
+the server; arguments cannot be edited in the extension. A restored running
+session is polled for a bounded period, and polling never creates a replacement
+session. Closing the Side Panel does not cancel backend work.
+
+The **Previous conversations** selector reads recent Session summaries from the
+local backend. Selecting one restores its public user/assistant messages, even
+after another Session has been created. The browser does not keep a second copy
+of the history.
+
+The **Context** tab has three sections. **Used This Turn** shows only snapshot
+IDs, lifecycle status, Skill metadata, Memory display metadata, effective tool
+names, timestamps, and estimated tokens. **Memory Manager** creates candidates
+that require a separate confirmation and uses an explicit **Replace confirmed**
+action for same-key changes. Delete is a backend soft delete. **Skill Manager**
+shows safe instruction snapshots and separates approval, activation, rejection,
+and retirement. Generated Skills also require a server-recorded passing
+evaluation before activation.
 
 ## Resume storage and privacy
 
 Saving the resume is optional. When enabled, the resume is stored in `chrome.storage.local` in the current Chrome profile. **Clear saved resume** removes that stored copy and clears the field. The extension does not write resume text, job-description text, API keys, or generated results to the console.
+
+For the Assistant, the extension stores only the active session ID in
+`chrome.storage.local`. Messages, tool outputs, prompts, approval data, and
+session state are restored from the backend and are not cached in browser
+storage. A temporary backend failure keeps the saved session ID; an explicit
+`404` removes it.
+
+Memory, Skill, and context responses are fetched when the Context tab opens and
+after relevant changes. They are not stored in `chrome.storage`. The context
+summary never contains system prompts, assembled model context, raw source
+evidence, raw tool results, owner IDs, or task-private messages.
 
 The local FastAPI service and its SQLite database have their own storage behavior. Clearing the browser copy does not delete data already sent to the backend.
 
@@ -74,3 +116,5 @@ The extension does not request optional website host patterns, automatic access 
 - There are no site-specific adapters, batch scraping, automatic applications, login bypasses, or file uploads.
 - The backend must be running locally, and the in-progress request must complete within 60 seconds.
 - Resume persistence is local to the Chrome profile and is not encrypted by the extension.
+- Session access currently follows the backend's trusted local single-user model;
+  there is no account or tenant authorization boundary.

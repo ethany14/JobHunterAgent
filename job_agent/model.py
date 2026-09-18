@@ -13,6 +13,41 @@ from pydantic import BaseModel
 
 Result = TypeVar("Result", bound=BaseModel)
 DEFAULT_ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+GEMINI_OPENAI_COMPATIBILITY_HOST = "generativelanguage.googleapis.com"
+GEMINI_MISSING_THOUGHT_SIGNATURE = "skip_thought_signature_validator"
+
+
+class ProviderCompatibleChatOpenAI(ChatOpenAI):
+    """Patch provider-specific wire metadata without changing shared messages.
+
+    Gemini 3 requires a thought signature when a function-call message is sent
+    back with its tool result. The installed OpenAI/LangChain compatibility
+    stack drops Gemini's ``extra_content`` while normalizing the first response.
+    Google's documented fallback signature is added only for Gemini's
+    OpenAI-compatible endpoint and only when the signature is absent.
+    """
+
+    def _get_request_payload(
+        self,
+        input_: Any,
+        *,
+        stop: list[str] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        payload = super()._get_request_payload(input_, stop=stop, **kwargs)
+        base_url = str(self.openai_api_base or "")
+        if GEMINI_OPENAI_COMPATIBILITY_HOST not in base_url.casefold():
+            return payload
+        for message in payload.get("messages", []):
+            if message.get("role") != "assistant" or not message.get("tool_calls"):
+                continue
+            first_call = message["tool_calls"][0]
+            extra_content = first_call.setdefault("extra_content", {})
+            google = extra_content.setdefault("google", {})
+            google.setdefault(
+                "thought_signature", GEMINI_MISSING_THOUGHT_SIGNATURE
+            )
+        return payload
 
 
 def optional_setting(settings: Mapping[str, Any], key: str) -> str | None:
@@ -27,7 +62,7 @@ def create_model(
     *,
     env_path: Path = DEFAULT_ENV_PATH,
     environ: Mapping[str, str] | None = None,
-    model_factory: Callable[..., Any] = ChatOpenAI,
+    model_factory: Callable[..., Any] = ProviderCompatibleChatOpenAI,
 ) -> Any:
     """Create the configured chat model with environment values taking priority."""
     environment = os.environ if environ is None else environ

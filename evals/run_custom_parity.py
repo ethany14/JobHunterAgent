@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import json
+import platform
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -12,6 +14,7 @@ from tempfile import TemporaryDirectory
 from time import perf_counter
 from typing import Any
 
+from evals import DATASET_VERSION
 from evals.metrics import (
     EvaluationResult,
     MissingRequirement,
@@ -31,7 +34,13 @@ from custom_agent.state import AgentStatus, Step
 from api.db import create_database
 from job_agent.graph import builder
 from job_agent.nodes import _create_model
-from job_agent.schemas import SkillMatch, TailoredResume, VerificationResult
+from job_agent.prompts import PROMPT_VERSION
+from job_agent.schemas import (
+    SCHEMA_VERSION,
+    SkillMatch,
+    TailoredResume,
+    VerificationResult,
+)
 
 DEFAULT_CASES_PATH = EVALS_DIR / "stability_cases.json"
 DEFAULT_OUTPUT_PATH = EVALS_DIR / "results" / "custom_v0.1.1_parity.json"
@@ -45,6 +54,25 @@ COMPUTATION_STEPS = {
     "verify_resume",
     "revise_resume",
 }
+
+
+def dependency_versions() -> dict[str, str]:
+    """Capture the runtime versions needed to interpret a parity artifact."""
+    versions = {"python": platform.python_version()}
+    for package in (
+        "langgraph",
+        "langgraph-checkpoint",
+        "langgraph-checkpoint-sqlite",
+        "langchain-core",
+        "langchain-openai",
+        "pydantic",
+        "sqlalchemy",
+    ):
+        try:
+            versions[package] = importlib.metadata.version(package)
+        except importlib.metadata.PackageNotFoundError:
+            versions[package] = "not-installed"
+    return versions
 
 
 def _expected_requirements(case: dict[str, Any]) -> list[MissingRequirement]:
@@ -288,10 +316,14 @@ def run_parity_evaluation(cases_path: Path, output_path: Path) -> dict[str, Any]
             "dirty_before_run": dirty_before_run,
             "model": model.model_name,
             "temperature": model.temperature,
-            "prompt_version": "v1",
-            "dataset_version": "v2",
+            "max_retries": model.max_retries,
+            "prompt_version": PROMPT_VERSION,
+            "schema_version": SCHEMA_VERSION,
+            "dataset_version": DATASET_VERSION,
             "runs_per_case": 1,
             "cases_per_backend": len(cases),
+            "dependency_versions": dependency_versions(),
+            "backend_policy": "langgraph_frozen_custom_default",
             "transition_comparison": (
                 "LangGraph route derived from final revision_count; custom route read "
                 "from persisted events."

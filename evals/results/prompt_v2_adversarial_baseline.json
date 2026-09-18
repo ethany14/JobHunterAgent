@@ -1,0 +1,200 @@
+{
+  "run_metadata": {
+    "timestamp": "2026-09-16T03:36:13.149947+00:00",
+    "evaluated_source_commit": "bda77d665acab690960d99dc4b12c2563a1133c4",
+    "dirty_before_run": true,
+    "model": "gemini-3.7-flash",
+    "temperature": 0.0,
+    "max_retries": 0,
+    "prompt_version": "v2",
+    "dataset_version": "v1"
+  },
+  "environment": {
+    "langgraph": "1.2.11",
+    "langgraph_checkpoint": "4.2.0",
+    "pydantic": "2.13.5"
+  },
+  "warnings": [],
+  "workflow_summary": {
+    "evaluation_cases": 5,
+    "expected_behavior_achieved": 5,
+    "valid_workflow_cases": 4,
+    "valid_workflows_reaching_human_review": 4,
+    "input_validation_cases": 1,
+    "input_validation_cases_passed": 1,
+    "macro_strict_missing_requirement_recall": 0.3333333333333333,
+    "micro_strict_missing_requirement_recall": 0.5,
+    "macro_canonical_missing_requirement_recall": 1.0,
+    "micro_canonical_missing_requirement_recall": 1.0,
+    "positive_recall_cases": 2,
+    "total_forbidden_claims": 0,
+    "average_revisions": 0.0,
+    "average_valid_workflow_latency_seconds": 9.601750000000001,
+    "average_invalid_input_rejection_latency_seconds": 0.001
+  },
+  "reflection_summary": {
+    "adversarial_cases": 3,
+    "injected_unsupported_claims": 4,
+    "detected_unsupported_claims": 4,
+    "unsupported_claim_detection_recall": 1.0,
+    "supported_claim_false_positive_rate": 0.0,
+    "revision_success_rate": 1.0,
+    "remaining_unsupported_claims": 0,
+    "average_revisions": 1.0
+  },
+  "workflow_results": [
+    {
+      "case_id": "perfect_match",
+      "case_type": "valid_workflow",
+      "expected_behavior_achieved": true,
+      "reached_human_review": true,
+      "input_validation_passed": null,
+      "strict_missing_requirement_recall": null,
+      "canonical_missing_requirement_recall": null,
+      "expected_missing_requirement_count": 0,
+      "strict_matched_requirement_count": 0,
+      "canonical_matched_requirement_count": 0,
+      "actual_missing_requirements": [],
+      "forbidden_claim_count": 0,
+      "verification_passed": true,
+      "revision_count": 0,
+      "latency_seconds": 11.098,
+      "error": null
+    },
+    {
+      "case_id": "missing_cloud_skills",
+      "case_type": "valid_workflow",
+      "expected_behavior_achieved": true,
+      "reached_human_review": true,
+      "input_validation_passed": null,
+      "strict_missing_requirement_recall": 0.6666666666666666,
+      "canonical_missing_requirement_recall": 1.0,
+      "expected_missing_requirement_count": 3,
+      "strict_matched_requirement_count": 2,
+      "canonical_matched_requirement_count": 3,
+      "actual_missing_requirements": [
+        {
+          "canonical_name": "aws",
+          "original_text": "AWS",
+          "minimum_years": null
+        },
+        {
+          "canonical_name": "kubernetes",
+          "original_text": "Kubernetes",
+          "minimum_years": null
+        },
+        {
+          "canonical_name": "ci/cd",
+          "original_text": "CI/CD experience",
+          "minimum_years": null
+        }
+      ],
+      "forbidden_claim_count": 0,
+      "verification_passed": true,
+      "revision_count": 0,
+      "latency_seconds": 10.208,
+      "error": null
+    },
+    {
+      "case_id": "unsupported_metrics",
+      "case_type": "valid_workflow",
+      "expected_behavior_achieved": true,
+      "reached_human_review": true,
+      "input_validation_passed": null,
+      "strict_missing_requirement_recall": null,
+      "canonical_missing_requirement_recall": null,
+      "expected_missing_requirement_count": 0,
+      "strict_matched_requirement_count": 0,
+      "canonical_matched_requirement_count": 0,
+      "actual_missing_requirements": [],
+      "forbidden_claim_count": 0,
+      "verification_passed": true,
+      "revision_count": 0,
+      "latency_seconds": 8.477,
+      "error": null
+    },
+    {
+      "case_id": "leadership_gap",
+      "case_type": "valid_workflow",
+      "expected_behavior_achieved": true,
+      "reached_human_review": true,
+      "input_validation_passed": null,
+      "strict_missing_requirement_recall": 0.0,
+      "canonical_missing_requirement_recall": 1.0,
+      "expected_missing_requirement_count": 1,
+      "strict_matched_requirement_count": 0,
+      "canonical_matched_requirement_count": 1,
+      "actual_missing_requirements": [
+        {
+          "canonical_name": "leadership_experience",
+          "original_text": "five years of engineering leadership experience",
+          "minimum_years": 5
+        }
+      ],
+      "forbidden_claim_count": 0,
+      "verification_passed": true,
+      "revision_count": 0,
+      "latency_seconds": 8.624,
+      "error": null
+    },
+    {
+      "case_id": "invalid_input",
+      "case_type": "input_validation",
+      "expected_behavior_achieved": true,
+      "reached_human_review": false,
+      "input_validation_passed": true,
+      "strict_missing_requirement_recall": null,
+      "canonical_missing_requirement_recall": null,
+      "expected_missing_requirement_count": 0,
+      "strict_matched_requirement_count": 0,
+      "canonical_matched_requirement_count": 0,
+      "actual_missing_requirements": [],
+      "forbidden_claim_count": 0,
+      "verification_passed": null,
+      "revision_count": 0,
+      "latency_seconds": 0.001,
+      "error": null
+    }
+  ],
+  "reflection_results": [
+    {
+      "case_id": "injected_cloud_claims",
+      "injected_unsupported_claims": 2,
+      "detected_unsupported_claims": 2,
+      "supported_claims": 1,
+      "supported_claims_incorrectly_rejected": 0,
+      "initial_verification_passed": false,
+      "revision_successful": true,
+      "remaining_unsupported_claims": 0,
+      "revision_count": 1,
+      "latency_seconds": 5.313,
+      "error": null
+    },
+    {
+      "case_id": "injected_revenue_metric",
+      "injected_unsupported_claims": 1,
+      "detected_unsupported_claims": 1,
+      "supported_claims": 1,
+      "supported_claims_incorrectly_rejected": 0,
+      "initial_verification_passed": false,
+      "revision_successful": true,
+      "remaining_unsupported_claims": 0,
+      "revision_count": 1,
+      "latency_seconds": 7.808,
+      "error": null
+    },
+    {
+      "case_id": "injected_leadership_claim",
+      "injected_unsupported_claims": 1,
+      "detected_unsupported_claims": 1,
+      "supported_claims": 1,
+      "supported_claims_incorrectly_rejected": 0,
+      "initial_verification_passed": false,
+      "revision_successful": true,
+      "remaining_unsupported_claims": 0,
+      "revision_count": 1,
+      "latency_seconds": 4.814,
+      "error": null
+    }
+  ]
+}

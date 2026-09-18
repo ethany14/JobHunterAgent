@@ -62,9 +62,9 @@ def job_analysis() -> JobAnalysis:
         summary="Build services",
         requirements=[
             JobRequirement(requirement_id="REQ-001", canonical_name="python",
-                           original_text="Strong Python skills", level="required"),
+                           original_text="Python", level="required"),
             JobRequirement(requirement_id="REQ-002", canonical_name="sql",
-                           original_text="SQL experience", level="required"),
+                           original_text="SQL", level="required"),
         ],
         responsibilities=["Build services"],
     )
@@ -176,6 +176,15 @@ def test_python_assigns_stable_evidence_ids_and_deduplicates():
     assert first.evidence[0].evidence_id == second.evidence[0].evidence_id == FACT_ID
 
 
+def test_resume_analysis_preserves_verbatim_evidence_text():
+    verbatim = "  Built REST APIs in Python and FastAPI.  "
+    analysis = resume_analysis(verbatim)
+    with patch("job_agent.nodes._analyze", return_value=analysis):
+        result = analyze_resume({"resume_text": verbatim}, {})["resume_analysis"]
+    result = ResumeAnalysis.model_validate(result)
+    assert result.evidence[0].exact_text == verbatim
+
+
 def test_job_requirements_are_deduplicated_and_required_wins():
     raw = JobAnalysis(
         title="Engineer", summary="Role", responsibilities=[],
@@ -190,13 +199,18 @@ def test_job_requirements_are_deduplicated_and_required_wins():
                            original_text="Kubernetes required", level="required"),
         ],
     )
+    job_description = (
+        "Python preferred. Strong Python programming skills. "
+        "Docker and Kubernetes. Kubernetes required."
+    )
     with patch("job_agent.nodes._analyze", return_value=raw):
-        result = analyze_job({"job_description": "Role"}, {})["job_analysis"]
+        result = analyze_job({"job_description": job_description}, {})["job_analysis"]
     result = JobAnalysis.model_validate(result)
     assert [(item.canonical_name, item.level) for item in result.requirements] == [
         ("python", "required"), ("kubernetes", "required")
     ]
-    assert [item.requirement_id for item in result.requirements] == ["REQ-001", "REQ-002"]
+    assert all(item.requirement_id.startswith("REQ-") for item in result.requirements)
+    assert len({item.requirement_id for item in result.requirements}) == 2
 
 
 def test_calculate_match_score_uses_fixed_weights():

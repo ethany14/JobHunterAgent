@@ -1,0 +1,26 @@
+[
+  {
+    "id": "direct_summary_length",
+    "prompt": "How many sentences should I have in my resume summary?",
+    "expect_memory": true,
+    "expected_answer_phrases": ["no more than two"]
+  },
+  {
+    "id": "paraphrased_summary_length",
+    "prompt": "Based on my saved preferences, what is the maximum length of my resume professional summary?",
+    "expect_memory": true,
+    "expected_answer_phrases": ["no more than two"]
+  },
+  {
+    "id": "explicit_turn_override",
+    "prompt": "For this turn only, override my usual summary-length preference and give me a three-sentence structure.",
+    "expect_memory": true,
+    "expected_answer_phrases": ["three-sentence", "three sentence"]
+  },
+  {
+    "id": "irrelevant_sql_question",
+    "prompt": "What is the difference between a SQL INNER JOIN and LEFT JOIN?",
+    "expect_memory": false,
+    "expected_answer_phrases": ["join"]
+  }
+]

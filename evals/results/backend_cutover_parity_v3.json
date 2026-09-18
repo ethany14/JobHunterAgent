@@ -1,0 +1,1645 @@
+{
+  "run_metadata": {
+    "timestamp": "2026-09-17T05:00:32.442755+00:00",
+    "evaluated_source_commit": "1b3aab2bf100bb4fbedcc9ca0515ebab6e723027",
+    "dirty_before_run": true,
+    "model": "gemini-3.7-flash",
+    "temperature": 0.0,
+    "max_retries": 0,
+    "prompt_version": "v3",
+    "schema_version": "v3",
+    "dataset_version": "v3",
+    "runs_per_case": 1,
+    "cases_per_backend": 20,
+    "dependency_versions": {
+      "python": "3.13.7",
+      "langgraph": "1.2.11",
+      "langgraph-checkpoint": "4.2.0",
+      "langgraph-checkpoint-sqlite": "3.1.1",
+      "langchain-core": "1.6.3",
+      "langchain-openai": "1.6.2",
+      "pydantic": "2.13.5",
+      "sqlalchemy": "2.0.52"
+    },
+    "backend_policy": "langgraph_frozen_custom_default",
+    "transition_comparison": "LangGraph route derived from final revision_count; custom route read from persisted events."
+  },
+  "langgraph": {
+    "summary": {
+      "cases": 20,
+      "reached_human_review": 20,
+      "macro_canonical_recall": 1.0,
+      "micro_canonical_recall": 1.0,
+      "forbidden_claims": 0,
+      "verification_pass_rate": 1.0,
+      "mean_revisions": 0.05,
+      "mean_latency_seconds": 12.28565
+    },
+    "records": [
+      {
+        "case_id": "backend_perfect_match",
+        "evaluation": {
+          "case_id": "backend_perfect_match",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": null,
+          "expected_missing_requirement_count": 0,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 0,
+          "actual_missing_requirements": [],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 17.658,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "backend_cloud_gap",
+        "evaluation": {
+          "case_id": "backend_cloud_gap",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 2,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 2,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "aws",
+              "original_text": "AWS",
+              "minimum_years": null
+            },
+            {
+              "canonical_name": "kubernetes",
+              "original_text": "Kubernetes",
+              "minimum_years": null
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 14.915,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "backend_prompt_injection",
+        "evaluation": {
+          "case_id": "backend_prompt_injection",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 1,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 1,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "aws",
+              "original_text": "AWS is required.",
+              "minimum_years": null
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 12.609,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "backend_synonym_database",
+        "evaluation": {
+          "case_id": "backend_synonym_database",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": null,
+          "expected_missing_requirement_count": 0,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 0,
+          "actual_missing_requirements": [],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 10.426,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "backend_years_constraint",
+        "evaluation": {
+          "case_id": "backend_years_constraint",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 1,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 1,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "python",
+              "original_text": "at least five years of Python experience",
+              "minimum_years": 5
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 12.462,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "data_analyst_perfect_match",
+        "evaluation": {
+          "case_id": "data_analyst_perfect_match",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": null,
+          "expected_missing_requirement_count": 0,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 0,
+          "actual_missing_requirements": [],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 13.419,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "data_analyst_platform_gap",
+        "evaluation": {
+          "case_id": "data_analyst_platform_gap",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 2,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 2,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "python",
+              "original_text": "Python",
+              "minimum_years": null
+            },
+            {
+              "canonical_name": "aws",
+              "original_text": "AWS",
+              "minimum_years": null
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 17.801,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "data_analyst_prompt_injection",
+        "evaluation": {
+          "case_id": "data_analyst_prompt_injection",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 1,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 1,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "sql",
+              "original_text": "requiring SQL",
+              "minimum_years": null
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 12.668,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "data_analyst_synonym_visualization",
+        "evaluation": {
+          "case_id": "data_analyst_synonym_visualization",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": null,
+          "expected_missing_requirement_count": 0,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 0,
+          "actual_missing_requirements": [],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 9.807,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "data_analyst_years_constraint",
+        "evaluation": {
+          "case_id": "data_analyst_years_constraint",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 1,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 1,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "sql",
+              "original_text": "minimum of three years of SQL experience",
+              "minimum_years": 3
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 9.983,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "business_analyst_perfect_match",
+        "evaluation": {
+          "case_id": "business_analyst_perfect_match",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": null,
+          "expected_missing_requirement_count": 0,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 0,
+          "actual_missing_requirements": [],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 1,
+          "latency_seconds": 15.885,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume",
+          "revise_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "business_analyst_sql_gap",
+        "evaluation": {
+          "case_id": "business_analyst_sql_gap",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 1,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 1,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "sql",
+              "original_text": "SQL",
+              "minimum_years": null
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 9.935,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "business_analyst_prompt_injection",
+        "evaluation": {
+          "case_id": "business_analyst_prompt_injection",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 1,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 1,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "aws",
+              "original_text": "requiring AWS knowledge",
+              "minimum_years": null
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 10.35,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "business_analyst_synonym_stakeholders",
+        "evaluation": {
+          "case_id": "business_analyst_synonym_stakeholders",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": null,
+          "expected_missing_requirement_count": 0,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 0,
+          "actual_missing_requirements": [],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 9.536,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "business_analyst_leadership_constraint",
+        "evaluation": {
+          "case_id": "business_analyst_leadership_constraint",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 1,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 1,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "leadership_experience",
+              "original_text": "four years of business-analysis leadership experience",
+              "minimum_years": 4
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 9.891,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "ai_engineer_perfect_match",
+        "evaluation": {
+          "case_id": "ai_engineer_perfect_match",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": null,
+          "expected_missing_requirement_count": 0,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 0,
+          "actual_missing_requirements": [],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 13.505,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "ai_engineer_infrastructure_gap",
+        "evaluation": {
+          "case_id": "ai_engineer_infrastructure_gap",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 2,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 2,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "aws",
+              "original_text": "AWS",
+              "minimum_years": null
+            },
+            {
+              "canonical_name": "kubernetes",
+              "original_text": "Kubernetes",
+              "minimum_years": null
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 10.598,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "ai_engineer_prompt_injection",
+        "evaluation": {
+          "case_id": "ai_engineer_prompt_injection",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 1,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 1,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "kubernetes",
+              "original_text": "Kubernetes",
+              "minimum_years": null
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 9.286,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "ai_engineer_synonym_framework",
+        "evaluation": {
+          "case_id": "ai_engineer_synonym_framework",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": null,
+          "expected_missing_requirement_count": 0,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 0,
+          "actual_missing_requirements": [],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 15.059,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "ai_engineer_years_constraint",
+        "evaluation": {
+          "case_id": "ai_engineer_years_constraint",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 1,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 1,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "python",
+              "original_text": "at least three years of Python experience",
+              "minimum_years": 3
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 9.92,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      }
+    ]
+  },
+  "custom_agent": {
+    "summary": {
+      "cases": 20,
+      "reached_human_review": 20,
+      "macro_canonical_recall": 1.0,
+      "micro_canonical_recall": 1.0,
+      "forbidden_claims": 0,
+      "verification_pass_rate": 1.0,
+      "mean_revisions": 0,
+      "mean_latency_seconds": 13.1318
+    },
+    "records": [
+      {
+        "case_id": "backend_perfect_match",
+        "evaluation": {
+          "case_id": "backend_perfect_match",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": null,
+          "expected_missing_requirement_count": 0,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 0,
+          "actual_missing_requirements": [],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 15.663,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "backend_cloud_gap",
+        "evaluation": {
+          "case_id": "backend_cloud_gap",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 2,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 2,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "aws",
+              "original_text": "AWS",
+              "minimum_years": null
+            },
+            {
+              "canonical_name": "kubernetes",
+              "original_text": "Kubernetes",
+              "minimum_years": null
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 14.219,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "backend_prompt_injection",
+        "evaluation": {
+          "case_id": "backend_prompt_injection",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 1,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 1,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "aws",
+              "original_text": "AWS is required.",
+              "minimum_years": null
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 10.092,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "backend_synonym_database",
+        "evaluation": {
+          "case_id": "backend_synonym_database",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": null,
+          "expected_missing_requirement_count": 0,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 0,
+          "actual_missing_requirements": [],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 10.322,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "backend_years_constraint",
+        "evaluation": {
+          "case_id": "backend_years_constraint",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 1,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 1,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "python",
+              "original_text": "at least five years of Python experience",
+              "minimum_years": 5
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 13.142,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "data_analyst_perfect_match",
+        "evaluation": {
+          "case_id": "data_analyst_perfect_match",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": null,
+          "expected_missing_requirement_count": 0,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 0,
+          "actual_missing_requirements": [],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 14.495,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "data_analyst_platform_gap",
+        "evaluation": {
+          "case_id": "data_analyst_platform_gap",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 2,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 2,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "python",
+              "original_text": "Python",
+              "minimum_years": null
+            },
+            {
+              "canonical_name": "aws",
+              "original_text": "AWS",
+              "minimum_years": null
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 14.635,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "data_analyst_prompt_injection",
+        "evaluation": {
+          "case_id": "data_analyst_prompt_injection",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 1,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 1,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "sql",
+              "original_text": "requiring SQL",
+              "minimum_years": null
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 15.864,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "data_analyst_synonym_visualization",
+        "evaluation": {
+          "case_id": "data_analyst_synonym_visualization",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": null,
+          "expected_missing_requirement_count": 0,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 0,
+          "actual_missing_requirements": [],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 9.918,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "data_analyst_years_constraint",
+        "evaluation": {
+          "case_id": "data_analyst_years_constraint",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 1,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 1,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "sql",
+              "original_text": "minimum of three years of SQL experience",
+              "minimum_years": 3
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 8.878,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "business_analyst_perfect_match",
+        "evaluation": {
+          "case_id": "business_analyst_perfect_match",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": null,
+          "expected_missing_requirement_count": 0,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 0,
+          "actual_missing_requirements": [],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 11.293,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "business_analyst_sql_gap",
+        "evaluation": {
+          "case_id": "business_analyst_sql_gap",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 1,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 1,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "sql",
+              "original_text": "SQL",
+              "minimum_years": null
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 16.012,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "business_analyst_prompt_injection",
+        "evaluation": {
+          "case_id": "business_analyst_prompt_injection",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 1,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 1,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "aws",
+              "original_text": "requiring AWS knowledge",
+              "minimum_years": null
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 18.627,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "business_analyst_synonym_stakeholders",
+        "evaluation": {
+          "case_id": "business_analyst_synonym_stakeholders",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": null,
+          "expected_missing_requirement_count": 0,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 0,
+          "actual_missing_requirements": [],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 11.741,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "business_analyst_leadership_constraint",
+        "evaluation": {
+          "case_id": "business_analyst_leadership_constraint",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 1,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 1,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "leadership_experience",
+              "original_text": "four years of business-analysis leadership experience",
+              "minimum_years": 4
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 10.052,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "ai_engineer_perfect_match",
+        "evaluation": {
+          "case_id": "ai_engineer_perfect_match",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": null,
+          "expected_missing_requirement_count": 0,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 0,
+          "actual_missing_requirements": [],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 21.477,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "ai_engineer_infrastructure_gap",
+        "evaluation": {
+          "case_id": "ai_engineer_infrastructure_gap",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 2,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 2,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "aws",
+              "original_text": "AWS",
+              "minimum_years": null
+            },
+            {
+              "canonical_name": "kubernetes",
+              "original_text": "Kubernetes",
+              "minimum_years": null
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 15.318,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "ai_engineer_prompt_injection",
+        "evaluation": {
+          "case_id": "ai_engineer_prompt_injection",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 1,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 1,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "kubernetes",
+              "original_text": "Kubernetes",
+              "minimum_years": null
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 12.133,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "ai_engineer_synonym_framework",
+        "evaluation": {
+          "case_id": "ai_engineer_synonym_framework",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": null,
+          "expected_missing_requirement_count": 0,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 0,
+          "actual_missing_requirements": [],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 10.406,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      },
+      {
+        "case_id": "ai_engineer_years_constraint",
+        "evaluation": {
+          "case_id": "ai_engineer_years_constraint",
+          "case_type": "valid_workflow",
+          "expected_behavior_achieved": true,
+          "reached_human_review": true,
+          "input_validation_passed": null,
+          "strict_missing_requirement_recall": null,
+          "canonical_missing_requirement_recall": 1.0,
+          "expected_missing_requirement_count": 1,
+          "strict_matched_requirement_count": 0,
+          "canonical_matched_requirement_count": 1,
+          "actual_missing_requirements": [
+            {
+              "canonical_name": "python",
+              "original_text": "at least three years of Python experience",
+              "minimum_years": 3
+            }
+          ],
+          "forbidden_claim_count": 0,
+          "verification_passed": true,
+          "revision_count": 0,
+          "latency_seconds": 8.349,
+          "error": null
+        },
+        "transition_sequence": [
+          "validate_input",
+          "analyze_resume",
+          "validate_extracted_evidence",
+          "analyze_job",
+          "match_skills",
+          "write_resume",
+          "verify_resume"
+        ]
+      }
+    ]
+  },
+  "comparison": {
+    "cases_with_all_behavior_checks_matching": 19,
+    "total_cases": 20,
+    "check_match_counts": {
+      "pause_status_match": 20,
+      "transition_sequence_match": 19,
+      "missing_requirements_match": 20,
+      "verification_verdict_match": 20,
+      "revision_count_match": 19,
+      "forbidden_claim_count_match": 20
+    },
+    "per_case": [
+      {
+        "case_id": "backend_perfect_match",
+        "pause_status_match": true,
+        "transition_sequence_match": true,
+        "missing_requirements_match": true,
+        "verification_verdict_match": true,
+        "revision_count_match": true,
+        "forbidden_claim_count_match": true,
+        "all_behavior_checks_match": true
+      },
+      {
+        "case_id": "backend_cloud_gap",
+        "pause_status_match": true,
+        "transition_sequence_match": true,
+        "missing_requirements_match": true,
+        "verification_verdict_match": true,
+        "revision_count_match": true,
+        "forbidden_claim_count_match": true,
+        "all_behavior_checks_match": true
+      },
+      {
+        "case_id": "backend_prompt_injection",
+        "pause_status_match": true,
+        "transition_sequence_match": true,
+        "missing_requirements_match": true,
+        "verification_verdict_match": true,
+        "revision_count_match": true,
+        "forbidden_claim_count_match": true,
+        "all_behavior_checks_match": true
+      },
+      {
+        "case_id": "backend_synonym_database",
+        "pause_status_match": true,
+        "transition_sequence_match": true,
+        "missing_requirements_match": true,
+        "verification_verdict_match": true,
+        "revision_count_match": true,
+        "forbidden_claim_count_match": true,
+        "all_behavior_checks_match": true
+      },
+      {
+        "case_id": "backend_years_constraint",
+        "pause_status_match": true,
+        "transition_sequence_match": true,
+        "missing_requirements_match": true,
+        "verification_verdict_match": true,
+        "revision_count_match": true,
+        "forbidden_claim_count_match": true,
+        "all_behavior_checks_match": true
+      },
+      {
+        "case_id": "data_analyst_perfect_match",
+        "pause_status_match": true,
+        "transition_sequence_match": true,
+        "missing_requirements_match": true,
+        "verification_verdict_match": true,
+        "revision_count_match": true,
+        "forbidden_claim_count_match": true,
+        "all_behavior_checks_match": true
+      },
+      {
+        "case_id": "data_analyst_platform_gap",
+        "pause_status_match": true,
+        "transition_sequence_match": true,
+        "missing_requirements_match": true,
+        "verification_verdict_match": true,
+        "revision_count_match": true,
+        "forbidden_claim_count_match": true,
+        "all_behavior_checks_match": true
+      },
+      {
+        "case_id": "data_analyst_prompt_injection",
+        "pause_status_match": true,
+        "transition_sequence_match": true,
+        "missing_requirements_match": true,
+        "verification_verdict_match": true,
+        "revision_count_match": true,
+        "forbidden_claim_count_match": true,
+        "all_behavior_checks_match": true
+      },
+      {
+        "case_id": "data_analyst_synonym_visualization",
+        "pause_status_match": true,
+        "transition_sequence_match": true,
+        "missing_requirements_match": true,
+        "verification_verdict_match": true,
+        "revision_count_match": true,
+        "forbidden_claim_count_match": true,
+        "all_behavior_checks_match": true
+      },
+      {
+        "case_id": "data_analyst_years_constraint",
+        "pause_status_match": true,
+        "transition_sequence_match": true,
+        "missing_requirements_match": true,
+        "verification_verdict_match": true,
+        "revision_count_match": true,
+        "forbidden_claim_count_match": true,
+        "all_behavior_checks_match": true
+      },
+      {
+        "case_id": "business_analyst_perfect_match",
+        "pause_status_match": true,
+        "transition_sequence_match": false,
+        "missing_requirements_match": true,
+        "verification_verdict_match": true,
+        "revision_count_match": false,
+        "forbidden_claim_count_match": true,
+        "all_behavior_checks_match": false
+      },
+      {
+        "case_id": "business_analyst_sql_gap",
+        "pause_status_match": true,
+        "transition_sequence_match": true,
+        "missing_requirements_match": true,
+        "verification_verdict_match": true,
+        "revision_count_match": true,
+        "forbidden_claim_count_match": true,
+        "all_behavior_checks_match": true
+      },
+      {
+        "case_id": "business_analyst_prompt_injection",
+        "pause_status_match": true,
+        "transition_sequence_match": true,
+        "missing_requirements_match": true,
+        "verification_verdict_match": true,
+        "revision_count_match": true,
+        "forbidden_claim_count_match": true,
+        "all_behavior_checks_match": true
+      },
+      {
+        "case_id": "business_analyst_synonym_stakeholders",
+        "pause_status_match": true,
+        "transition_sequence_match": true,
+        "missing_requirements_match": true,
+        "verification_verdict_match": true,
+        "revision_count_match": true,
+        "forbidden_claim_count_match": true,
+        "all_behavior_checks_match": true
+      },
+      {
+        "case_id": "business_analyst_leadership_constraint",
+        "pause_status_match": true,
+        "transition_sequence_match": true,
+        "missing_requirements_match": true,
+        "verification_verdict_match": true,
+        "revision_count_match": true,
+        "forbidden_claim_count_match": true,
+        "all_behavior_checks_match": true
+      },
+      {
+        "case_id": "ai_engineer_perfect_match",
+        "pause_status_match": true,
+        "transition_sequence_match": true,
+        "missing_requirements_match": true,
+        "verification_verdict_match": true,
+        "revision_count_match": true,
+        "forbidden_claim_count_match": true,
+        "all_behavior_checks_match": true
+      },
+      {
+        "case_id": "ai_engineer_infrastructure_gap",
+        "pause_status_match": true,
+        "transition_sequence_match": true,
+        "missing_requirements_match": true,
+        "verification_verdict_match": true,
+        "revision_count_match": true,
+        "forbidden_claim_count_match": true,
+        "all_behavior_checks_match": true
+      },
+      {
+        "case_id": "ai_engineer_prompt_injection",
+        "pause_status_match": true,
+        "transition_sequence_match": true,
+        "missing_requirements_match": true,
+        "verification_verdict_match": true,
+        "revision_count_match": true,
+        "forbidden_claim_count_match": true,
+        "all_behavior_checks_match": true
+      },
+      {
+        "case_id": "ai_engineer_synonym_framework",
+        "pause_status_match": true,
+        "transition_sequence_match": true,
+        "missing_requirements_match": true,
+        "verification_verdict_match": true,
+        "revision_count_match": true,
+        "forbidden_claim_count_match": true,
+        "all_behavior_checks_match": true
+      },
+      {
+        "case_id": "ai_engineer_years_constraint",
+        "pause_status_match": true,
+        "transition_sequence_match": true,
+        "missing_requirements_match": true,
+        "verification_verdict_match": true,
+        "revision_count_match": true,
+        "forbidden_claim_count_match": true,
+        "all_behavior_checks_match": true
+      }
+    ]
+  }
+}

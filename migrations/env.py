@@ -10,6 +10,11 @@ from sqlalchemy import engine_from_config, pool
 
 from api.db import Base
 import api.models  # noqa: F401
+import agent_runtime.models  # noqa: F401
+import agent_runtime.sessions.models  # noqa: F401
+import agent_runtime.memory.models  # noqa: F401
+import agent_runtime.skills.models  # noqa: F401
+import agent_runtime.context.models  # noqa: F401
 import custom_agent.models  # noqa: F401
 
 config = context.config

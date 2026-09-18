@@ -1,0 +1,42 @@
+[
+  {
+    "id": "recent_three",
+    "user_message": "Show my three most recent job analyses.",
+    "allowed_tools": ["list_recent_runs"],
+    "expected_tools": ["list_recent_runs"],
+    "expected_arguments": [{"limit": 3}]
+  },
+  {
+    "id": "compare_missing",
+    "user_message": "Compare the missing requirements in runs A and B.",
+    "allowed_tools": ["compare_run_requirements"],
+    "expected_tools": ["compare_run_requirements"],
+    "expected_arguments": [{"run_ids": ["A", "B"]}]
+  },
+  {
+    "id": "render_markdown",
+    "user_message": "Render the tailored resume from run A as Markdown.",
+    "allowed_tools": ["render_tailored_resume"],
+    "expected_tools": ["render_tailored_resume"],
+    "expected_arguments": [{"run_id": "A", "format": "markdown"}]
+  },
+  {
+    "id": "explain_partial",
+    "user_message": "What does partial match mean?",
+    "allowed_tools": [
+      "list_recent_runs",
+      "get_run_result",
+      "compare_run_requirements",
+      "render_tailored_resume"
+    ],
+    "expected_tools": [],
+    "expected_arguments": []
+  },
+  {
+    "id": "get_public_result",
+    "user_message": "Show the result for run A.",
+    "allowed_tools": ["get_run_result"],
+    "expected_tools": ["get_run_result"],
+    "expected_arguments": [{"run_id": "A"}]
+  }
+]

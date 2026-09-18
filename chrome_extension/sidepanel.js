@@ -1,6 +1,34 @@
 ﻿"use strict";
 
-import { ApiError, createRun, getRun, health, reviewRun } from "./api-client.js";
+import {
+  ApiError,
+  activateSkill,
+  approveSkill,
+  approveToolCall,
+  cancelSession,
+  confirmMemory,
+  createMemory,
+  createRun,
+  createSession,
+  deleteMemory,
+  getRun,
+  getSession,
+  getSessionContext,
+  getSessionMessages,
+  health,
+  listMemories,
+  listSessions,
+  listSkills,
+  listSkillVersions,
+  recoverSession,
+  rejectMemory,
+  rejectSkill,
+  rejectToolCall,
+  retireSkill,
+  reviewRun,
+  sendSessionMessage,
+  supersedeMemory,
+} from "./api-client.js";
 import { extractJobDescriptionFromPage } from "./extractor.js";
 
 const MAX_TEXT_LENGTH = 50_000;
@@ -8,6 +36,11 @@ const POLL_INTERVAL_MS = 1_500;
 const POLL_TIMEOUT_MS = 60_000;
 const SAVED_RESUME_KEY = "jobAgentSavedResume";
 const ACTIVE_JOB_TAB_KEY = "jobAgentActiveTab";
+const ACTIVE_SESSION_KEY = "jobAgentActiveSessionId";
+const MAX_SESSION_MESSAGE_LENGTH = 20_000;
+const SESSION_POLL_INTERVAL_MS = 1_500;
+const SESSION_POLL_TIMEOUT_MS = 30_000;
+const TERMINAL_SESSION_STATUSES = new Set(["completed", "failed", "cancelled", "timed_out"]);
 
 const elements = {
   healthButton: document.querySelector("#health-button"),
@@ -36,11 +69,48 @@ const elements = {
   approve: document.querySelector("#approve-button"),
   feedback: document.querySelector("#review-feedback"),
   reject: document.querySelector("#reject-button"),
+  askRun: document.querySelector("#ask-run-button"),
+  analysisTab: document.querySelector("#analysis-tab"),
+  assistantTab: document.querySelector("#assistant-tab"),
+  contextTab: document.querySelector("#context-tab"),
+  analysisPanel: document.querySelector("#analysis-panel"),
+  assistantPanel: document.querySelector("#assistant-panel"),
+  contextPanel: document.querySelector("#context-panel"),
+  sessionMessage: document.querySelector("#session-message"),
+  sessionStatus: document.querySelector("#session-status"),
+  sessionRun: document.querySelector("#session-run"),
+  assistantMessages: document.querySelector("#assistant-messages"),
+  toolApprovals: document.querySelector("#tool-approvals"),
+  assistantInput: document.querySelector("#assistant-input"),
+  assistantCount: document.querySelector("#assistant-count"),
+  newSession: document.querySelector("#new-session-button"),
+  sendSession: document.querySelector("#send-session-button"),
+  cancelSession: document.querySelector("#cancel-session-button"),
+  recoverSession: document.querySelector("#recover-session-button"),
+  sessionHistory: document.querySelector("#session-history"),
+  refreshSessions: document.querySelector("#refresh-sessions-button"),
+  contextMessage: document.querySelector("#context-message"),
+  usedContext: document.querySelector("#used-context"),
+  refreshContext: document.querySelector("#refresh-context-button"),
+  memoryKey: document.querySelector("#memory-key"),
+  memoryDisplay: document.querySelector("#memory-display"),
+  memoryType: document.querySelector("#memory-type"),
+  memoryScope: document.querySelector("#memory-scope"),
+  memorySensitivity: document.querySelector("#memory-sensitivity"),
+  memoryContent: document.querySelector("#memory-content"),
+  createMemory: document.querySelector("#create-memory-button"),
+  memoryList: document.querySelector("#memory-list"),
+  refreshMemories: document.querySelector("#refresh-memories-button"),
+  skillList: document.querySelector("#skill-list"),
+  refreshSkills: document.querySelector("#refresh-skills-button"),
 };
 
 let currentRunId = null;
 let currentResumeText = "";
-let busy = false;
+let analysisBusy = false;
+let sessionBusy = false;
+let contextBusy = false;
+let currentSession = null;
 
 function setMessage(text, kind = "info") {
   elements.message.textContent = text;
@@ -49,13 +119,38 @@ function setMessage(text, kind = "info") {
 }
 
 function setBusy(value, message = "") {
-  busy = value;
+  analysisBusy = value;
   elements.analyze.disabled = value;
   elements.extract.disabled = value;
   elements.approve.disabled = value;
   elements.reject.disabled = value;
   if (message) {
     setMessage(message, "info");
+  }
+}
+
+function setSessionMessage(text, kind = "info") {
+  elements.sessionMessage.textContent = text;
+  elements.sessionMessage.dataset.kind = kind;
+  elements.sessionMessage.hidden = !text;
+}
+
+function setSessionBusy(value, message = "") {
+  sessionBusy = value;
+  elements.newSession.disabled = value;
+  elements.sendSession.disabled = value
+    || !currentSession
+    || !["active", "awaiting_user"].includes(currentSession.status);
+  elements.cancelSession.disabled = value
+    || !currentSession
+    || TERMINAL_SESSION_STATUSES.has(currentSession.status);
+  elements.recoverSession.disabled = value
+    || !currentSession
+    || currentSession.recovery_available !== true;
+  elements.sessionHistory.disabled = value;
+  elements.refreshSessions.disabled = value;
+  if (message) {
+    setSessionMessage(message, "info");
   }
 }
 
@@ -269,6 +364,7 @@ function publicStatus(status) {
 
 function renderRun(run) {
   currentRunId = run.run_id || currentRunId;
+  elements.askRun.disabled = !currentRunId;
   elements.results.hidden = false;
   elements.runStatus.textContent = publicStatus(run.status);
   elements.reviewPanel.hidden = run.status !== "awaiting_review";
@@ -379,7 +475,7 @@ async function getTargetJobTab() {
 }
 
 async function extractJobDescription() {
-  if (busy) {
+  if (analysisBusy) {
     return;
   }
   setBusy(true, "Reading the current page...");
@@ -410,7 +506,7 @@ async function extractJobDescription() {
 }
 
 async function analyze() {
-  if (busy) {
+  if (analysisBusy) {
     return;
   }
   try {
@@ -441,7 +537,7 @@ async function analyze() {
 }
 
 async function submitReview(approved) {
-  if (busy || !currentRunId) {
+  if (analysisBusy || !currentRunId) {
     return;
   }
   const feedback = elements.feedback.value.trim();
@@ -496,13 +592,759 @@ async function clearSavedResume() {
   setMessage("The locally saved resume was cleared.", "success");
 }
 
+function switchPanel(name) {
+  const assistant = name === "assistant";
+  const context = name === "context";
+  const analysis = !assistant && !context;
+  elements.analysisPanel.hidden = !analysis;
+  elements.assistantPanel.hidden = !assistant;
+  elements.contextPanel.hidden = !context;
+  elements.analysisTab.classList.toggle("active", analysis);
+  elements.assistantTab.classList.toggle("active", assistant);
+  elements.contextTab.classList.toggle("active", context);
+  elements.analysisTab.setAttribute("aria-selected", String(analysis));
+  elements.assistantTab.setAttribute("aria-selected", String(assistant));
+  elements.contextTab.setAttribute("aria-selected", String(context));
+}
+
+function sessionStatusLabel(status) {
+  const labels = {
+    active: "Active",
+    running: "Running",
+    awaiting_user: "Awaiting user",
+    awaiting_tool_approval: "Awaiting tool approval",
+    completed: "Completed",
+    failed: "Failed",
+    cancelled: "Cancelled",
+    timed_out: "Timed out",
+  };
+  return labels[status] || "No session";
+}
+
+function updateSessionCount() {
+  const length = elements.assistantInput.value.length;
+  elements.assistantCount.textContent = `${length.toLocaleString()} / ${MAX_SESSION_MESSAGE_LENGTH.toLocaleString()}`;
+  elements.assistantCount.classList.toggle("over-limit", length > MAX_SESSION_MESSAGE_LENGTH);
+}
+
+function renderSessionMessages(messages) {
+  replaceChildren(elements.assistantMessages);
+  const publicMessages = Array.isArray(messages)
+    ? messages.filter((item) => ["user", "assistant"].includes(item?.role))
+    : [];
+  if (!publicMessages.length) {
+    appendTextElement(
+      elements.assistantMessages,
+      "p",
+      currentSession ? "No conversation messages yet." : "Start a session to ask about your saved Job Agent runs.",
+      "muted empty-session",
+    );
+    return;
+  }
+  for (const item of publicMessages) {
+    const article = document.createElement("article");
+    article.className = `chat-message ${item.role}`;
+    appendTextElement(article, "span", item.role === "user" ? "You" : "Assistant", "chat-role");
+    appendTextElement(article, "p", typeof item.content === "string" ? item.content : "");
+    elements.assistantMessages.append(article);
+  }
+  elements.assistantMessages.scrollTop = elements.assistantMessages.scrollHeight;
+}
+
+function renderToolApprovals(approvals) {
+  replaceChildren(elements.toolApprovals);
+  const safeApprovals = Array.isArray(approvals) ? approvals : [];
+  elements.toolApprovals.hidden = !safeApprovals.length;
+  for (const approval of safeApprovals) {
+    const card = document.createElement("section");
+    card.className = "card approval-card";
+    appendTextElement(card, "p", "Approval required", "step-label");
+    appendTextElement(card, "h2", approval.tool_name || "Tool call");
+    appendTextElement(card, "p", approval.description || "", "hint");
+    const metadata = [
+      approval.tool_version ? `Version ${approval.tool_version}` : null,
+      approval.side_effect ? `Side effect: ${approval.side_effect}` : null,
+      approval.data_classification ? `Data: ${approval.data_classification}` : null,
+    ].filter(Boolean);
+    appendTextElement(card, "p", metadata.join(" • "), "requirement-meta");
+    appendTextElement(card, "strong", "Arguments (redacted by server)");
+    appendTextElement(card, "pre", JSON.stringify(approval.arguments || {}, null, 2), "approval-arguments");
+    const actions = document.createElement("div");
+    actions.className = "assistant-actions";
+    const approve = appendTextElement(actions, "button", "Approve", "primary-button");
+    approve.type = "button";
+    approve.addEventListener("click", () => respondToToolApproval(approval.call_id, true));
+    const reject = appendTextElement(actions, "button", "Reject", "secondary-button");
+    reject.type = "button";
+    reject.addEventListener("click", () => respondToToolApproval(approval.call_id, false));
+    card.append(actions);
+    elements.toolApprovals.append(card);
+  }
+}
+
+function renderSession(response) {
+  if (!response?.session) {
+    return;
+  }
+  currentSession = response.session;
+  elements.sessionStatus.textContent = sessionStatusLabel(currentSession.status);
+  elements.sessionStatus.dataset.status = currentSession.status;
+  elements.sessionRun.textContent = currentSession.active_run_id
+    ? `Run ${currentSession.active_run_id}`
+    : "General run assistant";
+  elements.recoverSession.hidden = currentSession.recovery_available !== true;
+  elements.cancelSession.hidden = TERMINAL_SESSION_STATUSES.has(currentSession.status);
+  elements.sendSession.disabled = sessionBusy
+    || !["active", "awaiting_user"].includes(currentSession.status);
+  renderToolApprovals(response.pending_tool_approvals);
+  if (currentSession.status === "failed") {
+    setSessionMessage(currentSession.error_message || "The session failed safely.", "error");
+  } else if (currentSession.status === "timed_out") {
+    setSessionMessage("The session turn timed out. Recover it only when the backend allows recovery.", "error");
+  } else if (currentSession.status === "cancelled") {
+    setSessionMessage("The session was cancelled.", "info");
+  } else if (currentSession.status === "awaiting_tool_approval") {
+    setSessionMessage("Review the pending tool request before the assistant continues.", "info");
+  } else if (response.response) {
+    setSessionMessage("Assistant response ready.", "success");
+  }
+}
+
+async function refreshSession() {
+  if (!currentSession?.session_id) {
+    return null;
+  }
+  const response = await getSession(currentSession.session_id);
+  renderSession(response);
+  const messageResponse = await getSessionMessages(currentSession.session_id);
+  renderSessionMessages(messageResponse.messages);
+  await refreshContextSummary({ quiet: true });
+  return response;
+}
+
+function historyLabel(session) {
+  const title = typeof session.title === "string" && session.title.trim()
+    ? session.title.trim()
+    : session.active_run_id
+      ? `Run ${session.active_run_id}`
+      : "General conversation";
+  const date = new Date(session.updated_at);
+  const updated = Number.isNaN(date.getTime()) ? "" : date.toLocaleString();
+  return `${title} • ${sessionStatusLabel(session.status)}${updated ? ` • ${updated}` : ""}`;
+}
+
+async function loadSessionHistory() {
+  const response = await listSessions(50);
+  const sessions = Array.isArray(response?.sessions) ? response.sessions : [];
+  replaceChildren(elements.sessionHistory);
+  if (!sessions.length) {
+    const option = appendTextElement(elements.sessionHistory, "option", "No saved conversations");
+    option.value = "";
+    return sessions;
+  }
+  const placeholder = appendTextElement(elements.sessionHistory, "option", "Choose a previous conversation");
+  placeholder.value = "";
+  for (const session of sessions) {
+    const option = appendTextElement(elements.sessionHistory, "option", historyLabel(session));
+    option.value = session.session_id;
+    option.selected = session.session_id === currentSession?.session_id;
+  }
+  return sessions;
+}
+
+async function openSession(sessionId) {
+  if (sessionBusy || !sessionId) {
+    return;
+  }
+  setSessionBusy(true, "Loading the previous conversation...");
+  try {
+    const response = await getSession(sessionId);
+    renderSession(response);
+    await chrome.storage.local.set({ [ACTIVE_SESSION_KEY]: sessionId });
+    const messages = await getSessionMessages(sessionId);
+    renderSessionMessages(messages.messages);
+    switchPanel("assistant");
+    if (currentSession?.status === "running") {
+      await pollRestoredSession();
+    }
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      const stored = await chrome.storage.local.get(ACTIVE_SESSION_KEY);
+      if (stored[ACTIVE_SESSION_KEY] === sessionId) {
+        await chrome.storage.local.remove(ACTIVE_SESSION_KEY);
+      }
+      setSessionMessage("That conversation no longer exists on the backend.", "error");
+      await loadSessionHistory();
+    } else {
+      showSessionError(error);
+    }
+  } finally {
+    setSessionBusy(false);
+  }
+}
+
+async function startSession(activeRunId = null) {
+  if (sessionBusy) {
+    return;
+  }
+  setSessionBusy(true, "Creating a persistent session...");
+  switchPanel("assistant");
+  try {
+    const response = await createSession(activeRunId);
+    currentSession = response.session;
+    await chrome.storage.local.set({ [ACTIVE_SESSION_KEY]: currentSession.session_id });
+    renderSession(response);
+    renderSessionMessages([]);
+    await loadSessionHistory();
+    setSessionMessage(
+      activeRunId ? "Session created for the current run." : "New session created.",
+      "success",
+    );
+    elements.assistantInput.focus();
+  } catch (error) {
+    showSessionError(error);
+  } finally {
+    setSessionBusy(false);
+  }
+}
+
+function showSessionError(error) {
+  setSessionMessage(
+    error instanceof Error ? error.message : "The session request failed.",
+    "error",
+  );
+}
+
+async function handleConcurrency(error) {
+  if (!(error instanceof ApiError) || error.status !== 409) {
+    return false;
+  }
+  try {
+    await refreshSession();
+  } catch (refreshError) {
+    showSessionError(refreshError);
+    return true;
+  }
+  setSessionMessage(
+    "The session changed in another request. The latest state was loaded; your message was not resent.",
+    "error",
+  );
+  return true;
+}
+
+async function sendMessage() {
+  if (sessionBusy || !currentSession) {
+    return;
+  }
+  const content = elements.assistantInput.value.trim();
+  if (!content) {
+    setSessionMessage("Enter a message before sending.", "error");
+    elements.assistantInput.focus();
+    return;
+  }
+  if (content.length > MAX_SESSION_MESSAGE_LENGTH) {
+    setSessionMessage("The message exceeds 20,000 characters.", "error");
+    return;
+  }
+  setSessionBusy(true, "The assistant is working...");
+  try {
+    const response = await sendSessionMessage(
+      currentSession.session_id,
+      crypto.randomUUID(),
+      content,
+      currentSession.version,
+    );
+    elements.assistantInput.value = "";
+    updateSessionCount();
+    renderSession(response);
+    await refreshSession();
+  } catch (error) {
+    if (!(await handleConcurrency(error))) {
+      showSessionError(error);
+    }
+  } finally {
+    setSessionBusy(false);
+  }
+}
+
+async function respondToToolApproval(toolCallId, approved) {
+  if (sessionBusy || !currentSession) {
+    return;
+  }
+  setSessionBusy(true, approved ? "Approving tool call..." : "Rejecting tool call...");
+  try {
+    const response = approved
+      ? await approveToolCall(currentSession.session_id, toolCallId, currentSession.version)
+      : await rejectToolCall(currentSession.session_id, toolCallId, currentSession.version);
+    renderSession(response);
+    await refreshSession();
+  } catch (error) {
+    if (!(await handleConcurrency(error))) {
+      showSessionError(error);
+    }
+  } finally {
+    setSessionBusy(false);
+  }
+}
+
+async function cancelCurrentSession() {
+  if (sessionBusy || !currentSession) {
+    return;
+  }
+  setSessionBusy(true, "Cancelling the session...");
+  try {
+    const response = await cancelSession(
+      currentSession.session_id,
+      currentSession.version,
+      "Cancelled by the user from the Chrome Side Panel.",
+    );
+    renderSession(response);
+    await refreshSession();
+  } catch (error) {
+    if (!(await handleConcurrency(error))) {
+      showSessionError(error);
+    }
+  } finally {
+    setSessionBusy(false);
+  }
+}
+
+async function recoverCurrentSession() {
+  if (sessionBusy || !currentSession || currentSession.recovery_available !== true) {
+    return;
+  }
+  setSessionBusy(true, "Recovering the persisted session...");
+  try {
+    const response = await recoverSession(currentSession.session_id, currentSession.version);
+    renderSession(response);
+    await refreshSession();
+  } catch (error) {
+    if (!(await handleConcurrency(error))) {
+      showSessionError(error);
+    }
+  } finally {
+    setSessionBusy(false);
+  }
+}
+
+async function pollRestoredSession() {
+  const startedAt = Date.now();
+  while (currentSession?.status === "running") {
+    if (Date.now() - startedAt >= SESSION_POLL_TIMEOUT_MS) {
+      setSessionMessage(
+        "The session is still running. Polling stopped; no replacement session was created.",
+        "info",
+      );
+      return;
+    }
+    await delay(SESSION_POLL_INTERVAL_MS);
+    await refreshSession();
+  }
+}
+
+async function restoreSession() {
+  try {
+    await loadSessionHistory();
+  } catch (error) {
+    // History failure must not discard the active session pointer.
+    showSessionError(error);
+  }
+  const stored = await chrome.storage.local.get(ACTIVE_SESSION_KEY);
+  const sessionId = stored[ACTIVE_SESSION_KEY];
+  if (typeof sessionId !== "string" || !sessionId) {
+    return;
+  }
+  try {
+    const response = await getSession(sessionId);
+    renderSession(response);
+    await refreshSession();
+    if (currentSession?.status === "running") {
+      await pollRestoredSession();
+    }
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      await chrome.storage.local.remove(ACTIVE_SESSION_KEY);
+      currentSession = null;
+      renderSessionMessages([]);
+      setSessionMessage("The saved session no longer exists on the backend.", "error");
+      return;
+    }
+    // Preserve the ID during temporary backend or network failures.
+    showSessionError(error);
+  }
+}
+
+function setContextMessage(text, kind = "info") {
+  elements.contextMessage.textContent = text;
+  elements.contextMessage.dataset.kind = kind;
+  elements.contextMessage.hidden = !text;
+}
+
+function setContextBusy(value, message = "") {
+  contextBusy = value;
+  elements.refreshContext.disabled = value;
+  elements.refreshMemories.disabled = value;
+  elements.refreshSkills.disabled = value;
+  elements.createMemory.disabled = value;
+  if (message) {
+    setContextMessage(message, "info");
+  }
+}
+
+function contextAction(parent, label, handler, className = "secondary-button") {
+  const button = appendTextElement(parent, "button", label, className);
+  button.type = "button";
+  button.addEventListener("click", handler);
+  return button;
+}
+
+function renderUsedContext(response) {
+  replaceChildren(elements.usedContext);
+  const snapshots = Array.isArray(response?.snapshots) ? response.snapshots : [];
+  if (!snapshots.length) {
+    appendTextElement(
+      elements.usedContext,
+      "p",
+      currentSession ? "No prepared or used context snapshot is available." : "Open a Session to inspect its safe context summary.",
+      "muted",
+    );
+    return;
+  }
+  for (const snapshot of snapshots) {
+    const card = document.createElement("article");
+    card.className = "context-item";
+    appendTextElement(card, "h3", `Snapshot ${snapshot.snapshot_id}`);
+    appendTextElement(
+      card,
+      "p",
+      `${displayLabel(snapshot.status, "Unknown")} • ${Number(snapshot.estimated_input_tokens || 0).toLocaleString()} estimated tokens`,
+      "requirement-meta",
+    );
+    const skills = Array.isArray(snapshot.skills) ? snapshot.skills : [];
+    appendTextElement(
+      card,
+      "p",
+      skills.length
+        ? `Skills: ${skills.map((item) => `${item.name} ${item.version}`).join(", ")}`
+        : "Skills: none",
+    );
+    const memories = Array.isArray(snapshot.memories) ? snapshot.memories : [];
+    appendTextElement(
+      card,
+      "p",
+      memories.length
+        ? `Memory: ${memories.map((item) => `${item.memory_key} — ${item.display_text}`).join("; ")}`
+        : "Memory: none",
+    );
+    appendTextElement(
+      card,
+      "p",
+      `Effective tools: ${(snapshot.effective_tools || []).join(", ") || "none"}`,
+      "muted",
+    );
+    elements.usedContext.append(card);
+  }
+}
+
+async function refreshContextSummary({ quiet = false } = {}) {
+  if (!currentSession?.session_id) {
+    renderUsedContext({ snapshots: [] });
+    return;
+  }
+  try {
+    renderUsedContext(await getSessionContext(currentSession.session_id));
+  } catch (error) {
+    if (!quiet) {
+      setContextMessage(error instanceof Error ? error.message : "Could not load Session context.", "error");
+    }
+  }
+}
+
+function memoryIdentity(memory) {
+  return `${memory.scope}:${memory.session_id || ""}:${memory.memory_key}`;
+}
+
+async function mutateMemory(operation, progress) {
+  if (contextBusy) {
+    return;
+  }
+  setContextBusy(true, progress);
+  try {
+    await operation();
+    await Promise.all([refreshMemories(), refreshContextSummary({ quiet: true })]);
+    setContextMessage("Memory state updated.", "success");
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 409) {
+      await refreshMemories().catch(() => {});
+      setContextMessage(
+        "The Memory changed or conflicts with a confirmed value. The latest list was loaded; use Replace confirmed when appropriate.",
+        "error",
+      );
+    } else {
+      setContextMessage(error instanceof Error ? error.message : "Memory update failed.", "error");
+    }
+  } finally {
+    setContextBusy(false);
+  }
+}
+
+function renderMemories(memories) {
+  replaceChildren(elements.memoryList);
+  const safeMemories = Array.isArray(memories) ? memories : [];
+  const confirmedByIdentity = new Map(
+    safeMemories
+      .filter((item) => item.status === "confirmed")
+      .map((item) => [memoryIdentity(item), item]),
+  );
+  if (!safeMemories.length) {
+    appendTextElement(elements.memoryList, "p", "No Memory items.", "muted");
+    return;
+  }
+  for (const memory of safeMemories) {
+    const card = document.createElement("article");
+    card.className = "context-item";
+    appendTextElement(card, "h3", memory.memory_key || "Memory");
+    appendTextElement(card, "p", memory.display_text || "");
+    appendTextElement(
+      card,
+      "p",
+      [memory.status, memory.memory_type, memory.scope, memory.sensitivity]
+        .map((item) => displayLabel(item, "Unknown"))
+        .join(" • "),
+      "requirement-meta",
+    );
+    const details = document.createElement("details");
+    appendTextElement(details, "summary", "Structured content");
+    appendTextElement(details, "pre", JSON.stringify(memory.content || {}, null, 2), "approval-arguments");
+    card.append(details);
+    const actions = document.createElement("div");
+    actions.className = "context-actions";
+    if (memory.status === "candidate") {
+      const existing = confirmedByIdentity.get(memoryIdentity(memory));
+      if (existing) {
+        contextAction(actions, "Replace confirmed", () => mutateMemory(
+          () => supersedeMemory(
+            existing.memory_id,
+            existing.version,
+            memory.memory_id,
+            memory.version,
+          ),
+          "Replacing the confirmed Memory...",
+        ));
+      } else {
+        contextAction(actions, "Confirm", () => mutateMemory(
+          () => confirmMemory(memory.memory_id, memory.version),
+          "Confirming Memory...",
+        ), "primary-button");
+      }
+      contextAction(actions, "Reject", () => mutateMemory(
+        () => rejectMemory(memory.memory_id, memory.version),
+        "Rejecting Memory...",
+      ));
+    }
+    if (memory.status !== "deleted") {
+      contextAction(actions, "Delete", () => mutateMemory(
+        () => deleteMemory(memory.memory_id, memory.version),
+        "Soft-deleting Memory...",
+      ), "text-button danger-text");
+    }
+    card.append(actions);
+    elements.memoryList.append(card);
+  }
+}
+
+async function refreshMemories() {
+  const response = await listMemories();
+  renderMemories(response.memories);
+  return response;
+}
+
+async function createMemoryCandidate() {
+  if (contextBusy) {
+    return;
+  }
+  const key = elements.memoryKey.value.trim();
+  const displayText = elements.memoryDisplay.value.trim();
+  if (!key || !displayText) {
+    setContextMessage("Memory key and display text are required.", "error");
+    return;
+  }
+  let content;
+  try {
+    content = JSON.parse(elements.memoryContent.value || "{}");
+  } catch (_error) {
+    setContextMessage("Structured content must be a valid JSON object.", "error");
+    return;
+  }
+  if (!content || Array.isArray(content) || typeof content !== "object") {
+    setContextMessage("Structured content must be a JSON object.", "error");
+    return;
+  }
+  const scope = elements.memoryScope.value;
+  if (scope === "session" && !currentSession?.session_id) {
+    setContextMessage("Open a Session before creating session-scoped Memory.", "error");
+    return;
+  }
+  setContextBusy(true, "Creating a Memory candidate...");
+  try {
+    await createMemory({
+      scope,
+      session_id: scope === "session" ? currentSession.session_id : null,
+      memory_key: key,
+      memory_type: elements.memoryType.value,
+      display_text: displayText,
+      content,
+      sensitivity: elements.memorySensitivity.value,
+      confidence: 1,
+    });
+    elements.memoryDisplay.value = "";
+    elements.memoryContent.value = "{}";
+    await refreshMemories();
+    setContextMessage("Candidate created. Confirm it before it can enter model context.", "success");
+  } catch (error) {
+    setContextMessage(error instanceof Error ? error.message : "Could not create Memory.", "error");
+  } finally {
+    setContextBusy(false);
+  }
+}
+
+async function mutateSkill(version, action, progress) {
+  if (contextBusy) {
+    return;
+  }
+  setContextBusy(true, progress);
+  try {
+    await action(version.version_id, version.version);
+    await Promise.all([refreshSkills(), refreshContextSummary({ quiet: true })]);
+    setContextMessage("Skill lifecycle updated.", "success");
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 409) {
+      await refreshSkills().catch(() => {});
+      setContextMessage("The Skill changed. The latest lifecycle state was loaded.", "error");
+    } else {
+      setContextMessage(error instanceof Error ? error.message : "Skill update failed.", "error");
+    }
+  } finally {
+    setContextBusy(false);
+  }
+}
+
+function renderSkillVersions(versions) {
+  replaceChildren(elements.skillList);
+  if (!versions.length) {
+    appendTextElement(elements.skillList, "p", "No registered Skills.", "muted");
+    return;
+  }
+  for (const version of versions) {
+    const card = document.createElement("article");
+    card.className = "context-item";
+    appendTextElement(card, "h3", `${version.name} ${version.version_label}`);
+    appendTextElement(card, "p", version.description || "");
+    appendTextElement(
+      card,
+      "p",
+      `${displayLabel(version.status, "Unknown")} • Tools: ${(version.allowed_tools || []).join(", ") || "Session permissions only"}`,
+      "requirement-meta",
+    );
+    const details = document.createElement("details");
+    appendTextElement(details, "summary", "Inspect instructions");
+    appendTextElement(details, "pre", version.instructions || "", "approval-arguments");
+    card.append(details);
+    const actions = document.createElement("div");
+    actions.className = "context-actions";
+    if (version.status === "approval_required") {
+      contextAction(actions, "Approve", () => mutateSkill(version, approveSkill, "Approving Skill..."), "primary-button");
+      contextAction(actions, "Reject", () => mutateSkill(version, rejectSkill, "Rejecting Skill..."));
+    } else if (version.status === "approved") {
+      contextAction(actions, "Activate", () => mutateSkill(version, activateSkill, "Activating Skill..."), "primary-button");
+      contextAction(actions, "Reject", () => mutateSkill(version, rejectSkill, "Rejecting Skill..."));
+    } else if (version.status === "active") {
+      contextAction(actions, "Retire", () => mutateSkill(version, retireSkill, "Retiring Skill..."));
+    }
+    card.append(actions);
+    elements.skillList.append(card);
+  }
+}
+
+async function refreshSkills() {
+  const response = await listSkills();
+  const groups = await Promise.all(
+    (response.skills || []).map((skill) => listSkillVersions(skill.name)),
+  );
+  renderSkillVersions(groups.flatMap((item) => item.versions || []));
+  return groups;
+}
+
+async function refreshContextPanel() {
+  if (contextBusy) {
+    return;
+  }
+  setContextBusy(true, "Refreshing governed context...");
+  try {
+    await Promise.all([refreshContextSummary(), refreshMemories(), refreshSkills()]);
+    setContextMessage("Context information refreshed.", "success");
+  } catch (error) {
+    setContextMessage(error instanceof Error ? error.message : "Could not refresh context.", "error");
+  } finally {
+    setContextBusy(false);
+  }
+}
+
 elements.healthButton.addEventListener("click", checkHealth);
+elements.analysisTab.addEventListener("click", () => switchPanel("analysis"));
+elements.assistantTab.addEventListener("click", () => switchPanel("assistant"));
+elements.contextTab.addEventListener("click", () => {
+  switchPanel("context");
+  refreshContextPanel();
+});
 elements.extract.addEventListener("click", extractJobDescription);
 elements.analyze.addEventListener("click", analyze);
 elements.approve.addEventListener("click", () => submitReview(true));
 elements.reject.addEventListener("click", () => submitReview(false));
 elements.copy.addEventListener("click", copyResume);
 elements.clearResume.addEventListener("click", clearSavedResume);
+elements.askRun.addEventListener("click", () => {
+  if (currentRunId) {
+    startSession(currentRunId);
+  }
+});
+elements.newSession.addEventListener("click", () => startSession());
+elements.refreshSessions.addEventListener("click", async () => {
+  try {
+    await loadSessionHistory();
+    setSessionMessage("Conversation history refreshed.", "success");
+  } catch (error) {
+    showSessionError(error);
+  }
+});
+elements.sessionHistory.addEventListener("change", () => {
+  const sessionId = elements.sessionHistory.value;
+  if (sessionId) {
+    openSession(sessionId);
+  }
+});
+elements.sendSession.addEventListener("click", sendMessage);
+elements.cancelSession.addEventListener("click", cancelCurrentSession);
+elements.recoverSession.addEventListener("click", recoverCurrentSession);
+elements.refreshContext.addEventListener("click", refreshContextPanel);
+elements.refreshMemories.addEventListener("click", async () => {
+  try {
+    await refreshMemories();
+    setContextMessage("Memory list refreshed.", "success");
+  } catch (error) {
+    setContextMessage(error instanceof Error ? error.message : "Could not load Memory.", "error");
+  }
+});
+elements.refreshSkills.addEventListener("click", async () => {
+  try {
+    await refreshSkills();
+    setContextMessage("Skill list refreshed.", "success");
+  } catch (error) {
+    setContextMessage(error instanceof Error ? error.message : "Could not load Skills.", "error");
+  }
+});
+elements.createMemory.addEventListener("click", createMemoryCandidate);
+elements.assistantInput.addEventListener("input", updateSessionCount);
 elements.resume.addEventListener("input", () => updateCount(elements.resume, elements.resumeCount));
 elements.job.addEventListener("input", () => updateCount(elements.job, elements.jobCount));
 elements.saveResume.addEventListener("change", async () => {
@@ -516,7 +1358,12 @@ elements.saveResume.addEventListener("change", async () => {
 });
 
 elements.copy.disabled = true;
+elements.askRun.disabled = true;
+setSessionBusy(false);
+setContextBusy(false);
 updateCount(elements.resume, elements.resumeCount);
 updateCount(elements.job, elements.jobCount);
+updateSessionCount();
 loadSavedResume().catch(showError);
+restoreSession().catch(showSessionError);
 checkHealth();

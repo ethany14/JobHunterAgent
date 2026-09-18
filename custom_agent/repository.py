@@ -61,6 +61,8 @@ class StateRepository:
                         run_id=state.run_id,
                         thread_id=state.run_id,
                         status=projection_status(state.status),
+                        backend="custom",
+                        backend_source="explicit_new_run",
                         resume_text=state.resume_text,
                         job_description=state.job_description,
                         result_json=self._encode(result),

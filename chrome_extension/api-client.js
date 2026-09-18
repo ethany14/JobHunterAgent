@@ -13,6 +13,9 @@ export class ApiError extends Error {
 }
 
 function validationMessage(detail) {
+  if (detail && typeof detail === "object" && typeof detail.message === "string") {
+    return detail.message;
+  }
   if (!Array.isArray(detail)) {
     return typeof detail === "string" ? detail : null;
   }
@@ -31,7 +34,7 @@ function safeErrorMessage(status, detail) {
     return validation ? `Please check the submitted text: ${validation}` : "Please check the submitted text.";
   }
   if (status === 404) {
-    return validation || "This run no longer exists.";
+    return validation || "The requested resource no longer exists.";
   }
   if (status === 409) {
     return validation || "This run cannot be reviewed in its current state.";
@@ -97,4 +100,153 @@ export function reviewRun(runId, approved, feedback = null) {
     method: "POST",
     body: JSON.stringify({ approved, feedback }),
   });
+}
+
+export function createSession(activeRunId = null) {
+  return request("/sessions", {
+    method: "POST",
+    body: JSON.stringify({
+      capability_profile: "job_assistant_readonly",
+      active_run_id: activeRunId,
+    }),
+  });
+}
+
+export function listSessions(limit = 25) {
+  return request(`/sessions?limit=${encodeURIComponent(limit)}`);
+}
+
+export function getSession(sessionId) {
+  return request(`/sessions/${encodeURIComponent(sessionId)}`);
+}
+
+export function getSessionMessages(sessionId) {
+  return request(`/sessions/${encodeURIComponent(sessionId)}/messages`);
+}
+
+export function sendSessionMessage(sessionId, messageId, content, expectedVersion) {
+  return request(`/sessions/${encodeURIComponent(sessionId)}/messages`, {
+    method: "POST",
+    body: JSON.stringify({
+      message_id: messageId,
+      content,
+      expected_version: expectedVersion,
+    }),
+  });
+}
+
+export function approveToolCall(sessionId, toolCallId, expectedVersion) {
+  return request(
+    `/sessions/${encodeURIComponent(sessionId)}/tool-calls/${encodeURIComponent(toolCallId)}/approve`,
+    {
+      method: "POST",
+      body: JSON.stringify({ expected_version: expectedVersion }),
+    },
+  );
+}
+
+export function rejectToolCall(sessionId, toolCallId, expectedVersion) {
+  return request(
+    `/sessions/${encodeURIComponent(sessionId)}/tool-calls/${encodeURIComponent(toolCallId)}/reject`,
+    {
+      method: "POST",
+      body: JSON.stringify({ expected_version: expectedVersion }),
+    },
+  );
+}
+
+export function cancelSession(sessionId, expectedVersion, reason) {
+  return request(`/sessions/${encodeURIComponent(sessionId)}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({ expected_version: expectedVersion, reason }),
+  });
+}
+
+export function recoverSession(sessionId, expectedVersion) {
+  return request(`/sessions/${encodeURIComponent(sessionId)}/recover`, {
+    method: "POST",
+    body: JSON.stringify({ expected_version: expectedVersion }),
+  });
+}
+
+export function listMemories() {
+  return request("/memories");
+}
+
+export function createMemory(memory) {
+  return request("/memories", {
+    method: "POST",
+    body: JSON.stringify(memory),
+  });
+}
+
+export function confirmMemory(memoryId, expectedVersion) {
+  return request(`/memories/${encodeURIComponent(memoryId)}/confirm`, {
+    method: "POST",
+    body: JSON.stringify({ expected_version: expectedVersion }),
+  });
+}
+
+export function rejectMemory(memoryId, expectedVersion) {
+  return request(`/memories/${encodeURIComponent(memoryId)}/reject`, {
+    method: "POST",
+    body: JSON.stringify({ expected_version: expectedVersion }),
+  });
+}
+
+export function supersedeMemory(memoryId, expectedVersion, replacementMemoryId, replacementVersion) {
+  return request(`/memories/${encodeURIComponent(memoryId)}/supersede`, {
+    method: "POST",
+    body: JSON.stringify({
+      expected_version: expectedVersion,
+      replacement_memory_id: replacementMemoryId,
+      replacement_expected_version: replacementVersion,
+    }),
+  });
+}
+
+export function deleteMemory(memoryId, expectedVersion) {
+  return request(
+    `/memories/${encodeURIComponent(memoryId)}?expected_version=${encodeURIComponent(expectedVersion)}`,
+    { method: "DELETE" },
+  );
+}
+
+export function listSkills() {
+  return request("/skills");
+}
+
+export function listSkillVersions(skillName) {
+  return request(`/skills/${encodeURIComponent(skillName)}/versions`);
+}
+
+export function getSkillVersion(versionId) {
+  return request(`/skill-versions/${encodeURIComponent(versionId)}`);
+}
+
+function mutateSkill(versionId, action, expectedVersion) {
+  return request(`/skill-versions/${encodeURIComponent(versionId)}/${action}`, {
+    method: "POST",
+    body: JSON.stringify({ expected_version: expectedVersion }),
+  });
+}
+
+export function approveSkill(versionId, expectedVersion) {
+  return mutateSkill(versionId, "approve", expectedVersion);
+}
+
+export function activateSkill(versionId, expectedVersion) {
+  return mutateSkill(versionId, "activate", expectedVersion);
+}
+
+export function rejectSkill(versionId, expectedVersion) {
+  return mutateSkill(versionId, "reject", expectedVersion);
+}
+
+export function retireSkill(versionId, expectedVersion) {
+  return mutateSkill(versionId, "retire", expectedVersion);
+}
+
+export function getSessionContext(sessionId) {
+  return request(`/sessions/${encodeURIComponent(sessionId)}/context`);
 }

@@ -1,0 +1,71 @@
+[
+  {
+    "id": "deloitte_ai_consulting_regression",
+    "role": "ai_consulting",
+    "tags": [
+      "regression",
+      "compound_requirements",
+      "eligibility",
+      "duration",
+      "in_progress_education",
+      "adjacent_tools"
+    ],
+    "resume_text": "Technology consultant with two years of experience at a consulting firm supporting commercial-sector modernization programs. Two years of IT project management, engineering transformation, and business analysis experience. Currently pursuing a Bachelor of Science in Computer Science with expected graduation in 2027. Built Tableau dashboards for operational reporting and analytics. Used general AI assistants in the current project environment to summarize technical documentation. Managed schedules, RAID logs, project documentation, and stakeholder meetings with business and engineering teams. Used JIRA and Confluence for project delivery.",
+    "job_description": "US-E-Consulting Services - AI & E - EaaS - Consultant, Strategy Growth & Transformation - FY27\n\nPosition Summary\n\nJoin our AI & Engineering team in transforming technology platforms, driving innovation, and helping make a significant impact on our clients' success. You'll work alongside talented professionals reimagining and re-engineering operations and processes that are critical to businesses.\n\nWork You'll Do\n\nAs a Consultant in our AI & Engineering Engineering-as-a-Service team, you will work on end-to-end IT transformation projects for major consulting clients; collaborate with cross-functional engineering and development teams to design, onboard, and optimize DevOps toolchains such as GitLab, Artifactory, and SonarQube; develop project plans, facilitate meetings, maintain project documentation, and drive delivery within scope, schedule, and budget; analyze business requirements, performance metrics, and project risks; and act as a technology liaison between business stakeholders and engineering teams.\n\nQualifications\n\nRequired:\nBachelor's degree in information sciences, technology, computer science, or related field.\n3+ years' experience in a consulting firm, working on large-scale technology transformation and modernization projects in the commercial sector in the strategy, growth and IT transformation space with a strong focus on technology.\n2+ years' experience in IT project management, engineering transformation, and business analysis including tech modernization experience.\nDemonstrated expertise in helping clients transform the SDLC to the AI SDLC using Claude, Claude Code and Cowork.\nProject management-risk mitigation, RAID items, scheduling, cost control.\nStakeholder management-bridging business and engineering groups.\nData center and application migration projects.\nBusiness intelligence, reporting (Power BI), and analytics delivery.\nDemonstrated use of AI in current project environment.\nAdvanced proficiency with project management tools (Confluence, JIRA) and reporting in a consulting, financial services, or technology environment.\nExperience evaluating the engineering toolchain and technical solutions approaches across programs with specific experience working on application development modernization projects on a large scale with a strategic as well as technical focus.\nStrong presentation, communication, and customer service mindset; proven ability to develop strong client relationships and deliver results across geographically distributed teams.\nCertifications: Certified Scrum Master, ITIL Foundation.\nAbility to travel 50%, on average, based on the work you do and the clients and industries/sectors you serve.\nMust be legally authorized to work in the United States without the need for employer sponsorship, now or at any time in the future.\n\nPreferred:\nExperience with large-scale technology modernization, cloud transformation, and continuous integration / continuous delivery (CI/CD) pipeline improvement.\nExperience using transformation execution centers (TXC) and similar program execution platforms.\nClaude certification(s).\nMaster's degree.",
+    "expected_categories": {
+      "bachelors_degree": "education",
+      "consulting_experience": "experience",
+      "it_project_management_experience": "experience",
+      "claude": "skill",
+      "claude_code": "skill",
+      "cowork": "skill",
+      "power_bi": "skill",
+      "certified_scrum_master": "certification",
+      "itil_foundation": "certification",
+      "travel": "eligibility",
+      "work_authorization": "eligibility",
+      "masters_degree": "education"
+    },
+    "expected_eligibility": ["travel", "work_authorization"],
+    "expected_duration_decisions": [
+      {
+        "canonical_key": "consulting_experience",
+        "minimum_years": 3,
+        "expected_status": "partial"
+      },
+      {
+        "canonical_key": "it_project_management_experience",
+        "minimum_years": 2,
+        "expected_status": "matched"
+      }
+    ],
+    "expected_in_progress_education": {
+      "canonical_key": "bachelors_degree",
+      "expected_status": "partial"
+    },
+    "expected_groups": [
+      ["claude", "claude_code", "cowork"],
+      ["certified_scrum_master", "itil_foundation"]
+    ],
+    "expected_missing_canonical": [
+      "bachelors_degree",
+      "consulting_experience",
+      "claude",
+      "claude_code",
+      "cowork",
+      "power_bi",
+      "certified_scrum_master",
+      "itil_foundation"
+    ],
+    "forbidden_claims": [
+      "completed bachelor's degree",
+      "three years of consulting",
+      "Power BI",
+      "Claude Code",
+      "Cowork",
+      "Certified Scrum Master",
+      "ITIL Foundation",
+      "authorized to work"
+    ]
+  }
+]

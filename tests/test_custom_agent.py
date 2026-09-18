@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
+from datetime import UTC
 from types import SimpleNamespace
 
 import pytest
+from pydantic import ValidationError
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import inspect, select, text
@@ -10,7 +13,11 @@ from sqlalchemy.exc import IntegrityError
 
 from api.db import create_database
 from api.models import Run
-from custom_agent.errors import InvalidTransitionError, StaleStateError
+from custom_agent.errors import (
+    InvalidTransitionError,
+    RunAlreadyExistsError,
+    StaleStateError,
+)
 from custom_agent.events import AgentEvent, AgentEventType
 from custom_agent.handlers import JobAgentStepHandler
 from custom_agent.loop import AgentLoop
@@ -124,13 +131,19 @@ def failing() -> VerificationResult:
 
 
 class FakeHandler:
-    def __init__(self, verifications=None, on_revise=None) -> None:
+    def __init__(
+        self, verifications=None, on_revise=None, missing_output_step=None
+    ) -> None:
         self.verifications = list(verifications or [passing()])
         self.on_revise = on_revise
+        self.missing_output_step = missing_output_step
         self.calls = []
+        self.verification_inputs = []
 
     def execute(self, step, state):
         self.calls.append(step)
+        if step == self.missing_output_step:
+            return StepOutcome(updates={})
         updates = {
             Step.VALIDATE_INPUT: {},
             Step.ANALYZE_RESUME: {"resume_analysis": resume_analysis()},
@@ -143,7 +156,10 @@ class FakeHandler:
         if step == Step.REVISE_RESUME and self.on_revise:
             self.on_revise(state)
         if step == Step.VERIFY_RESUME:
+            self.verification_inputs.append(state)
             verification = self.verifications.pop(0)
+            if isinstance(verification, Exception):
+                raise verification
             return StepOutcome(
                 updates={
                     "verification": verification,
@@ -208,17 +224,29 @@ def test_existing_v04_database_can_be_stamped_then_upgraded(tmp_path):
     path = tmp_path / "legacy-v04.sqlite"
     url = database_url(path)
     legacy_database = create_database(url)
-    Run.__table__.create(legacy_database.engine)
-    with legacy_database.session_factory.begin() as session:
-        session.add(
-            Run(
-                run_id="legacy-run",
-                thread_id="legacy-run",
-                status="awaiting_review",
-                resume_text="Legacy resume",
-                job_description="Legacy job",
+    with legacy_database.engine.begin() as connection:
+        connection.exec_driver_sql("""
+            CREATE TABLE runs (
+                run_id VARCHAR(36) PRIMARY KEY NOT NULL,
+                thread_id VARCHAR(36) UNIQUE NOT NULL,
+                status VARCHAR(32) NOT NULL,
+                resume_text TEXT NOT NULL,
+                job_description TEXT NOT NULL,
+                result_json TEXT,
+                error_message TEXT,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL
             )
-        )
+        """)
+        connection.exec_driver_sql("""
+            INSERT INTO runs (
+                run_id, thread_id, status, resume_text, job_description,
+                created_at, updated_at
+            ) VALUES (
+                'legacy-run', 'legacy-run', 'awaiting_review',
+                'Legacy resume', 'Legacy job', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+        """)
     legacy_database.close()
 
     config = Config("alembic.ini")
@@ -269,6 +297,186 @@ def test_sqlite_foreign_keys_reject_orphan_custom_state(tmp_path):
         database.close()
 
 
+def test_create_rejects_mismatched_state_and_event_identity(custom_runtime):
+    state = AgentState(
+        run_id="state-run",
+        resume_text="Resume",
+        job_description="Job",
+    )
+    event = AgentEvent(
+        run_id="event-run",
+        sequence=1,
+        event_type=AgentEventType.RUN_CREATED,
+        step=Step.VALIDATE_INPUT,
+    )
+    with pytest.raises(ValueError, match="run IDs do not match"):
+        custom_runtime.repository.create(state, event)
+    assert custom_runtime.repository.get(state.run_id) is None
+    with custom_runtime.database.session_factory() as session:
+        assert session.get(Run, state.run_id) is None
+
+
+@pytest.mark.parametrize(
+    ("event_type", "event_step", "message"),
+    [
+        (
+            AgentEventType.STEP_COMPLETED,
+            Step.VALIDATE_INPUT,
+            "Initial event must be RUN_CREATED",
+        ),
+        (
+            AgentEventType.RUN_CREATED,
+            Step.ANALYZE_RESUME,
+            "Initial event step does not match",
+        ),
+    ],
+)
+def test_create_rejects_invalid_initial_event(
+    custom_runtime, event_type, event_step, message
+):
+    state = AgentState(
+        run_id=f"invalid-{event_type.value}-{event_step.value}",
+        resume_text="Resume",
+        job_description="Job",
+    )
+    event = AgentEvent(
+        run_id=state.run_id,
+        sequence=1,
+        event_type=event_type,
+        step=event_step,
+    )
+    with pytest.raises(ValueError, match=message):
+        custom_runtime.repository.create(state, event)
+    assert custom_runtime.repository.get(state.run_id) is None
+
+
+def test_duplicate_run_id_raises_stable_domain_error(custom_runtime):
+    state = AgentState(
+        run_id="duplicate-run",
+        resume_text="Resume",
+        job_description="Job",
+    )
+
+    def created_event():
+        return AgentEvent(
+            run_id=state.run_id,
+            sequence=1,
+            event_type=AgentEventType.RUN_CREATED,
+            step=Step.VALIDATE_INPUT,
+        )
+
+    custom_runtime.repository.create(state, created_event())
+    with pytest.raises(RunAlreadyExistsError, match="already exists"):
+        custom_runtime.repository.create(state, created_event())
+    assert len(custom_runtime.repository.events(state.run_id)) == 1
+
+
+def test_repository_updates_revalidate_agent_state_contract(custom_runtime):
+    state = AgentState(
+        run_id="revalidate-state",
+        resume_text="Resume",
+        job_description="Job",
+    )
+    created = custom_runtime.repository.create(
+        state,
+        AgentEvent(
+            run_id=state.run_id,
+            sequence=1,
+            event_type=AgentEventType.RUN_CREATED,
+            step=Step.VALIDATE_INPUT,
+        ),
+    )
+    invalid = created.model_copy(
+        update={
+            "step": Step.HUMAN_REVIEW,
+            "status": AgentStatus.RUNNING,
+            "verification": passing(),
+        }
+    )
+    event = AgentEvent(
+        run_id=state.run_id,
+        sequence=2,
+        event_type=AgentEventType.STEP_COMPLETED,
+        step=Step.VALIDATE_INPUT,
+    )
+    with pytest.raises(ValidationError, match="requires status"):
+        custom_runtime.repository.save(
+            invalid,
+            event,
+            expected_version=0,
+            result=None,
+        )
+    unchanged = custom_runtime.repository.require(state.run_id)
+    assert unchanged.step == Step.VALIDATE_INPUT
+    assert unchanged.version == 0
+    assert len(custom_runtime.repository.events(state.run_id)) == 1
+
+
+def test_same_expected_version_allows_only_one_save(custom_runtime):
+    state = AgentState(
+        run_id="optimistic-run",
+        resume_text="Resume",
+        job_description="Job",
+    )
+    created = custom_runtime.repository.create(
+        state,
+        AgentEvent(
+            run_id=state.run_id,
+            sequence=1,
+            event_type=AgentEventType.RUN_CREATED,
+            step=Step.VALIDATE_INPUT,
+        ),
+    )
+    next_state = AgentState.model_validate(
+        {**created.model_dump(mode="python"), "step": Step.ANALYZE_RESUME}
+    )
+
+    def completed_event():
+        return AgentEvent(
+            run_id=state.run_id,
+            sequence=2,
+            event_type=AgentEventType.STEP_COMPLETED,
+            step=Step.VALIDATE_INPUT,
+        )
+
+    saved = custom_runtime.repository.save(
+        next_state,
+        completed_event(),
+        expected_version=0,
+        result=None,
+    )
+    assert saved.version == 1
+    with pytest.raises(StaleStateError, match="stale"):
+        custom_runtime.repository.save(
+            next_state,
+            completed_event(),
+            expected_version=0,
+            result=None,
+        )
+    assert custom_runtime.repository.require(state.run_id).version == 1
+    assert len(custom_runtime.repository.events(state.run_id)) == 2
+
+
+def test_event_datetime_round_trip_is_utc_aware(custom_runtime):
+    state = AgentState(
+        run_id="utc-event",
+        resume_text="Resume",
+        job_description="Job",
+    )
+    custom_runtime.repository.create(
+        state,
+        AgentEvent(
+            run_id=state.run_id,
+            sequence=1,
+            event_type=AgentEventType.RUN_CREATED,
+            step=Step.VALIDATE_INPUT,
+        ),
+    )
+    occurred_at = custom_runtime.repository.events(state.run_id)[0].occurred_at
+    assert occurred_at.tzinfo is not None
+    assert occurred_at.utcoffset() == UTC.utcoffset(occurred_at)
+
+
 def test_complete_happy_path_pauses_then_approves(custom_runtime):
     loop = make_loop(custom_runtime.repository)
     paused = start(loop)
@@ -277,6 +485,21 @@ def test_complete_happy_path_pauses_then_approves(custom_runtime):
     assert custom_runtime.repository.events(paused.run_id)[-1].event_type == (
         AgentEventType.PAUSED_FOR_REVIEW
     )
+    with custom_runtime.database.session_factory() as session:
+        paused_projection = session.get(Run, paused.run_id)
+        paused_result = json.loads(paused_projection.result_json)
+        assert paused_projection.status == "awaiting_review"
+        assert "workflow_status" not in paused_result
+        assert not {
+            "resume_text",
+            "job_description",
+            "version",
+            "error_message",
+        } & paused_result.keys()
+        assert set(paused_result) == AgentState.PUBLIC_RESULT_FIELDS
+    assert custom_runtime.repository.events(paused.run_id)[-1].payload[
+        "pause_reason"
+    ] == "verification_passed"
 
     completed = loop.review(
         paused.run_id,
@@ -286,6 +509,11 @@ def test_complete_happy_path_pauses_then_approves(custom_runtime):
     )
     assert completed.step == Step.COMPLETED
     assert completed.status == AgentStatus.APPROVED
+    with custom_runtime.database.session_factory() as session:
+        approved_projection = session.get(Run, paused.run_id)
+        approved_result = json.loads(approved_projection.result_json)
+        assert approved_projection.status == "approved"
+        assert "workflow_status" not in approved_result
     with pytest.raises(InvalidTransitionError, match="terminal"):
         loop.run_until_pause(paused.run_id)
 
@@ -326,6 +554,92 @@ def test_real_step_handler_completes_happy_path_with_fake_model(custom_runtime):
     assert analyzer.calls[1][2] == "Requires Python"
 
 
+def test_skill_matching_normalizes_evidence_and_restores_exact_resume_text():
+    assessment = SkillAssessment(
+        matches=[
+            SkillEvidence(
+                requirement_id="REQ-001",
+                job_skill="python",
+                requirement_level="required",
+                match_status="matched",
+                resume_evidence=["  BUILT   python APIs!  "],
+                confidence=1,
+            )
+        ],
+        explanation="Python is supported.",
+        recommendations=[],
+    )
+    state = AgentState(
+        run_id="normalized-evidence",
+        resume_text=FACT,
+        job_description="Requires Python",
+        step=Step.MATCH_SKILLS,
+        resume_analysis=resume_analysis(),
+        job_analysis=job_analysis(),
+    )
+    outcome = JobAgentStepHandler(QueueAnalyzer([assessment])).execute(
+        Step.MATCH_SKILLS, state
+    )
+    matched = outcome.updates["skill_match"].matches[0]
+    assert matched.match_status == "matched"
+    assert matched.resume_evidence == [FACT]
+
+
+def test_custom_resume_analysis_preserves_verbatim_evidence_text():
+    verbatim = "  Built Python APIs.  "
+    analysis = ResumeAnalysis(
+        summary="Developer",
+        skills=["Python"],
+        evidence=[
+            ResumeEvidence(
+                evidence_id="temporary",
+                source_section="Experience",
+                exact_text=verbatim,
+            )
+        ],
+        education=[],
+    )
+    state = AgentState(
+        run_id="verbatim-evidence",
+        resume_text=verbatim,
+        job_description="Requires Python",
+        step=Step.ANALYZE_RESUME,
+    )
+    outcome = JobAgentStepHandler(QueueAnalyzer([analysis])).execute(
+        Step.ANALYZE_RESUME, state
+    )
+    assert outcome.updates["resume_analysis"].evidence[0].exact_text == verbatim
+
+
+def test_verifier_rejects_claim_without_evidence_ids():
+    unsupported_claim = SupportedClaim.model_construct(
+        text="Python developer",
+        evidence_ids=[],
+    )
+    unvalidated_resume = TailoredResume.model_construct(
+        professional_summary=[unsupported_claim],
+        experience_bullets=[SupportedClaim(text=FACT, evidence_ids=[FACT_ID])],
+        highlighted_skills=[SupportedClaim(text="Python", evidence_ids=[FACT_ID])],
+    )
+    state = AgentState(
+        run_id="missing-evidence-id",
+        resume_text=FACT,
+        job_description="Requires Python",
+        step=Step.VERIFY_RESUME,
+        resume_analysis=resume_analysis(),
+        tailored_resume=tailored(),
+    ).model_copy(update={"tailored_resume": unvalidated_resume})
+    outcome = JobAgentStepHandler(QueueAnalyzer([passing()])).execute(
+        Step.VERIFY_RESUME, state
+    )
+    verification = outcome.updates["verification"]
+    assert verification.passed is False
+    assert verification.unsupported_claims[0].claim == "Python developer"
+    assert verification.unsupported_claims[0].reason == (
+        "The claim does not reference any resume evidence."
+    )
+
+
 def test_pause_reject_revise_verify_and_pause_again(custom_runtime):
     handler = FakeHandler(verifications=[passing(), passing()])
     loop = make_loop(custom_runtime.repository, handler)
@@ -352,6 +666,108 @@ def test_verifier_failure_respects_revision_limit(custom_runtime):
     assert paused.revision_count == 1
     assert paused.verification.passed is False
     assert handler.calls.count(Step.REVISE_RESUME) == 1
+    assert custom_runtime.repository.events(paused.run_id)[-1].payload[
+        "pause_reason"
+    ] == "revision_limit_reached"
+
+
+def test_new_verification_replaces_failed_verification_after_revision(custom_runtime):
+    handler = FakeHandler(verifications=[failing(), passing()])
+    paused = start(make_loop(custom_runtime.repository, handler))
+    assert paused.verification == passing()
+    assert paused.revision_count == 1
+
+
+@pytest.mark.parametrize(
+    ("missing_step", "verifications", "required_field"),
+    [
+        (Step.ANALYZE_RESUME, [passing()], "resume_analysis"),
+        (Step.WRITE_RESUME, [passing()], "tailored_resume"),
+        (Step.VERIFY_RESUME, [passing()], "verification"),
+        (Step.REVISE_RESUME, [failing()], "tailored_resume"),
+    ],
+)
+def test_handler_must_produce_required_step_output(
+    custom_runtime, missing_step, verifications, required_field
+):
+    run_id = f"missing-{missing_step.value}"
+    handler = FakeHandler(
+        verifications=verifications,
+        missing_output_step=missing_step,
+    )
+    with pytest.raises(InvalidTransitionError, match=required_field):
+        make_loop(custom_runtime.repository, handler).start(
+            run_id=run_id,
+            resume_text=FACT,
+            job_description="Requires Python",
+        )
+    stored = custom_runtime.repository.require(run_id)
+    assert stored.step == missing_step
+
+
+def test_successful_revision_invalidates_verification_before_reverification_failure(
+    custom_runtime,
+):
+    run_id = "revision-then-verifier-failure"
+    handler = FakeHandler(
+        verifications=[failing(), RuntimeError("verification crashed")]
+    )
+    loop = make_loop(custom_runtime.repository, handler)
+
+    with pytest.raises(RuntimeError, match="verification crashed"):
+        loop.start(
+            run_id=run_id,
+            resume_text=FACT,
+            job_description="Requires Python",
+        )
+
+    reverification_input = handler.verification_inputs[1]
+    assert reverification_input.step == Step.VERIFY_RESUME
+    assert reverification_input.tailored_resume == tailored("Revised Python developer")
+    assert reverification_input.verification is None
+    assert reverification_input.revision_count == 1
+    stored = custom_runtime.repository.require(run_id)
+    assert stored.step == Step.FAILED
+    assert stored.status == AgentStatus.FAILED
+    assert stored.tailored_resume == tailored("Revised Python developer")
+    assert stored.verification is None
+    assert stored.revision_count == 1
+    with custom_runtime.database.session_factory() as session:
+        projection = session.get(Run, run_id)
+        assert projection.status == "failed"
+        assert projection.result_json is None
+
+
+def test_failed_reverification_preserves_previous_stable_public_result(custom_runtime):
+    handler = FakeHandler(
+        verifications=[passing(), RuntimeError("verification crashed")]
+    )
+    loop = make_loop(custom_runtime.repository, handler)
+    paused = start(loop)
+    with custom_runtime.database.session_factory() as session:
+        before = session.get(Run, paused.run_id)
+        previous_result_json = before.result_json
+
+    with pytest.raises(RuntimeError, match="verification crashed"):
+        loop.review(
+            paused.run_id,
+            approved=False,
+            feedback="Shorten the summary.",
+            expected_version=paused.version,
+        )
+
+    stored = custom_runtime.repository.require(paused.run_id)
+    assert stored.status == AgentStatus.FAILED
+    assert stored.tailored_resume == tailored("Revised Python developer")
+    assert stored.verification is None
+    with custom_runtime.database.session_factory() as session:
+        projection = session.get(Run, paused.run_id)
+        assert projection.status == "failed"
+        assert projection.result_json == previous_result_json
+        retained = json.loads(projection.result_json)
+    assert retained["tailored_resume"] == tailored().model_dump(mode="json")
+    assert retained["verification"] == passing().model_dump(mode="json")
+    assert "workflow_status" not in retained
 
 
 def test_stale_version_and_duplicate_review_are_rejected(custom_runtime):
@@ -382,6 +798,36 @@ def test_rejection_without_feedback_is_validation_error(custom_runtime):
     unchanged = custom_runtime.repository.require(paused.run_id)
     assert unchanged.version == paused.version
     assert unchanged.status == AgentStatus.AWAITING_REVIEW
+
+
+def test_failed_verification_cannot_be_approved_but_can_be_revised(custom_runtime):
+    handler = FakeHandler(verifications=[failing(), passing()])
+    loop = make_loop(custom_runtime.repository, handler)
+    paused = start(loop, max_revisions=0)
+    assert paused.verification.passed is False
+    with pytest.raises(InvalidTransitionError, match="cannot be approved"):
+        loop.review(
+            paused.run_id,
+            approved=True,
+            feedback=None,
+            expected_version=paused.version,
+        )
+    unchanged = custom_runtime.repository.require(paused.run_id)
+    assert unchanged.version == paused.version
+    revised = loop.review(
+        paused.run_id,
+        approved=False,
+        feedback="Remove the unsupported claim.",
+        expected_version=paused.version,
+    )
+    assert revised.status == AgentStatus.AWAITING_REVIEW
+    assert revised.verification.passed is True
+    rejected_event = next(
+        event
+        for event in custom_runtime.repository.events(paused.run_id)
+        if event.event_type == AgentEventType.REVIEW_REJECTED
+    )
+    assert rejected_event.payload["reason"] == "human_feedback"
 
 
 def test_rejection_state_event_and_projection_commit_before_revision(custom_runtime):
@@ -473,22 +919,35 @@ def test_transition_policy_is_pure_and_covers_required_branches():
     base = AgentState(run_id="run", resume_text="Resume", job_description="Job")
     assert policy.after_step(base).step == Step.ANALYZE_RESUME
 
-    failed = base.model_copy(
-        update={
-            "step": Step.VERIFY_RESUME,
-            "verification": failing(),
-            "revision_count": 0,
-        }
+    failed = AgentState(
+        run_id="failed-verification",
+        resume_text="Resume",
+        job_description="Job",
+        step=Step.VERIFY_RESUME,
+        verification=failing(),
     )
-    assert policy.after_step(failed).step == Step.REVISE_RESUME
-    limited = failed.model_copy(update={"revision_count": 3})
-    assert policy.after_step(limited).step == Step.HUMAN_REVIEW
+    assert policy.after_step(
+        failed, produced_fields={"verification"}
+    ).step == Step.REVISE_RESUME
+    limited = AgentState(
+        run_id="limited-verification",
+        resume_text="Resume",
+        job_description="Job",
+        step=Step.VERIFY_RESUME,
+        verification=failing(),
+        revision_count=3,
+    )
+    assert policy.after_step(
+        limited, produced_fields={"verification"}
+    ).step == Step.HUMAN_REVIEW
 
-    review = base.model_copy(
-        update={
-            "step": Step.HUMAN_REVIEW,
-            "status": AgentStatus.AWAITING_REVIEW,
-        }
+    review = AgentState(
+        run_id="review",
+        resume_text="Resume",
+        job_description="Job",
+        step=Step.HUMAN_REVIEW,
+        status=AgentStatus.AWAITING_REVIEW,
+        verification=passing(),
     )
     assert policy.after_review(review, approved=True, feedback=None).step == Step.COMPLETED
     assert (
@@ -497,8 +956,99 @@ def test_transition_policy_is_pure_and_covers_required_branches():
     )
     with pytest.raises(ValueError):
         policy.after_review(review, approved=False, feedback=None)
-    terminal = base.model_copy(
-        update={"step": Step.COMPLETED, "status": AgentStatus.APPROVED}
+    terminal = AgentState(
+        run_id="terminal",
+        resume_text="Resume",
+        job_description="Job",
+        step=Step.COMPLETED,
+        status=AgentStatus.APPROVED,
+        approved=True,
+        verification=passing(),
     )
     with pytest.raises(InvalidTransitionError):
         policy.after_step(terminal)
+
+
+def test_agent_state_accepts_valid_lifecycle_states():
+    states = [
+        AgentState(run_id="initial", resume_text="Resume", job_description="Job"),
+        AgentState(
+            run_id="running",
+            resume_text="Resume",
+            job_description="Job",
+            step=Step.ANALYZE_JOB,
+        ),
+        AgentState(
+            run_id="revising",
+            resume_text="Resume",
+            job_description="Job",
+            step=Step.REVISE_RESUME,
+            status=AgentStatus.REVISING,
+            verification=failing(),
+        ),
+        AgentState(
+            run_id="paused",
+            resume_text="Resume",
+            job_description="Job",
+            step=Step.HUMAN_REVIEW,
+            status=AgentStatus.AWAITING_REVIEW,
+            verification=passing(),
+        ),
+        AgentState(
+            run_id="completed",
+            resume_text="Resume",
+            job_description="Job",
+            step=Step.COMPLETED,
+            status=AgentStatus.APPROVED,
+            approved=True,
+            verification=passing(),
+        ),
+        AgentState(
+            run_id="failed",
+            resume_text="Resume",
+            job_description="Job",
+            step=Step.FAILED,
+            status=AgentStatus.FAILED,
+            error_message="Safe failure message.",
+        ),
+    ]
+    assert all(isinstance(state, AgentState) for state in states)
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {
+            "step": Step.HUMAN_REVIEW,
+            "status": AgentStatus.RUNNING,
+            "verification": passing(),
+        },
+        {
+            "step": Step.COMPLETED,
+            "status": AgentStatus.APPROVED,
+            "approved": False,
+            "verification": passing(),
+        },
+        {
+            "step": Step.COMPLETED,
+            "status": AgentStatus.APPROVED,
+            "approved": True,
+            "verification": None,
+        },
+        {
+            "step": Step.FAILED,
+            "status": AgentStatus.FAILED,
+            "error_message": None,
+        },
+    ],
+)
+def test_agent_state_rejects_invalid_invariants(updates):
+    with pytest.raises(ValidationError):
+        AgentState.model_validate(
+            {
+                "run_id": "invalid",
+                "resume_text": "Resume",
+                "job_description": "Job",
+                **updates,
+            }
+        )

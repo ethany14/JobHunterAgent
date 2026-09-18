@@ -14,7 +14,7 @@ from langgraph.types import interrupt
 from api.db import create_database
 from api.main import create_app
 from api.repositories.run_repository import RunRepository
-from api.runtime import create_run_service
+from api.runtime import create_frozen_langgraph_run_service
 from api.schemas.runs import CreateRunRequest, ReviewRequest
 from api.services.run_service import SAFE_RUN_ERROR, InvalidRunStateError, RunNotFoundError
 
@@ -85,7 +85,7 @@ def sqlite_url(path: Path) -> str:
 
 
 def new_service(tmp_path: Path):
-    return create_run_service(
+    return create_frozen_langgraph_run_service(
         database_url=sqlite_url(tmp_path / "runs.sqlite"),
         checkpoint_path=tmp_path / "checkpoints.sqlite",
         graph_builder=build_test_graph(),
@@ -121,6 +121,45 @@ def test_created_run_is_queryable_from_database(tmp_path):
         assert row.result["revision_count"] == 0
     finally:
         service.close()
+
+
+def test_repository_none_result_preserves_latest_stable_projection(tmp_path):
+    database = create_database(
+        sqlite_url(tmp_path / "projection.sqlite"), create_schema_for_tests=True
+    )
+    repository = RunRepository(database.session_factory)
+    try:
+        repository.create(
+            run_id="projection-run",
+            thread_id="projection-run",
+            resume_text="Resume",
+            job_description="Job",
+        )
+        repository.update(
+            "projection-run",
+            status="awaiting_review",
+            result={"tailored_resume": "stable"},
+            error_message=None,
+        )
+        revising = repository.update(
+            "projection-run",
+            status="revising",
+            result=None,
+            error_message=None,
+        )
+        assert revising.status == "revising"
+        assert revising.result == {"tailored_resume": "stable"}
+
+        failed = repository.update(
+            "projection-run",
+            status="failed",
+            result=None,
+            error_message=SAFE_RUN_ERROR,
+        )
+        assert failed.status == "failed"
+        assert failed.result == {"tailored_resume": "stable"}
+    finally:
+        database.close()
 
 
 def test_new_application_instance_reads_and_approves_after_restart(tmp_path):
@@ -201,7 +240,7 @@ def test_failed_status_is_persisted_without_internal_error_details(tmp_path):
     graph.add_node("fail", fail)
     graph.add_edge(START, "fail")
     graph.add_edge("fail", END)
-    service = create_run_service(
+    service = create_frozen_langgraph_run_service(
         database_url=sqlite_url(tmp_path / "runs.sqlite"),
         checkpoint_path=tmp_path / "checkpoints.sqlite",
         graph_builder=graph,

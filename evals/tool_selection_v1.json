@@ -1,0 +1,38 @@
+[
+  {
+    "id": "list_recent",
+    "user_message": "Show me my most recent job application runs.",
+    "allowed_tools": ["list_recent_runs"],
+    "expected_tools": ["list_recent_runs"]
+  },
+  {
+    "id": "get_one_result",
+    "user_message": "Get the public result for run run-123.",
+    "allowed_tools": ["get_run_result"],
+    "expected_tools": ["get_run_result"]
+  },
+  {
+    "id": "compare_requirements",
+    "user_message": "Compare canonical requirements for runs run-123 and run-456.",
+    "allowed_tools": ["compare_run_requirements"],
+    "expected_tools": ["compare_run_requirements"]
+  },
+  {
+    "id": "render_markdown",
+    "user_message": "Render the tailored resume from run run-123 as Markdown.",
+    "allowed_tools": ["render_tailored_resume"],
+    "expected_tools": ["render_tailored_resume"]
+  },
+  {
+    "id": "choose_between_read_tools",
+    "user_message": "Which requirements were missing across runs run-123 and run-456?",
+    "allowed_tools": ["list_recent_runs", "get_run_result", "compare_run_requirements"],
+    "expected_tools": ["compare_run_requirements"]
+  },
+  {
+    "id": "no_tool_needed",
+    "user_message": "Explain what a canonical requirement means in one sentence.",
+    "allowed_tools": ["list_recent_runs", "get_run_result", "compare_run_requirements", "render_tailored_resume"],
+    "expected_tools": []
+  }
+]

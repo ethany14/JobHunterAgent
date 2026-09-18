@@ -11,7 +11,7 @@ from sqlalchemy import update
 from sqlalchemy.orm import Session, sessionmaker
 
 from api.models import Run, utc_now
-from api.schemas.runs import RunStatus
+from api.schemas.runs import RunBackend, RunStatus
 
 
 @dataclass(frozen=True)
@@ -19,6 +19,8 @@ class RunRecord:
     run_id: str
     thread_id: str
     status: RunStatus
+    backend: RunBackend
+    backend_source: str
     resume_text: str
     job_description: str
     result: dict[str, Any] | None
@@ -38,11 +40,15 @@ class RunRepository:
         thread_id: str,
         resume_text: str,
         job_description: str,
+        backend: RunBackend = "custom",
+        backend_source: str = "explicit_new_run",
     ) -> RunRecord:
         row = Run(
             run_id=run_id,
             thread_id=thread_id,
             status="running",
+            backend=backend,
+            backend_source=backend_source,
             resume_text=resume_text,
             job_description=job_description,
         )
@@ -104,6 +110,8 @@ class RunRepository:
             run_id=row.run_id,
             thread_id=row.thread_id,
             status=row.status,  # type: ignore[arg-type]
+            backend=row.backend,  # type: ignore[arg-type]
+            backend_source=row.backend_source,
             resume_text=row.resume_text,
             job_description=row.job_description,
             result=result,

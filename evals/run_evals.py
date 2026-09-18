@@ -16,6 +16,7 @@ from typing import Any
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
+from evals import DATASET_VERSION
 from evals.metrics import (
     EvaluationResult,
     MissingRequirement,
@@ -29,7 +30,9 @@ from evals.metrics import (
 )
 from job_agent.graph import builder
 from job_agent.nodes import _create_model, make_evidence_id, revise_resume, verify_resume
+from job_agent.prompts import PROMPT_VERSION
 from job_agent.schemas import (
+    SCHEMA_VERSION,
     JobAnalysis,
     ResumeAnalysis,
     ResumeEvidence,
@@ -38,6 +41,7 @@ from job_agent.schemas import (
     TailoredResume,
     VerificationResult,
 )
+from job_agent.rendering import render_tailored_resume_text
 
 EVALS_DIR = Path(__file__).resolve().parent
 DEFAULT_CASES_PATH = EVALS_DIR / "cases.json"
@@ -53,8 +57,7 @@ def load_cases(path: Path) -> list[dict[str, Any]]:
 
 
 def tailored_resume_text(resume: TailoredResume) -> str:
-    claims = resume.professional_summary + resume.experience_bullets + resume.highlighted_skills
-    return "\n".join(claim.text for claim in claims)
+    return render_tailored_resume_text(resume)
 
 
 def _expected_requirements(case: dict[str, Any]) -> list[MissingRequirement]:
@@ -265,6 +268,17 @@ def summarize_reflection(results: list[ReflectionEvaluationResult]) -> dict[str,
 
 
 def run_evaluations(cases_path: Path, adversarial_path: Path, output_path: Path) -> dict[str, Any]:
+    evaluated_source_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+    ).stdout.strip()
+    dirty_before_run = bool(
+        subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+    )
     checkpoint_messages: list[str] = []
 
     class CheckpointWarningHandler(logging.Handler):
@@ -287,17 +301,17 @@ def run_evaluations(cases_path: Path, adversarial_path: Path, output_path: Path)
     finally:
         checkpoint_logger.removeHandler(handler)
     model = _create_model()
-    commit = subprocess.run(
-        ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
-    ).stdout.strip()
     report = {
         "run_metadata": {
             "timestamp": datetime.now(UTC).isoformat(),
-            "git_commit": commit,
+            "evaluated_source_commit": evaluated_source_commit,
+            "dirty_before_run": dirty_before_run,
             "model": model.model_name,
             "temperature": model.temperature,
-            "prompt_version": "v1",
-            "dataset_version": "v1",
+            "max_retries": model.max_retries,
+            "prompt_version": PROMPT_VERSION,
+            "schema_version": SCHEMA_VERSION,
+            "dataset_version": DATASET_VERSION,
         },
         "environment": {
             "langgraph": version("langgraph"),

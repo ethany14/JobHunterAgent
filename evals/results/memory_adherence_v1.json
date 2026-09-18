@@ -1,0 +1,96 @@
+{
+  "run_metadata": {
+    "timestamp": "2026-09-18T00:52:11.834822+00:00",
+    "dataset_version": "memory_adherence_v1",
+    "live_evaluation": true,
+    "runs_per_case": 1,
+    "model": "gemini-3.7-flash",
+    "temperature": 0.0
+  },
+  "memory": {
+    "memory_key": "resume.summary.max_sentences",
+    "display_text": "Prefers resume summaries with no more than two sentences."
+  },
+  "results": [
+    {
+      "case_id": "direct_summary_length",
+      "prompt": "How many sentences should I have in my resume summary?",
+      "expected_memory": true,
+      "selected_memory_ids": [
+        "44791767-e976-44da-9f32-2d30bffb6e6b"
+      ],
+      "confirmed_memory_id": "44791767-e976-44da-9f32-2d30bffb6e6b",
+      "snapshot_id": "d98576da-a6a5-4091-b50a-10227be26d5d",
+      "session_outcome_status": "response_ready",
+      "raw_response": "Based on your preference, you should aim for **no more than two sentences** in your resume summary. Keeping it to 1–2 impactful sentences ensures your summary is punchy, concise, and easy for recruiters to scan quickly.\n\n*(As a general industry note: typical resume summaries range from 2 to 4 sentences, but keeping it capped at 2 sentences is an effective way to highlight only your strongest qualifications and value proposition without clutter.)*",
+      "memory_selection_correct": true,
+      "expected_answer_phrase_present": true,
+      "passed": true,
+      "input_tokens": 302,
+      "output_tokens": 92,
+      "latency_seconds": 2.007,
+      "error": null
+    },
+    {
+      "case_id": "paraphrased_summary_length",
+      "prompt": "Based on my saved preferences, what is the maximum length of my resume professional summary?",
+      "expected_memory": true,
+      "selected_memory_ids": [
+        "44791767-e976-44da-9f32-2d30bffb6e6b"
+      ],
+      "confirmed_memory_id": "44791767-e976-44da-9f32-2d30bffb6e6b",
+      "snapshot_id": "2a9d46f3-6806-492f-898a-b21e509be63e",
+      "session_outcome_status": "response_ready",
+      "raw_response": "Based on your saved preferences, the maximum length for your resume professional summary is **no more than two sentences**.",
+      "memory_selection_correct": true,
+      "expected_answer_phrase_present": true,
+      "passed": true,
+      "input_tokens": 308,
+      "output_tokens": 22,
+      "latency_seconds": 1.323,
+      "error": null
+    },
+    {
+      "case_id": "explicit_turn_override",
+      "prompt": "For this turn only, override my usual summary-length preference and give me a three-sentence structure.",
+      "expected_memory": true,
+      "selected_memory_ids": [
+        "44791767-e976-44da-9f32-2d30bffb6e6b"
+      ],
+      "confirmed_memory_id": "44791767-e976-44da-9f32-2d30bffb6e6b",
+      "snapshot_id": "dfa540a5-23e7-459b-8f05-11f84cd12607",
+      "session_outcome_status": "response_ready",
+      "raw_response": "Here is an effective **three-sentence resume summary structure**:\n\n---\n\n### **3-Sentence Resume Summary Blueprint**\n\n* **Sentence 1: Professional Identity & Core Expertise**\n  * *Purpose:* Establish who you are, your years of experience, and your primary area of specialization.\n  * *Template:* `[Job Title/Core Identity]` with `[Number]+ years of experience` specializing in `[Key Domain/Skill 1]` and `[Key Domain/Skill 2]`.\n\n* **Sentence 2: Top Accomplishment & Value Demonstration**\n  * *Purpose:* Highlight a standout, quantifiable achievement or signature strength that proves your impact.\n  * *Template:* Proven track record of `[major achievement/outcome with metric]`, including expertise in `[tool/methodology/specialized skill]`.\n\n* **Sentence 3: Target Alignment & Value Proposition**\n  * *Purpose:* Clarify the specific value, leadership, or solution you deliver to the prospective employer.\n  * *Template:* Adept at `[high-level capability, e.g., scaling teams / driving revenue / optimizing workflows]` to help `[target company type/industry]` achieve `[key organizational goal]`.\n\n---\n\n### **Example in Practice (Marketing Manager)**\n\n> **Sentence 1:** Growth-focused Senior Marketing Manager with over 7 years of experience leading cross-functional teams and scaling B2B SaaS demand generation programs.  \n> **Sentence 2:** Spearheaded multi-channel campaigns that generated a 42% increase in qualified pipeline and reduced customer acquisition cost by $1.2M.  \n> **Sentence 3:** Adept at aligning product marketing with sales enablement to accelerate revenue growth and expand enterprise market share.",
+      "memory_selection_correct": true,
+      "expected_answer_phrase_present": true,
+      "passed": true,
+      "input_tokens": 312,
+      "output_tokens": 368,
+      "latency_seconds": 2.698,
+      "error": null
+    },
+    {
+      "case_id": "irrelevant_sql_question",
+      "prompt": "What is the difference between a SQL INNER JOIN and LEFT JOIN?",
+      "expected_memory": false,
+      "selected_memory_ids": [],
+      "confirmed_memory_id": "44791767-e976-44da-9f32-2d30bffb6e6b",
+      "snapshot_id": "749007df-ba62-42a5-8628-ad4ab20b1ada",
+      "session_outcome_status": "response_ready",
+      "raw_response": "The main difference between an **`INNER JOIN`** and a **`LEFT JOIN`** (or `LEFT OUTER JOIN`) is how they handle rows that do not have a match in both tables.\n\n---\n\n### 1. `INNER JOIN`\n* **What it does:** Returns **only the rows that have matching values in both tables**.\n* **Unmatched rows:** Any row in either table that does not satisfy the join condition is **excluded** from the result.\n\n**Conceptual Diagram:**\n```text\nTable A        Table B\n[  A  (  A ∩ B  )  B  ]\n         ^^^^^\n      INNER JOIN\n```\n\n**Example:**\n```sql\nSELECT Customers.Name, Orders.OrderID\nFROM Customers\nINNER JOIN Orders \n    ON Customers.CustomerID = Orders.CustomerID;\n```\n* **Result:** Only customers who have placed at least one order are returned. Customers with no orders are omitted.\n\n---\n\n### 2. `LEFT JOIN`\n* **What it does:** Returns **all rows from the left table**, along with matched rows from the right table.\n* **Unmatched rows:** If a row from the left table has no match in the right table, the result still includes the row, and the columns from the right table are filled with **`NULL`**.\n\n**Conceptual Diagram:**\n```text\nTable A        Table B\n[  A  (  A ∩ B  )  B  ]\n^^^^^^^^^^^^^^\n   LEFT JOIN\n```\n\n**Example:**\n```sql\nSELECT Customers.Name, Orders.OrderID\nFROM Customers\nLEFT JOIN Orders \n    ON Customers.CustomerID = Orders.CustomerID;\n```\n* **Result:** Every customer is returned. If a customer has never placed an order, `OrderID` will be `NULL`.\n\n---\n\n### Summary Comparison\n\n| Feature | `INNER JOIN` | `LEFT JOIN` |\n| :--- | :--- | :--- |\n| **Rows from Left Table** | Only if matched in the right table | **All rows** |\n| **Rows from Right Table** | Only if matched in the left table | Only if matched in the left table |\n| **Non-matching Left Rows** | Dropped | Preserved (with `NULL`s for right table columns) |\n| **Typical Use Case** | When you strictly need related data across both tables | When you want the full list from the first table regardless of whether related records exist |",
+      "memory_selection_correct": true,
+      "expected_answer_phrase_present": true,
+      "passed": true,
+      "input_tokens": 200,
+      "output_tokens": 527,
+      "latency_seconds": 4.267,
+      "error": null
+    }
+  ],
+  "metrics": {
+    "cases": 4,
+    "completed": 4,
+    "passed": 4,
+    "adherence_rate": 1.0
+  }
+}

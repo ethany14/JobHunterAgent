@@ -18,6 +18,7 @@ from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
+from evals import DATASET_VERSION
 from evals.metrics import count_forbidden_claims
 from evals.run_evals import (
     EVALS_DIR,
@@ -37,7 +38,8 @@ from job_agent.nodes import (
     validate_input,
     write_resume,
 )
-from job_agent.schemas import TailoredResume
+from job_agent.prompts import PROMPT_VERSION
+from job_agent.schemas import SCHEMA_VERSION, TailoredResume
 from job_agent.state import JobAgentState
 
 DEFAULT_CASES_PATH = EVALS_DIR / "cases.json"
@@ -410,8 +412,10 @@ def run_ablation(cases_path: Path, adversarial_path: Path, output_path: Path) ->
             ).stdout.strip(),
             "model": model.model_name,
             "temperature": model.temperature,
-            "prompt_version": "v1",
-            "dataset_version": "v1",
+            "max_retries": model.max_retries,
+            "prompt_version": PROMPT_VERSION,
+            "schema_version": SCHEMA_VERSION,
+            "dataset_version": DATASET_VERSION,
             "runs_per_case": 1,
         },
         "version_a_writer_only": writer,

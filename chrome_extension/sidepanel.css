@@ -24,6 +24,7 @@ body {
 }
 
 button, textarea, input { font: inherit; }
+select { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: wait; opacity: 0.58; }
 
@@ -57,6 +58,26 @@ h3 { margin-bottom: 8px; font-size: 14px; }
 
 main { padding: 14px; }
 
+.panel-tabs {
+  position: sticky;
+  top: 79px;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 0 14px;
+  background: var(--canvas);
+  border-bottom: 1px solid var(--line);
+}
+.panel-tab {
+  padding: 11px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  font-weight: 750;
+}
+.panel-tab.active { color: var(--accent-dark); border-bottom-color: var(--accent); }
+
 .card {
   margin-bottom: 14px;
   padding: 16px;
@@ -88,6 +109,15 @@ textarea:focus, button:focus-visible, input:focus-visible {
   outline: 3px solid rgba(23, 107, 77, 0.2);
   outline-offset: 2px;
 }
+select:focus { outline: 3px solid rgba(23, 107, 77, 0.2); outline-offset: 2px; }
+input, select {
+  width: 100%;
+  padding: 9px 10px;
+  color: var(--ink);
+  background: #fbfcfb;
+  border: 1px solid #c9d4cc;
+  border-radius: 8px;
+}
 
 .field-footer { margin-top: 8px; align-items: flex-start; }
 .hint, .muted, .character-count { color: var(--muted); font-size: 12px; }
@@ -106,6 +136,7 @@ textarea:focus, button:focus-visible, input:focus-visible {
 .secondary-button { padding: 9px 11px; color: var(--accent-dark); background: var(--accent-soft); }
 .text-button { padding: 5px; color: var(--accent); background: transparent; font-size: 12px; }
 .full-width { width: 100%; }
+.ask-run-button { margin-bottom: 14px; }
 
 .health {
   display: flex;
@@ -158,6 +189,77 @@ textarea:focus, button:focus-visible, input:focus-visible {
 .verification.failed { color: var(--danger); }
 .review-panel label { display: block; margin: 14px 0 6px; font-size: 13px; font-weight: 700; }
 .review-panel .secondary-button { margin-top: 9px; }
+
+.session-meta, .assistant-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+.session-meta { justify-content: space-between; }
+.session-history-controls { margin-top: 12px; }
+.session-history-controls label { display: block; margin-bottom: 5px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.session-history-row { display: flex; align-items: center; gap: 8px; }
+.session-history-row select {
+  min-width: 0;
+  flex: 1;
+  padding: 8px;
+  color: var(--ink);
+  background: #fbfcfb;
+  border: 1px solid #c9d4cc;
+  border-radius: 8px;
+}
+.status-badge {
+  display: inline-flex;
+  padding: 5px 9px;
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 750;
+}
+.status-badge[data-status="failed"],
+.status-badge[data-status="cancelled"],
+.status-badge[data-status="timed_out"] { color: var(--danger); background: #f8e7e7; }
+.status-badge[data-status="running"],
+.status-badge[data-status="awaiting_tool_approval"] { color: var(--warning); background: #fff1dc; }
+.assistant-messages { max-height: 46vh; overflow-y: auto; }
+.chat-message { max-width: 92%; margin-bottom: 12px; padding: 11px; border-radius: 12px; }
+.chat-message.user { margin-left: auto; background: var(--accent-soft); }
+.chat-message.assistant { margin-right: auto; background: #eef1ef; }
+.chat-message p { margin: 5px 0 0; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-role { color: var(--muted); font-size: 11px; font-weight: 750; text-transform: uppercase; }
+.tool-approvals .card { border-color: #e9c78d; }
+.approval-arguments {
+  max-height: 180px;
+  overflow: auto;
+  padding: 9px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: #f7f8f7;
+  border-radius: 8px;
+  font-size: 11px;
+}
+.composer label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 700; }
+.assistant-actions { margin-top: 12px; }
+.danger-text { color: var(--danger); }
+
+.context-form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px; margin: 10px 0; }
+.context-form-grid label, #context-panel > .card > label {
+  display: block;
+  margin: 9px 0 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.context-list { display: grid; gap: 10px; margin-top: 12px; }
+.context-item { padding: 11px; background: #f8faf8; border: 1px solid var(--line); border-radius: 10px; }
+.context-item h3 { margin-bottom: 5px; overflow-wrap: anywhere; }
+.context-item p { margin-bottom: 7px; line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; }
+.context-item details { margin-top: 8px; }
+.context-item summary { cursor: pointer; color: var(--accent-dark); font-weight: 700; }
+.context-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
+.context-actions button { padding: 7px 9px; }
 
 .sr-only {
   position: absolute;

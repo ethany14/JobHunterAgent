@@ -5,6 +5,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 RunStatus = Literal["running", "awaiting_review", "revising", "approved", "failed"]
+RunBackend = Literal["custom", "langgraph", "unknown"]
 
 
 class ApiModel(BaseModel):

@@ -5,13 +5,13 @@ from threading import Lock
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from api.schemas.runs import CreateRunRequest, CreateRunResponse, ReviewRequest, RunResponse
-from api.services.run_service import InvalidRunStateError, RunNotFoundError, RunService
+from api.services.run_service import BackendRoutingRunService, InvalidRunStateError, RunNotFoundError, RunService
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 _service_initialization_lock = Lock()
 
 
-def get_run_service(request: Request) -> RunService:
+def get_run_service(request: Request) -> RunService | BackendRoutingRunService:
     service = getattr(request.app.state, "run_service", None)
     if service is None:
         with _service_initialization_lock:

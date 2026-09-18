@@ -1,3 +1,4 @@
+from evals import DATASET_VERSION
 from evals.metrics import (
     EvaluationResult,
     MissingRequirement,
@@ -38,6 +39,10 @@ def workflow_result(case_id: str, *, case_type="valid_workflow", strict=None,
         verification_passed=True if reached else None, revision_count=0,
         latency_seconds=latency, error=None,
     )
+
+
+def test_dataset_version_is_v3():
+    assert DATASET_VERSION == "v3"
 
 
 def test_empty_expected_recall_is_not_applicable():

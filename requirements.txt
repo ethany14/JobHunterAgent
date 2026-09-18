@@ -10,3 +10,4 @@ sqlalchemy>=2,<3
 alembic>=1.13,<2
 pytest
 httpx
+PyYAML>=6,<7

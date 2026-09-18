@@ -8,111 +8,165 @@
   </head>
   <body>
     <header class="app-header">
-      <div>
-        <p class="eyebrow">Evidence-grounded tailoring</p>
-        <h1>Job Agent</h1>
-      </div>
+      <div><p class="eyebrow">Evidence-grounded tailoring</p><h1>Job Agent</h1></div>
       <button id="health-button" class="health" type="button" aria-label="Check backend health">
         <span id="health-dot" class="health-dot" aria-hidden="true"></span>
-        <span id="health-text">Checking backend…</span>
+        <span id="health-text">Checking backend...</span>
       </button>
     </header>
 
+    <nav class="panel-tabs" aria-label="Job Agent panels">
+      <button id="analysis-tab" class="panel-tab active" type="button" aria-selected="true">Analysis</button>
+      <button id="assistant-tab" class="panel-tab" type="button" aria-selected="false">Assistant</button>
+      <button id="context-tab" class="panel-tab" type="button" aria-selected="false">Context</button>
+    </nav>
+
     <main>
-      <section class="card">
-        <div class="section-heading">
-          <div>
-            <p class="step-label">Step 1</p>
-            <h2>Resume</h2>
-          </div>
-          <button id="clear-resume-button" class="text-button" type="button">Clear saved resume</button>
-        </div>
-        <label class="sr-only" for="resume-text">Resume text</label>
-        <textarea id="resume-text" rows="10" maxlength="50001" placeholder="Paste your resume here"></textarea>
-        <div class="field-footer">
-          <label class="checkbox-label">
-            <input id="save-resume" type="checkbox">
-            Save this resume in this browser
-          </label>
-          <span id="resume-count" class="character-count">0 / 50,000</span>
-        </div>
-      </section>
-
-      <section class="card">
-        <div class="section-heading">
-          <div>
-            <p class="step-label">Step 2</p>
-            <h2>Job description</h2>
-          </div>
-          <button id="extract-button" class="secondary-button" type="button">Extract Job Description</button>
-        </div>
-        <p class="hint">Select the job description on the page first for the cleanest extraction.</p>
-        <label class="sr-only" for="job-description">Job description</label>
-        <textarea id="job-description" rows="12" maxlength="50001" placeholder="Extract from the current page or paste the job description"></textarea>
-        <div class="field-footer">
-          <span id="extraction-source" class="muted"></span>
-          <span id="job-count" class="character-count">0 / 50,000</span>
-        </div>
-      </section>
-
-      <button id="analyze-button" class="primary-button full-width" type="button">Analyze and Tailor Resume</button>
-
-      <div id="message" class="message" role="status" aria-live="polite" hidden></div>
-
-      <section id="results" class="results" hidden>
-        <div class="card result-summary">
-          <div>
-            <p class="step-label">Run status</p>
-            <h2 id="run-status">—</h2>
-          </div>
-          <div class="score-block">
-            <span id="match-score" class="score">—</span>
-            <span class="score-label">Match score</span>
-          </div>
-        </div>
-
+      <div id="analysis-panel" class="app-panel">
         <section class="card">
-          <h2>Requirement match</h2>
-          <div class="requirement-grid">
-            <div>
-              <h3 class="matched-heading">Matched</h3>
-              <ul id="matched-list" class="requirement-list"></ul>
-            </div>
-            <div>
-              <h3 class="partial-heading">Partial</h3>
-              <ul id="partial-list" class="requirement-list"></ul>
-            </div>
-            <div>
-              <h3 class="missing-heading">Missing evidence</h3>
-              <ul id="missing-list" class="requirement-list"></ul>
-            </div>
-            <div>
-              <h3 class="confirmation-heading">Needs your confirmation</h3>
-              <ul id="confirmation-list" class="requirement-list"></ul>
-            </div>
+          <div class="section-heading">
+            <div><p class="step-label">Step 1</p><h2>Resume</h2></div>
+            <button id="clear-resume-button" class="text-button" type="button">Clear saved resume</button>
+          </div>
+          <label class="sr-only" for="resume-text">Resume text</label>
+          <textarea id="resume-text" rows="10" maxlength="50001" placeholder="Paste your resume here"></textarea>
+          <div class="field-footer">
+            <label class="checkbox-label"><input id="save-resume" type="checkbox">Save this resume in this browser</label>
+            <span id="resume-count" class="character-count">0 / 50,000</span>
           </div>
         </section>
 
         <section class="card">
           <div class="section-heading">
-            <h2>Tailored resume</h2>
-            <button id="copy-button" class="secondary-button" type="button">Copy Resume</button>
+            <div><p class="step-label">Step 2</p><h2>Job description</h2></div>
+            <button id="extract-button" class="secondary-button" type="button">Extract Job Description</button>
           </div>
-          <div id="tailored-resume" class="resume-output"></div>
-          <div id="verification" class="verification"></div>
+          <p class="hint">Select the job description on the page first for the cleanest extraction.</p>
+          <label class="sr-only" for="job-description">Job description</label>
+          <textarea id="job-description" rows="12" maxlength="50001" placeholder="Extract from the current page or paste the job description"></textarea>
+          <div class="field-footer">
+            <span id="extraction-source" class="muted"></span>
+            <span id="job-count" class="character-count">0 / 50,000</span>
+          </div>
         </section>
 
-        <section id="review-panel" class="card review-panel" hidden>
-          <h2>Human review</h2>
-          <p class="hint">Approve this version, or explain what should change. Requested changes must remain supported by the original resume.</p>
-          <div class="review-actions">
-            <button id="approve-button" class="primary-button" type="button">Approve</button>
+        <button id="analyze-button" class="primary-button full-width" type="button">Analyze and Tailor Resume</button>
+        <div id="message" class="message" role="status" aria-live="polite" hidden></div>
+
+        <section id="results" class="results" hidden>
+          <div class="card result-summary">
+            <div><p class="step-label">Run status</p><h2 id="run-status">—</h2></div>
+            <div class="score-block"><span id="match-score" class="score">—</span><span class="score-label">Match score</span></div>
           </div>
-          <label for="review-feedback">Revision feedback</label>
-          <textarea id="review-feedback" rows="4" placeholder="Example: Shorten the summary and emphasize PostgreSQL."></textarea>
-          <button id="reject-button" class="secondary-button full-width" type="button">Request Revision</button>
+          <button id="ask-run-button" class="secondary-button full-width ask-run-button" type="button">Ask Agent About This Run</button>
+
+          <section class="card">
+            <h2>Requirement match</h2>
+            <div class="requirement-grid">
+              <div><h3 class="matched-heading">Matched</h3><ul id="matched-list" class="requirement-list"></ul></div>
+              <div><h3 class="partial-heading">Partial</h3><ul id="partial-list" class="requirement-list"></ul></div>
+              <div><h3 class="missing-heading">Missing evidence</h3><ul id="missing-list" class="requirement-list"></ul></div>
+              <div><h3 class="confirmation-heading">Needs your confirmation</h3><ul id="confirmation-list" class="requirement-list"></ul></div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="section-heading"><h2>Tailored resume</h2><button id="copy-button" class="secondary-button" type="button">Copy Resume</button></div>
+            <div id="tailored-resume" class="resume-output"></div>
+            <div id="verification" class="verification"></div>
+          </section>
+
+          <section id="review-panel" class="card review-panel" hidden>
+            <h2>Human review</h2>
+            <p class="hint">Approve this version, or explain what should change. Requested changes must remain supported by the original resume.</p>
+            <div class="review-actions"><button id="approve-button" class="primary-button" type="button">Approve</button></div>
+            <label for="review-feedback">Revision feedback</label>
+            <textarea id="review-feedback" rows="4" placeholder="Example: Shorten the summary and emphasize PostgreSQL."></textarea>
+            <button id="reject-button" class="secondary-button full-width" type="button">Request Revision</button>
+          </section>
         </section>
-      </section>
+      </div>
+
+      <div id="assistant-panel" class="app-panel" hidden>
+        <section class="card assistant-header">
+          <div class="section-heading">
+            <div><p class="step-label">Persistent session</p><h2>Job Assistant</h2></div>
+            <button id="new-session-button" class="secondary-button" type="button">New Session</button>
+          </div>
+          <div class="session-meta">
+            <span id="session-status" class="status-badge">No session</span>
+            <span id="session-run" class="muted"></span>
+          </div>
+          <div class="session-history-controls">
+            <label for="session-history">Previous conversations</label>
+            <div class="session-history-row">
+              <select id="session-history" aria-label="Previous conversations">
+                <option value="">No saved conversations</option>
+              </select>
+              <button id="refresh-sessions-button" class="text-button" type="button">Refresh</button>
+            </div>
+          </div>
+        </section>
+
+        <div id="session-message" class="message" role="status" aria-live="polite" hidden></div>
+        <section id="assistant-messages" class="assistant-messages card" aria-live="polite">
+          <p class="muted empty-session">Start a session to ask about your saved Job Agent runs.</p>
+        </section>
+        <section id="tool-approvals" class="tool-approvals" hidden></section>
+
+        <section class="card composer">
+          <label for="assistant-input">Message</label>
+          <textarea id="assistant-input" rows="5" maxlength="20000" placeholder="Ask about recent runs, requirements, or a tailored resume."></textarea>
+          <div class="field-footer"><span class="muted">Messages are stored by the local backend.</span><span id="assistant-count" class="character-count">0 / 20,000</span></div>
+          <div class="assistant-actions">
+            <button id="send-session-button" class="primary-button" type="button">Send</button>
+            <button id="cancel-session-button" class="text-button danger-text" type="button">Cancel</button>
+            <button id="recover-session-button" class="secondary-button" type="button" hidden>Recover</button>
+          </div>
+        </section>
+      </div>
+
+      <div id="context-panel" class="app-panel" hidden>
+        <div id="context-message" class="message" role="status" aria-live="polite" hidden></div>
+
+        <section class="card">
+          <div class="section-heading">
+            <div><p class="step-label">Current session</p><h2>Used This Turn</h2></div>
+            <button id="refresh-context-button" class="text-button" type="button">Refresh</button>
+          </div>
+          <div id="used-context" class="context-list">
+            <p class="muted">Open a Session to inspect its safe context summary.</p>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="section-heading">
+            <div><p class="step-label">Confirmed data</p><h2>Memory Manager</h2></div>
+            <button id="refresh-memories-button" class="text-button" type="button">Refresh</button>
+          </div>
+          <label for="memory-key">Stable key</label>
+          <input id="memory-key" maxlength="160" placeholder="preference.role">
+          <label for="memory-display">Display text</label>
+          <textarea id="memory-display" rows="3" maxlength="2000" placeholder="Prefers backend engineering roles"></textarea>
+          <div class="context-form-grid">
+            <label>Type<select id="memory-type"><option value="preference">Preference</option><option value="semantic">Semantic</option><option value="episodic">Episodic</option></select></label>
+            <label>Scope<select id="memory-scope"><option value="user">User</option><option value="project">Project</option><option value="session">Current session</option></select></label>
+            <label>Sensitivity<select id="memory-sensitivity"><option value="normal">Normal</option><option value="personal">Personal</option><option value="sensitive">Sensitive</option></select></label>
+          </div>
+          <label for="memory-content">Structured content (JSON object)</label>
+          <textarea id="memory-content" rows="3" maxlength="10000" placeholder="{}">{}</textarea>
+          <button id="create-memory-button" class="primary-button full-width" type="button">Create Candidate</button>
+          <div id="memory-list" class="context-list"></div>
+        </section>
+
+        <section class="card">
+          <div class="section-heading">
+            <div><p class="step-label">Installed procedures</p><h2>Skill Manager</h2></div>
+            <button id="refresh-skills-button" class="text-button" type="button">Refresh</button>
+          </div>
+          <div id="skill-list" class="context-list"></div>
+        </section>
+      </div>
     </main>
 
     <script type="module" src="sidepanel.js"></script>

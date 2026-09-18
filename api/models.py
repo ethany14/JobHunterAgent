@@ -21,11 +21,17 @@ class Run(Base):
             "status IN ('running', 'awaiting_review', 'revising', 'approved', 'failed')",
             name="ck_runs_status",
         ),
+        CheckConstraint(
+            "backend IN ('custom', 'langgraph', 'unknown')",
+            name="ck_runs_backend",
+        ),
     )
 
     run_id: Mapped[str] = mapped_column(String(36), primary_key=True)
     thread_id: Mapped[str] = mapped_column(String(36), unique=True, nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    backend: Mapped[str] = mapped_column(String(16), nullable=False, default="unknown", index=True)
+    backend_source: Mapped[str] = mapped_column(String(32), nullable=False, default="unclassified")
     resume_text: Mapped[str] = mapped_column(Text, nullable=False)
     job_description: Mapped[str] = mapped_column(Text, nullable=False)
     result_json: Mapped[str | None] = mapped_column(Text, nullable=True)

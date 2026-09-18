@@ -12,12 +12,14 @@ from pathlib import Path
 from statistics import mean, median
 from typing import Any
 
+from evals import DATASET_VERSION
 from evals.metrics import EvaluationResult, requirement_key
 from evals.run_ablation import UsageCollector, compile_graph, usage_report
 from evals.run_evals import EVALS_DIR, load_cases, run_adversarial_case, run_case
 from job_agent.graph import builder
 from job_agent.nodes import _create_model
-from job_agent.schemas import TailoredResume
+from job_agent.prompts import PROMPT_VERSION
+from job_agent.schemas import SCHEMA_VERSION, TailoredResume
 
 DEFAULT_CASES_PATH = EVALS_DIR / "stability_cases.json"
 DEFAULT_ADVERSARIAL_CASES_PATH = EVALS_DIR / "stability_adversarial_cases.json"
@@ -258,8 +260,10 @@ def run_stability_evaluation(
             ).stdout.strip(),
             "model": model.model_name,
             "temperature": model.temperature,
-            "prompt_version": "v1",
-            "dataset_version": "v2",
+            "max_retries": model.max_retries,
+            "prompt_version": PROMPT_VERSION,
+            "schema_version": SCHEMA_VERSION,
+            "dataset_version": DATASET_VERSION,
             "runs_per_case": runs_per_case,
             "working_tree_dirty_at_run": bool(
                 subprocess.run(
