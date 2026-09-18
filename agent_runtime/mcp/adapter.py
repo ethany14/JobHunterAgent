@@ -13,12 +13,12 @@ from pydantic import ConfigDict, Field, model_validator
 
 from agent_runtime.mcp.config import McpStdioServerConfig
 from agent_runtime.mcp.errors import McpProtocolError
+from agent_runtime.mcp.types import McpToolProvenance
 from agent_runtime.security import canonical_json, redact_sensitive
 from agent_runtime.types import (
     RuntimeModel,
     ToolContext,
     ToolDataClassification,
-    ToolProvenance,
     ToolResult,
     ToolRiskLevel,
     ToolSideEffect,
@@ -109,6 +109,7 @@ def normalize_mcp_result(
     *,
     server_id: str,
     remote_tool_name: str,
+    public_name_override: str | None = None,
     max_bytes: int,
     secret_values: tuple[str, ...] = (),
 ) -> ToolResult:
@@ -143,11 +144,13 @@ def normalize_mcp_result(
         )
     return ToolResult(
         output=output.model_dump(mode="json"),
-        provenance=[ToolProvenance(
-            source_type="mcp_server",
-            source_id=server_id,
-            metadata={"remote_tool_name": remote_tool_name},
-        )],
+        provenance=[McpToolProvenance(
+            server_id=server_id,
+            remote_tool_name=remote_tool_name,
+            public_tool_name=(
+                public_name_override or public_tool_name(server_id, remote_tool_name)
+            ),
+        ).as_tool_provenance()],
         is_error=is_error,
         error_code="mcp_tool_reported_error" if is_error else None,
     )
@@ -195,6 +198,11 @@ class McpAgentTool:
             description=safe_description,
             remote_annotations=annotations if isinstance(annotations, dict) else None,
         )
+        self.mcp_provenance = McpToolProvenance(
+            server_id=config.server_id,
+            remote_tool_name=remote_name,
+            public_tool_name=self.name,
+        )
         self.input_schema = input_model_for_schema(self.name, safe_input_schema)
         self.timeout_seconds = config.call_timeout_seconds
         self._max_result_bytes = config.max_result_bytes
@@ -238,6 +246,7 @@ class McpAgentTool:
             result,
             server_id=self.metadata.server_id,
             remote_tool_name=self.metadata.remote_tool_name,
+            public_name_override=self.name,
             max_bytes=self._max_result_bytes,
             secret_values=self._secret_values,
         )

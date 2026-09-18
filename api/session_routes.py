@@ -27,6 +27,7 @@ from api.session_schemas import (
     PendingToolApproval,
     PublicSession,
     PublicSessionMessage,
+    PublicToolCall,
     SessionMessagesResponse,
     SessionListResponse,
     SessionResponse,
@@ -34,6 +35,7 @@ from api.session_schemas import (
     SubmitMessageRequest,
     VersionedMutationRequest,
 )
+from agent_runtime.mcp.types import McpToolProvenance
 from api.services.run_service import RunNotFoundError
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
@@ -121,6 +123,69 @@ def _pending_approvals(runtime: SessionRuntime, state: SessionState) -> list[Pen
     return approvals
 
 
+def _public_tool_calls(runtime: SessionRuntime, state: SessionState) -> list[PublicToolCall]:
+    terminal_events = {
+        "completed", "failed", "tool_reported_error", "timed_out",
+        "outcome_unknown", "denied", "user_rejected",
+    }
+    output: list[PublicToolCall] = []
+    for record in runtime.tool_calls.list_for_scope("session", state.session_id):
+        events = runtime.tool_calls.list_events(record.call_id)
+        requested = next((item for item in events if item.event_type == "requested"), None)
+        metadata = dict(requested.payload) if requested else {}
+        mcp = None
+        if metadata.get("provider") == "mcp":
+            try:
+                mcp = McpToolProvenance.model_validate({
+                    key: metadata.get(key)
+                    for key in ("server_id", "remote_tool_name", "transport", "public_tool_name")
+                })
+            except Exception:
+                mcp = None
+        if mcp is None and record.result is not None:
+            for provenance in record.result.provenance:
+                mcp = McpToolProvenance.from_tool_provenance(provenance)
+                if mcp is not None:
+                    break
+        started = next((item for item in events if item.event_type == "execution_started"), None)
+        completed = next((item for item in reversed(events) if item.event_type in terminal_events), None)
+        duration = None
+        result_truncated = False
+        for event in reversed(events):
+            if duration is None and isinstance(event.payload.get("duration_ms"), int):
+                duration = event.payload["duration_ms"]
+            result_truncated = result_truncated or event.payload.get("result_truncated") is True
+        if record.result is not None and isinstance(record.result.output, dict):
+            result_truncated = result_truncated or record.result.output.get("truncated") is True
+        event_names = {event.event_type for event in events}
+        approval_status = "not_required"
+        if "user_rejected" in event_names:
+            approval_status = "rejected"
+        elif "approved" in event_names:
+            approval_status = "approved"
+        elif "approval_required" in event_names:
+            approval_status = "required"
+        remote_name = mcp.remote_tool_name if mcp else None
+        output.append(PublicToolCall(
+            call_id=record.call_id,
+            display_name=remote_name or record.request.tool_name,
+            public_tool_name=record.request.tool_name,
+            provider="MCP" if mcp else "Built-in",
+            mcp_server_id=mcp.server_id if mcp else None,
+            remote_tool_name=remote_name,
+            status=record.status.value,
+            side_effect=record.side_effect,
+            duration_ms=duration,
+            approval_status=approval_status,
+            result_truncated=result_truncated,
+            idempotently_reused="idempotently_reused" in event_names,
+            started_at=started.occurred_at if started else None,
+            completed_at=completed.occurred_at if completed else None,
+            error_code=record.error_code,
+        ))
+    return output
+
+
 def _response(
     runtime: SessionRuntime,
     state: SessionState,
@@ -131,6 +196,7 @@ def _response(
         outcome_status=outcome.status if outcome else None,
         response=outcome.final_text if outcome else None,
         pending_tool_approvals=_pending_approvals(runtime, state),
+        tool_calls=_public_tool_calls(runtime, state),
     )
 
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import inspect
+from time import monotonic
 from pydantic import ValidationError
 from agent_runtime.errors import (ApprovalBindingError, ClassifiedToolError, RetryableToolError,
     ToolTimeoutError, UnknownToolError)
@@ -24,6 +25,24 @@ def _scope(context: ToolContext) -> tuple[str, str]:
         if value:
             return name.removesuffix("_id"), value
     raise ValueError("Persisted tool calls require a task, session, run, or user scope.")
+
+
+def _observability(tool) -> dict:
+    provenance = getattr(tool, "mcp_provenance", None)
+    payload = {"public_tool_name": tool.name, "provider": "builtin"}
+    if provenance is not None:
+        payload.update({"provider": "mcp", **provenance.model_dump(mode="json")})
+    return payload
+
+
+def _result_metadata(result: ToolResult | None, started: float) -> dict:
+    output = result.output if result is not None else None
+    return {
+        "duration_ms": max(0, round((monotonic() - started) * 1000)),
+        "result_truncated": bool(
+            isinstance(output, dict) and output.get("truncated") is True
+        ),
+    }
 
 class ToolExecutor:
     def __init__(self, registry: ToolRegistry, policy: ToolPolicy | None = None,
@@ -81,17 +100,28 @@ class ToolExecutor:
             scope_type=scope_type, scope_id=scope_id, arguments_hash=digest,
             redacted_arguments=redact_sensitive(canonical_arguments),
             side_effect=getattr(tool, "side_effect", None),
-            idempotent=getattr(tool, "idempotent", None))
+            idempotent=getattr(tool, "idempotent", None),
+            event_payload=_observability(tool))
 
         if not created:
-            if record.status in {ToolExecutionStatus.COMPLETED, ToolExecutionStatus.OUTCOME_UNKNOWN,
-                    ToolExecutionStatus.TIMED_OUT, ToolExecutionStatus.DENIED,
-                    ToolExecutionStatus.RUNNING, ToolExecutionStatus.APPROVAL_REQUIRED}:
+            if record.status in {
+                    ToolExecutionStatus.RUNNING,
+                    ToolExecutionStatus.APPROVAL_REQUIRED,
+            }:
+                # Do not mutate an in-flight or approval-pending record: doing so
+                # would invalidate the owner's optimistic version.
                 return record
+            if record.status in {ToolExecutionStatus.COMPLETED, ToolExecutionStatus.OUTCOME_UNKNOWN,
+                    ToolExecutionStatus.TIMED_OUT, ToolExecutionStatus.DENIED}:
+                return self._repository.record_idempotent_reuse(
+                    record.call_id, expected_version=record.version
+                )
             if record.status == ToolExecutionStatus.FAILED and not (
                     request.retry_failed and record.retryable
                     and record.attempt_count < record.request.max_attempts):
-                return record
+                return self._repository.record_idempotent_reuse(
+                    record.call_id, expected_version=record.version
+                )
             if record.status == ToolExecutionStatus.APPROVED and not self._approval_valid(record, tool, digest):
                 raise ApprovalBindingError("Persisted approval no longer matches the tool version and arguments.")
 
@@ -111,7 +141,11 @@ class ToolExecutor:
         running = self._repository.transition(record.call_id, expected_version=record.version,
             status=ToolExecutionStatus.RUNNING, event_type="execution_started",
             increment_attempt=True, execution_attempt_id=context.attempt_id,
-            execution_lease_until=context.lease_until)
+            execution_lease_until=context.lease_until,
+            payload={**_observability(tool), "approval_status": (
+                "approved" if approved else "not_required"
+            )})
+        started = monotonic()
         try:
             result = self._validate_result(tool, self._invoke(
                 tool, validated, context, effective_timeout
@@ -120,12 +154,14 @@ class ToolExecutor:
             return self._repository.transition(running.call_id, expected_version=running.version,
                 status=ToolExecutionStatus.FAILED, event_type="failed",
                 error_code="invalid_tool_output",
-                error_message="The tool returned an invalid result.", retryable=False)
+                error_message="The tool returned an invalid result.", retryable=False,
+                payload=_result_metadata(None, started))
         except ToolTimeoutError:
             status = ToolExecutionStatus.TIMED_OUT if tool.risk_level == ToolRiskLevel.READ_ONLY else ToolExecutionStatus.OUTCOME_UNKNOWN
             return self._repository.transition(running.call_id, expected_version=running.version,
                 status=status, event_type=status.value, error_code=status.value,
-                error_message="The tool did not report completion before its timeout.")
+                error_message="The tool did not report completion before its timeout.",
+                payload=_result_metadata(None, started))
         except ClassifiedToolError as exc:
             return self._repository.transition(
                 running.call_id,
@@ -135,12 +171,14 @@ class ToolExecutor:
                 error_code=exc.error_code,
                 error_message=exc.safe_message,
                 retryable=exc.retryable,
+                payload=_result_metadata(None, started),
             )
         except Exception as exc:
             return self._repository.transition(running.call_id, expected_version=running.version,
                 status=ToolExecutionStatus.FAILED, event_type="failed",
                 error_code="tool_execution_failed", error_message="The tool could not complete the request.",
-                retryable=isinstance(exc, RetryableToolError))
+                retryable=isinstance(exc, RetryableToolError),
+                payload=_result_metadata(None, started))
         if result.is_error:
             return self._repository.transition(
                 running.call_id,
@@ -151,9 +189,11 @@ class ToolExecutor:
                 error_code=result.error_code or "tool_reported_error",
                 error_message="The tool reported that it could not complete the request.",
                 retryable=False,
+                payload=_result_metadata(result, started),
             )
         return self._repository.transition(running.call_id, expected_version=running.version,
-            status=ToolExecutionStatus.COMPLETED, event_type="completed", result=result)
+            status=ToolExecutionStatus.COMPLETED, event_type="completed", result=result,
+            payload=_result_metadata(result, started))
 
     @staticmethod
     def _approval_valid(record, tool, digest: str) -> bool:

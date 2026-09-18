@@ -5,6 +5,7 @@ import sys
 import json
 import threading
 import time
+from types import SimpleNamespace
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -39,7 +40,10 @@ from agent_runtime.types import (
     ToolResult,
     ToolRiskLevel,
 )
+from agent_runtime.tools.serialization import tool_message_envelope
+from agent_runtime.mcp.types import McpToolProvenance
 from api.db import create_database
+from api.session_routes import _public_tool_calls
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -202,11 +206,21 @@ def test_required_failure_stops_startup_but_optional_failure_is_degraded():
     )
     tools = manager.start()
     assert [tool.name for tool in tools] == ["mcp__ready__echo_text"]
-    assert manager.health().model_dump() == {
+    health = manager.health().model_dump()
+    assert {key: health[key] for key in (
+        "configured_servers", "ready_servers", "failed_optional_servers", "registered_tools"
+    )} == {
         "configured_servers": 2,
         "ready_servers": 1,
         "failed_optional_servers": 1,
         "registered_tools": 1,
+    }
+    assert health["servers"][0]["status"] == "degraded"
+    assert health["servers"][0]["last_error_code"] == "mcp_startup_failed"
+    assert set(health["servers"][0]) == {
+        "server_id", "status", "required", "registered_tool_count",
+        "active_call_count", "completed_call_count", "failed_call_count",
+        "timeout_call_count", "last_success_at", "last_failure_at", "last_error_code",
     }
     assert optional.closed is True
     manager.stop()
@@ -276,6 +290,16 @@ def test_discovery_preserves_schema_metadata_and_calls_original_name():
     assert client.calls == [("echo_text", {"text": "hello"}, 30.0)]
     assert record.result.provenance[0].source_type == "mcp_server"
     assert record.result.provenance[0].source_id == "local-test"
+    assert record.result.provenance[0].metadata == {
+        "server_id": "local-test",
+        "remote_tool_name": "echo_text",
+        "transport": "stdio",
+        "public_tool_name": "mcp__local-test__echo_text",
+    }
+    server = manager.health().servers[0]
+    assert server.completed_call_count == 1
+    assert server.failed_call_count == 0
+    assert server.active_call_count == 0
     manager.stop()
 
 
@@ -337,11 +361,21 @@ def test_remote_is_error_becomes_persisted_failed_record(tmp_path):
     assert failed.status == ToolExecutionStatus.FAILED
     assert failed.error_code == "mcp_tool_reported_error"
     assert failed.result.is_error is True
+    recovered = repository.require(failed.call_id)
+    envelope = tool_message_envelope(
+        tool_call_id="model-call-1", tool_name=tool.name, record=recovered
+    )
+    assert McpToolProvenance.from_tool_provenance(
+        envelope.provenance[0]
+    ).public_tool_name == tool.name
     assert [event.event_type for event in repository.list_events(failed.call_id)] == [
         "requested",
         "execution_started",
         "tool_reported_error",
     ]
+    server = manager.health().servers[0]
+    assert server.failed_call_count == 1
+    assert server.completed_call_count == 0
     manager.stop()
 
 
@@ -372,6 +406,9 @@ def test_runtime_failures_are_safe_and_classified(tmp_path, error, expected_code
     )
     assert record.error_code == expected_code
     assert "secret" not in (record.error_message or "")
+    server = manager.health().servers[0]
+    assert server.failed_call_count == 1
+    assert server.timeout_call_count == (1 if expected_code == "timed_out" else 0)
     manager.stop()
 
 
@@ -663,6 +700,7 @@ def test_manager_allows_concurrent_session_scopes_and_bounds_shutdown():
     for thread in threads:
         thread.start()
     assert client.both_active.wait(timeout=1)
+    assert manager.health().servers[0].active_call_count == 2
     started = time.monotonic()
     manager.stop()
     elapsed = time.monotonic() - started
@@ -671,3 +709,73 @@ def test_manager_allows_concurrent_session_scopes_and_bounds_shutdown():
     assert elapsed < 0.5
     assert len(outputs) == 2
     assert client.closed is True
+    server = manager.health().servers[0]
+    assert server.status == "stopped"
+    assert server.active_call_count == 0
+    assert server.completed_call_count == 2
+
+
+def test_persisted_mcp_observability_and_idempotent_reuse(tmp_path):
+    client = FakeClient()
+    registry = ToolRegistry()
+    manager = McpToolManager(
+        config=McpRuntimeConfig(servers=[config()]),
+        registry=registry,
+        client_factory=lambda _: client,
+    )
+    tool = manager.start()[0]
+    executor, repository = persistent_executor(tmp_path, registry)
+    request = ToolCallRequest(
+        tool_name=tool.name,
+        arguments={"text": "hello"},
+        idempotency_key="same-call",
+    )
+    first = executor.execute(request, context(tool.name))
+    second = executor.execute(request, context(tool.name))
+
+    assert first.call_id == second.call_id
+    assert len(client.calls) == 1
+    assert manager.health().servers[0].completed_call_count == 1
+    events = repository.list_events(first.call_id)
+    assert events[0].payload == {
+        "provider": "mcp",
+        "public_tool_name": tool.name,
+        "remote_tool_name": "echo_text",
+        "server_id": "local-test",
+        "transport": "stdio",
+    }
+    assert events[-1].event_type == "idempotently_reused"
+    assert second.result.provenance == first.result.provenance
+    assert isinstance(events[-2].payload["duration_ms"], int)
+    assert events[-2].payload["result_truncated"] is False
+    manager.stop()
+
+
+def test_older_persisted_call_without_optional_metadata_is_safe(tmp_path):
+    database = create_database(
+        f"sqlite:///{(tmp_path / 'legacy-call.sqlite').as_posix()}",
+        create_schema_for_tests=True,
+    )
+    repository = ToolCallRepository(database.session_factory)
+    repository.get_or_create(
+        request=ToolCallRequest(
+            tool_name="legacy_builtin",
+            arguments={},
+            idempotency_key="legacy",
+        ),
+        tool_version="1",
+        risk_level=ToolRiskLevel.READ_ONLY,
+        scope_type="session",
+        scope_id="legacy-session",
+        arguments_hash="0" * 64,
+        redacted_arguments={},
+    )
+    calls = _public_tool_calls(
+        SimpleNamespace(tool_calls=repository),
+        SimpleNamespace(session_id="legacy-session"),
+    )
+    assert len(calls) == 1
+    assert calls[0].provider == "Built-in"
+    assert calls[0].duration_ms is None
+    assert calls[0].idempotently_reused is False
+    database.close()

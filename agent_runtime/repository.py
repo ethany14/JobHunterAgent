@@ -29,14 +29,16 @@ class ToolCallRepository:
                       risk_level: ToolRiskLevel, scope_type: str, scope_id: str,
                       arguments_hash: str, redacted_arguments: dict,
                       side_effect: ToolSideEffect | None = None,
-                      idempotent: bool | None = None) -> tuple[ToolCallRecord, bool]:
+                      idempotent: bool | None = None,
+                      event_payload: dict | None = None) -> tuple[ToolCallRecord, bool]:
         if not request.idempotency_key:
             raise ValueError("A persisted tool call requires an idempotency key.")
         try:
             return self._get_or_create_once(request=request, tool_version=tool_version,
                 risk_level=risk_level, scope_type=scope_type, scope_id=scope_id,
                 arguments_hash=arguments_hash, redacted_arguments=redacted_arguments,
-                side_effect=side_effect, idempotent=idempotent)
+                side_effect=side_effect, idempotent=idempotent,
+                event_payload=event_payload)
         except IntegrityError:
             # A concurrent creator may win the unique-key race. Only translate
             # that specific case; unrelated integrity failures remain visible.
@@ -55,7 +57,8 @@ class ToolCallRepository:
                             risk_level: ToolRiskLevel, scope_type: str, scope_id: str,
                             arguments_hash: str, redacted_arguments: dict,
                             side_effect: ToolSideEffect | None = None,
-                            idempotent: bool | None = None) -> tuple[ToolCallRecord, bool]:
+                            idempotent: bool | None = None,
+                            event_payload: dict | None = None) -> tuple[ToolCallRecord, bool]:
         with self._session_factory.begin() as session:
             row = session.scalar(self._idempotency_query(request, scope_type, scope_id))
             if row is not None:
@@ -76,9 +79,27 @@ class ToolCallRepository:
             # There is intentionally no ORM relationship; flush the parent first
             # so SQLite can enforce the event foreign key within this transaction.
             session.flush()
-            session.add(self._event(row, 1, "requested", None, ToolExecutionStatus.REQUESTED, {}))
+            session.add(self._event(
+                row, 1, "requested", None, ToolExecutionStatus.REQUESTED,
+                event_payload or {},
+            ))
             session.flush()
             return self._record(row), True
+
+    def record_idempotent_reuse(
+        self, call_id: str, *, expected_version: int
+    ) -> ToolCallRecord:
+        current = self.require(call_id)
+        return self.transition(
+            call_id,
+            expected_version=expected_version,
+            status=current.status,
+            event_type="idempotently_reused",
+            error_code=current.error_code,
+            error_message=current.error_message,
+            retryable=current.retryable,
+            payload={"idempotently_reused": True},
+        )
 
     @staticmethod
     def _idempotency_query(request: ToolCallRequest, scope_type: str, scope_id: str):

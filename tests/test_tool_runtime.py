@@ -357,8 +357,14 @@ def test_persisted_execution_has_ordered_events_and_idempotent_reuse(durable_run
     assert reused.call_id == first.call_id
     assert len(tool.calls) == 1
     events = repository.list_events(first.call_id)
-    assert [e.sequence for e in events] == [1, 2, 3]
-    assert [e.to_status for e in events] == [ToolExecutionStatus.REQUESTED, ToolExecutionStatus.RUNNING, ToolExecutionStatus.COMPLETED]
+    assert [e.sequence for e in events] == [1, 2, 3, 4]
+    assert [e.to_status for e in events] == [
+        ToolExecutionStatus.REQUESTED,
+        ToolExecutionStatus.RUNNING,
+        ToolExecutionStatus.COMPLETED,
+        ToolExecutionStatus.COMPLETED,
+    ]
+    assert events[-1].event_type == "idempotently_reused"
 
 
 def test_idempotency_conflict_uses_original_argument_hash(durable_runtime):

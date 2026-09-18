@@ -367,6 +367,33 @@ explicit truncation marker. A remote `isError` result becomes a failed tool call
 and connection/protocol/timeout failures use stable safe error codes without
 forwarding raw provider diagnostics.
 
+### MCP lifecycle and observability
+
+FastAPI owns one `McpToolManager` for the application lifespan. Each configured
+server moves through `disabled`, `starting`, `ready`, `degraded`, `stopping`,
+and `stopped`; shutdown first rejects new calls, waits a bounded time for active
+calls, closes clients, and unregisters their tools. An optional startup failure
+is `degraded`, while a required startup failure aborts runtime initialization.
+
+`GET /health` includes a sanitized server list. Server status, active/completed/
+failed/timeout counters, and last success/failure diagnostics are process-local
+and reset on restart. They are operational diagnostics rather than the source of
+truth for calls. Tool-call rows, safe transition events, redacted arguments,
+normalized results, and provenance are persisted by Tool Runtime and survive a
+restart. Reusing an idempotency key does not execute or increment MCP counters.
+
+Persisted MCP provenance has one form: `server_id`, `remote_tool_name`,
+`transport` (`stdio` only), and `public_tool_name`. It is attached to normalized
+`ToolResult` provenance and safe call events. Built-in tools retain their own
+`internal_database` provenance and are never inferred to be MCP tools from their
+names. The Session API exposes only safe call metadata for the collapsible Side
+Panel display; it does not expose arguments, results, commands, process paths,
+environment configuration, stderr, or raw exceptions.
+
+This release still supports only client-side stdio tool discovery and calls. It
+does not implement Streamable HTTP, SSE, OAuth, reconnection, resources, prompts,
+sampling, elicitation, or external MCP service configuration from clients.
+
 Example host initialization:
 
 ```python

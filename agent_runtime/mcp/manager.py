@@ -4,30 +4,25 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, datetime
-from enum import StrEnum
 from threading import Condition, RLock
 from time import monotonic
 from typing import Any
+
+from pydantic import Field
 
 from agent_runtime.mcp.adapter import McpAgentTool
 from agent_runtime.mcp.client import McpClient, StdioMcpClient
 from agent_runtime.mcp.config import McpRuntimeConfig, McpStdioServerConfig
 from agent_runtime.mcp.errors import (
+    McpCallTimeoutError,
     McpDisconnectedError,
     McpProtocolError,
     McpStartupError,
     McpToolCollisionError,
 )
+from agent_runtime.mcp.types import McpServerRuntimeStatus, McpServerStatus
 from agent_runtime.registry import ToolRegistry
 from agent_runtime.types import RuntimeModel
-
-
-class McpServerStatus(StrEnum):
-    DISABLED = "disabled"
-    STARTING = "starting"
-    READY = "ready"
-    DEGRADED = "degraded"
-    STOPPED = "stopped"
 
 
 class McpServerDiagnostic(RuntimeModel):
@@ -43,6 +38,7 @@ class McpHealth(RuntimeModel):
     ready_servers: int
     failed_optional_servers: int
     registered_tools: int
+    servers: list[McpServerRuntimeStatus] = Field(default_factory=list)
 
 
 class McpToolManager:
@@ -66,6 +62,18 @@ class McpToolManager:
         self._started = False
         self._accepting = False
         self._active_calls = 0
+        self._server_metrics: dict[str, dict[str, Any]] = {
+            server.server_id: {
+                "active_call_count": 0,
+                "completed_call_count": 0,
+                "failed_call_count": 0,
+                "timeout_call_count": 0,
+                "last_success_at": None,
+                "last_failure_at": None,
+                "last_error_code": None,
+            }
+            for server in config.servers
+        }
         self._lock = RLock()
         self._condition = Condition(self._lock)
 
@@ -90,6 +98,8 @@ class McpToolManager:
 
     def health(self) -> McpHealth:
         diagnostics = self.diagnostics
+        with self._lock:
+            statuses = [self._runtime_status(server) for server in self._config.servers]
         return McpHealth(
             configured_servers=len(self._config.servers),
             ready_servers=sum(item.status == McpServerStatus.READY for item in diagnostics),
@@ -97,6 +107,20 @@ class McpToolManager:
                 item.status == McpServerStatus.DEGRADED for item in diagnostics
             ),
             registered_tools=len(self.public_tool_names),
+            servers=statuses,
+        )
+
+    def _runtime_status(self, server: McpStdioServerConfig) -> McpServerRuntimeStatus:
+        diagnostic = self._diagnostics.get(server.server_id)
+        metrics = self._server_metrics[server.server_id]
+        return McpServerRuntimeStatus(
+            server_id=server.server_id,
+            status=(diagnostic.status.value if diagnostic else McpServerStatus.STOPPED.value),
+            required=server.required,
+            registered_tool_count=sum(
+                tool.metadata.server_id == server.server_id for tool in self._tools.values()
+            ),
+            **metrics,
         )
 
     def start(self) -> tuple[McpAgentTool, ...]:
@@ -180,20 +204,50 @@ class McpToolManager:
             if not self._accepting or client is None:
                 raise McpDisconnectedError("The MCP server connection is unavailable.")
             self._active_calls += 1
+            self._server_metrics[server_id]["active_call_count"] += 1
         try:
-            return client.call_tool(
+            result = client.call_tool(
                 remote_tool_name,
                 arguments,
                 timeout_seconds=timeout_seconds,
             )
+            with self._condition:
+                metrics = self._server_metrics[server_id]
+                if bool(getattr(result, "is_error", False)):
+                    metrics["failed_call_count"] += 1
+                    metrics["last_failure_at"] = datetime.now(UTC)
+                    metrics["last_error_code"] = "mcp_tool_reported_error"
+                else:
+                    metrics["completed_call_count"] += 1
+                    metrics["last_success_at"] = datetime.now(UTC)
+            return result
+        except Exception as exc:
+            with self._condition:
+                metrics = self._server_metrics[server_id]
+                metrics["failed_call_count"] += 1
+                metrics["last_failure_at"] = datetime.now(UTC)
+                code = self._safe_error_code(exc)
+                if isinstance(exc, McpCallTimeoutError):
+                    metrics["timeout_call_count"] += 1
+                    code = "mcp_call_timeout"
+                metrics["last_error_code"] = code
+            raise
         finally:
             with self._condition:
                 self._active_calls -= 1
+                self._server_metrics[server_id]["active_call_count"] -= 1
                 self._condition.notify_all()
 
     def stop(self) -> None:
         with self._condition:
             self._accepting = False
+            for server in self._config.servers:
+                current = self._diagnostics.get(server.server_id)
+                if current is not None and current.status not in {
+                    McpServerStatus.DISABLED,
+                    McpServerStatus.STOPPED,
+                }:
+                    self._set_status(server.server_id, McpServerStatus.STOPPING)
             deadline = monotonic() + self._shutdown_timeout_seconds
             while self._active_calls and monotonic() < deadline:
                 self._condition.wait(timeout=max(0.0, deadline - monotonic()))
@@ -251,9 +305,17 @@ class McpToolManager:
         )
         with self._lock:
             self._diagnostics[server_id] = diagnostic
+            if status == McpServerStatus.DEGRADED:
+                metrics = self._server_metrics[server_id]
+                metrics["last_failure_at"] = diagnostic.updated_at
+                metrics["last_error_code"] = error_code or "mcp_startup_failed"
 
     @staticmethod
     def _safe_error_code(exc: Exception) -> str:
+        if isinstance(exc, McpCallTimeoutError):
+            return "mcp_call_timeout"
+        if isinstance(exc, McpDisconnectedError):
+            return "mcp_disconnected"
         if isinstance(exc, McpToolCollisionError):
             return "mcp_tool_collision"
         if isinstance(exc, McpProtocolError):

@@ -82,11 +82,30 @@ class PendingToolApproval(SessionApiModel):
     updated_at: datetime
 
 
+class PublicToolCall(SessionApiModel):
+    call_id: str
+    display_name: str
+    public_tool_name: str
+    provider: Literal["Built-in", "MCP"]
+    mcp_server_id: str | None = None
+    remote_tool_name: str | None = None
+    status: str
+    side_effect: ToolSideEffect | None = None
+    duration_ms: int | None = None
+    approval_status: Literal["not_required", "required", "approved", "rejected"]
+    result_truncated: bool = False
+    idempotently_reused: bool = False
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error_code: str | None = None
+
+
 class SessionResponse(SessionApiModel):
     session: PublicSession
     outcome_status: SessionOutcomeStatus | None = None
     response: str | None = None
     pending_tool_approvals: list[PendingToolApproval] = Field(default_factory=list)
+    tool_calls: list[PublicToolCall] = Field(default_factory=list)
 
 
 class SessionMessagesResponse(SessionApiModel):

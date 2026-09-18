@@ -224,6 +224,29 @@ def test_session_rendering_uses_only_public_roles_and_safe_dom() -> None:
     assert "innerHTML" not in panel
 
 
+def test_tool_call_provenance_rendering_is_safe_and_collapsible() -> None:
+    panel = (EXTENSION / "sidepanel.js").read_text(encoding="utf-8")
+    page = (EXTENSION / "sidepanel.html").read_text(encoding="utf-8")
+
+    assert 'id="tool-call-details"' in page
+    section = panel[
+        panel.index("function renderToolCalls"):panel.index("function renderSession(")
+    ]
+    assert 'document.createElement("details")' in section
+    assert 'call.provider === "MCP"' in section
+    assert '"Built-in"' in section
+    assert "call.mcp_server_id" in section
+    assert "call.duration_ms" in section
+    assert "call.approval_status" in section
+    assert "call.idempotently_reused" in section
+    assert "call.result_truncated" in section
+    assert "call.arguments" not in section
+    assert "call.result.output" not in section
+    assert "call.result_json" not in section
+    assert "call.error" not in section
+    assert "textContent" not in section or "innerHTML" not in section
+
+
 def test_session_history_ui_is_backend_backed_and_safe() -> None:
     panel = (EXTENSION / "sidepanel.js").read_text(encoding="utf-8")
     page = (EXTENSION / "sidepanel.html").read_text(encoding="utf-8")

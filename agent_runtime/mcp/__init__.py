@@ -16,8 +16,12 @@ from agent_runtime.mcp.config import (
 from agent_runtime.mcp.manager import (
     McpHealth,
     McpServerDiagnostic,
-    McpServerStatus,
     McpToolManager,
+)
+from agent_runtime.mcp.types import (
+    McpServerRuntimeStatus,
+    McpServerStatus,
+    McpToolProvenance,
 )
 
 __all__ = [
@@ -31,6 +35,8 @@ __all__ = [
     "McpToolManager",
     "McpToolMetadata",
     "McpToolOutput",
+    "McpToolProvenance",
+    "McpServerRuntimeStatus",
     "StdioMcpClient",
     "normalize_mcp_result",
     "public_tool_name",

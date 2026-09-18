@@ -265,6 +265,11 @@ def test_reject_cancel_recover_and_stable_errors(tmp_path):
             )
             assert rejected.status_code == 200
             assert rejected.json()["response"] == "Rejected safely"
+            tool_call = rejected.json()["tool_calls"][0]
+            assert tool_call["provider"] == "Built-in"
+            assert tool_call["mcp_server_id"] is None
+            assert tool_call["approval_status"] == "rejected"
+            assert tool_call["status"] == "denied"
             current = rejected.json()["session"]
             cancelled = client.post(
                 f"/sessions/{session['session_id']}/cancel",

@@ -80,6 +80,7 @@ const elements = {
   sessionStatus: document.querySelector("#session-status"),
   sessionRun: document.querySelector("#session-run"),
   assistantMessages: document.querySelector("#assistant-messages"),
+  toolCallDetails: document.querySelector("#tool-call-details"),
   toolApprovals: document.querySelector("#tool-approvals"),
   assistantInput: document.querySelector("#assistant-input"),
   assistantCount: document.querySelector("#assistant-count"),
@@ -682,6 +683,44 @@ function renderToolApprovals(approvals) {
   }
 }
 
+function renderToolCalls(toolCalls) {
+  replaceChildren(elements.toolCallDetails);
+  const calls = Array.isArray(toolCalls) ? toolCalls : [];
+  elements.toolCallDetails.hidden = !calls.length;
+  for (const call of calls) {
+    const details = document.createElement("details");
+    details.className = "card tool-call-card";
+    const provider = call.provider === "MCP"
+      ? `MCP · ${call.mcp_server_id || "unknown server"}`
+      : "Built-in";
+    const summary = document.createElement("summary");
+    appendTextElement(summary, "span", provider, "step-label");
+    appendTextElement(summary, "strong", call.display_name || call.public_tool_name || "Tool call");
+    details.append(summary);
+    const sideEffect = call.side_effect === "none" ? "Read-only" : displayLabel(call.side_effect, "Unknown effect");
+    const duration = Number.isFinite(call.duration_ms) ? `${call.duration_ms} ms` : null;
+    appendTextElement(
+      details,
+      "p",
+      [displayLabel(call.status, "Unknown"), duration, sideEffect].filter(Boolean).join(" · "),
+      "requirement-meta",
+    );
+    appendTextElement(
+      details,
+      "p",
+      `Approval: ${displayLabel(call.approval_status, "Unknown")}`,
+      "muted",
+    );
+    if (call.idempotently_reused === true) {
+      appendTextElement(details, "span", "Reused", "tool-badge");
+    }
+    if (call.result_truncated === true) {
+      appendTextElement(details, "p", "The persisted tool result was truncated for safety.", "tool-warning");
+    }
+    elements.toolCallDetails.append(details);
+  }
+}
+
 function renderSession(response) {
   if (!response?.session) {
     return;
@@ -697,6 +736,7 @@ function renderSession(response) {
   elements.sendSession.disabled = sessionBusy
     || !["active", "awaiting_user"].includes(currentSession.status);
   renderToolApprovals(response.pending_tool_approvals);
+  renderToolCalls(response.tool_calls);
   if (currentSession.status === "failed") {
     setSessionMessage(currentSession.error_message || "The session failed safely.", "error");
   } else if (currentSession.status === "timed_out") {

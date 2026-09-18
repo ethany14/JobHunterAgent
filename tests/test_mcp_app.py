@@ -107,15 +107,16 @@ def test_fastapi_lifecycle_health_effective_tools_and_snapshot(tmp_path):
     app = create_app(session_runtime_factory=factory)
     with TestClient(app) as client:
         health = client.get("/health").json()
-        assert health == {
-            "status": "ok",
-            "mcp": {
+        assert health["status"] == "ok"
+        assert {key: health["mcp"][key] for key in (
+            "configured_servers", "ready_servers", "failed_optional_servers", "registered_tools"
+        )} == {
                 "configured_servers": 1,
                 "ready_servers": 1,
                 "failed_optional_servers": 0,
                 "registered_tools": 2,
-            },
         }
+        assert health["mcp"]["servers"][0]["server_id"] == "local-test"
         assert "command" not in str(health).lower()
         created = client.post("/sessions", json={
             "capability_profile": "job_assistant_readonly"
@@ -188,6 +189,15 @@ def test_mcp_is_error_is_returned_to_model_and_session_continues(tmp_path):
             assert response.status_code == 200
             assert response.json()["session"]["status"] == "active"
             assert response.json()["response"] == "The remote tool failed safely."
+            call = response.json()["tool_calls"][0]
+            assert call["provider"] == "MCP"
+            assert call["mcp_server_id"] == "local-test"
+            assert call["remote_tool_name"] == "echo_text"
+            assert call["status"] == "failed"
+            assert call["error_code"] == "mcp_tool_reported_error"
+            assert call["duration_ms"] >= 0
+            assert "arguments" not in call
+            assert "result" not in call
             tool_messages = [
                 message
                 for batch in model.message_batches
@@ -233,16 +243,25 @@ def test_optional_failure_produces_sanitized_degraded_health(tmp_path):
     try:
         with TestClient(create_app(run_service=object(), session_runtime=runtime)) as client:
             response = client.get("/health")
-            assert response.json() == {
-                "status": "degraded",
-                "mcp": {
+            body = response.json()
+            assert body["status"] == "degraded"
+            assert {key: body["mcp"][key] for key in (
+                "configured_servers", "ready_servers", "failed_optional_servers", "registered_tools"
+            )} == {
                     "configured_servers": 1,
                     "ready_servers": 0,
                     "failed_optional_servers": 1,
                     "registered_tools": 0,
-                },
             }
-            assert "private" not in response.text
+            server = body["mcp"]["servers"][0]
+            assert server["status"] == "degraded"
+            assert server["last_error_code"] == "mcp_startup_failed"
+            assert "private process details" not in response.text
+            assert "private-command" not in response.text
+            assert "command" not in server
+            assert "args" not in server
+            assert "cwd" not in server
+            assert "env" not in server
     finally:
         runtime.close()
     assert failed.closed is True

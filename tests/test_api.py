@@ -97,6 +97,7 @@ def test_health(api_client):
             "ready_servers": 0,
             "failed_optional_servers": 0,
             "registered_tools": 0,
+            "servers": [],
         },
     }
 
