@@ -23,6 +23,18 @@ class ToolRegistry:
         except KeyError as exc:
             raise UnknownToolError(f"Tool '{name}' is not registered.") from exc
 
+    def names(self) -> frozenset[str]:
+        return frozenset(self._tools)
+
+    def unregister(self, name: str, *, expected: AgentTool | None = None) -> None:
+        """Remove a lifecycle-owned tool without disturbing a replacement."""
+        current = self._tools.get(name)
+        if current is None:
+            return
+        if expected is not None and current is not expected:
+            return
+        del self._tools[name]
+
     def allowed_for(self, context: ToolContext) -> list[AgentTool]:
         return [
             tool

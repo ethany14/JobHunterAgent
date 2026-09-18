@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import inspect
 from pydantic import ValidationError
-from agent_runtime.errors import (ApprovalBindingError, RetryableToolError,
+from agent_runtime.errors import (ApprovalBindingError, ClassifiedToolError, RetryableToolError,
     ToolTimeoutError, UnknownToolError)
 from agent_runtime.policy import ToolPolicy
 from agent_runtime.registry import ToolRegistry
@@ -126,11 +126,32 @@ class ToolExecutor:
             return self._repository.transition(running.call_id, expected_version=running.version,
                 status=status, event_type=status.value, error_code=status.value,
                 error_message="The tool did not report completion before its timeout.")
+        except ClassifiedToolError as exc:
+            return self._repository.transition(
+                running.call_id,
+                expected_version=running.version,
+                status=ToolExecutionStatus.FAILED,
+                event_type="failed",
+                error_code=exc.error_code,
+                error_message=exc.safe_message,
+                retryable=exc.retryable,
+            )
         except Exception as exc:
             return self._repository.transition(running.call_id, expected_version=running.version,
                 status=ToolExecutionStatus.FAILED, event_type="failed",
                 error_code="tool_execution_failed", error_message="The tool could not complete the request.",
                 retryable=isinstance(exc, RetryableToolError))
+        if result.is_error:
+            return self._repository.transition(
+                running.call_id,
+                expected_version=running.version,
+                status=ToolExecutionStatus.FAILED,
+                event_type="tool_reported_error",
+                result=result,
+                error_code=result.error_code or "tool_reported_error",
+                error_message="The tool reported that it could not complete the request.",
+                retryable=False,
+            )
         return self._repository.transition(running.call_id, expected_version=running.version,
             status=ToolExecutionStatus.COMPLETED, event_type="completed", result=result)
 
@@ -156,7 +177,12 @@ class ToolExecutor:
         if output_schema is None:
             return result
         output = output_schema.model_validate(result.output).model_dump(mode="json")
-        return ToolResult(output=output, provenance=result.provenance)
+        return ToolResult(
+            output=output,
+            provenance=result.provenance,
+            is_error=result.is_error,
+            error_code=result.error_code,
+        )
 
     def _execute_transient(self, tool, arguments, request, context, digest):
         # A request boolean is not an auditable approval. Without a repository,
@@ -182,11 +208,34 @@ class ToolExecutor:
             return ToolCallRecord(request=request, status=status, tool_version=_tool_version(tool),
                 risk_level=tool.risk_level, arguments_hash=digest,
                 error_code=status.value, error_message="The tool did not report completion before its timeout.")
+        except ClassifiedToolError as exc:
+            return ToolCallRecord(
+                request=request,
+                status=ToolExecutionStatus.FAILED,
+                tool_version=_tool_version(tool),
+                risk_level=tool.risk_level,
+                arguments_hash=digest,
+                error_code=exc.error_code,
+                error_message=exc.safe_message,
+                retryable=exc.retryable,
+            )
         except Exception:
             return ToolCallRecord(request=request, status=ToolExecutionStatus.FAILED,
                 tool_version=_tool_version(tool), risk_level=tool.risk_level,
                 arguments_hash=digest, error_code="tool_execution_failed",
                 error_message="The tool could not complete the request.")
+        if result.is_error:
+            return ToolCallRecord(
+                request=request,
+                status=ToolExecutionStatus.FAILED,
+                tool_version=_tool_version(tool),
+                risk_level=tool.risk_level,
+                arguments_hash=digest,
+                result=result,
+                error_code=result.error_code or "tool_reported_error",
+                error_message="The tool reported that it could not complete the request.",
+                attempt_count=1,
+            )
         return ToolCallRecord(request=request, status=ToolExecutionStatus.COMPLETED,
             tool_version=_tool_version(tool), risk_level=tool.risk_level,
             arguments_hash=digest, result=result, attempt_count=1)

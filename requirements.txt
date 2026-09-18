@@ -11,3 +11,4 @@ alembic>=1.13,<2
 pytest
 httpx
 PyYAML>=6,<7
+mcp>=2.0,<3

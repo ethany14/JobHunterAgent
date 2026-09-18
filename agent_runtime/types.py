@@ -58,6 +58,8 @@ class ToolContext(RuntimeModel):
 class ToolResult(RuntimeModel):
     output: Any = None
     provenance: list[ToolProvenance] = Field(default_factory=list)
+    is_error: bool = False
+    error_code: str | None = None
 
 class ToolCallRequest(RuntimeModel):
     tool_name: str = Field(min_length=1)

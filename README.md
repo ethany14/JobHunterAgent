@@ -336,3 +336,57 @@ names and versions, Memory keys and display text, effective tool names, token
 estimates, and timestamps. It does not return system prompts, assembled context,
 source evidence, raw tool results, owner IDs, or private messages. This remains
 a trusted local single-user model rather than an authentication boundary.
+
+## MCP client integration (custom runtime)
+
+The custom runtime can discover tools from trusted, locally configured MCP
+servers over stdio. It uses the official Python MCP SDK 2.x and keeps one
+negotiated connection alive per enabled server until the host shuts the
+`McpToolManager` down. HTTP, SSE, OAuth, MCP server hosting, and MCP sampling are
+outside this phase.
+
+MCP configuration is server-owned. Each server has a stable lowercase ID,
+command, argument list, validated working directory, explicit environment
+overrides, allow/deny filters, and startup/call timeouts. Environment values are
+never included in tool schemas, errors, audit events, or persisted results.
+Server stderr is discarded because it may contain credentials or local paths.
+Do not accept MCP commands, paths, environment variables, or allowlists from a
+browser or model.
+
+Discovered names use `mcp__{server_id}__{remote_tool_name}`. Tools pass through
+the existing `ToolRegistry`, allowlist policy, Pydantic/JSON Schema argument
+validation, persistent approval binding, idempotency, timeout classification,
+and tool-call audit tables. MCP annotations are untrusted hints. A tool requires
+persisted approval unless trusted local configuration explicitly lists its
+remote name in `read_only_tools`; annotations cannot reduce that requirement.
+
+MCP output is untrusted external data. Text, structured content, resource/image
+metadata, error flags, and `mcp_server` provenance are normalized before the
+runtime sees them. Oversized output is deterministically reduced with an
+explicit truncation marker. A remote `isError` result becomes a failed tool call,
+and connection/protocol/timeout failures use stable safe error codes without
+forwarding raw provider diagnostics.
+
+Example host initialization:
+
+```python
+config = McpRuntimeConfig(
+    servers=[
+        McpStdioServerConfig(
+            server_id="local-tools",
+            command="python",
+            args=["path/to/server.py"],
+            tool_allowlist={"lookup"},
+            read_only_tools={"lookup"},
+        )
+    ]
+)
+registry = ToolRegistry()
+manager = McpToolManager(config=config, registry=registry)
+manager.start()
+try:
+    # Construct ToolExecutor with this registry and the existing repository.
+    ...
+finally:
+    manager.stop()
+```
