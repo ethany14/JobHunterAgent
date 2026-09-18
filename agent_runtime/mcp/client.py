@@ -107,6 +107,7 @@ class StdioMcpClient:
         try:
             return completed.result(timeout=timeout + 1.0)
         except FutureTimeoutError as exc:
+            self._connected = False
             raise McpCallTimeoutError(
                 "The MCP call did not complete before its timeout."
             ) from exc
@@ -130,6 +131,7 @@ class StdioMcpClient:
                 transport,
                 read_timeout_seconds=self._config.call_timeout_seconds,
             ) as client:
+                active: set[asyncio.Task[None]] = set()
                 self._connected = True
                 if not self._ready.done():
                     self._ready.set_result(True)
@@ -138,44 +140,73 @@ class StdioMcpClient:
                         self._commands.get
                     )
                     if operation == "close":
+                        if active:
+                            _, pending = await asyncio.wait(
+                                active,
+                                timeout=self._config.startup_timeout_seconds,
+                            )
+                            for task in pending:
+                                task.cancel()
+                            if pending:
+                                await asyncio.gather(*pending, return_exceptions=True)
                         if not completed.done():
                             completed.set_result(None)
                         break
-                    try:
-                        if operation == "list_tools":
-                            result = await asyncio.wait_for(
-                                client.list_tools(), timeout=timeout
-                            )
-                        elif operation == "call_tool":
-                            name, arguments = payload
-                            result = await asyncio.wait_for(
-                                client.call_tool(
-                                    name,
-                                    arguments,
-                                    read_timeout_seconds=timeout,
-                                ),
-                                timeout=timeout,
-                            )
-                        else:
-                            raise McpProtocolError("Unknown MCP client operation.")
-                    except asyncio.TimeoutError:
-                        completed.set_exception(McpCallTimeoutError(
-                            "The MCP call did not complete before its timeout."
-                        ))
-                    except McpProtocolError as exc:
-                        completed.set_exception(exc)
-                    except Exception as exc:
-                        completed.set_exception(McpDisconnectedError(
-                            "The MCP server connection failed during a request."
-                        ))
-                    else:
-                        completed.set_result(result)
+                    task = asyncio.create_task(
+                        self._perform(client, operation, payload, timeout, completed)
+                    )
+                    active.add(task)
+                    task.add_done_callback(active.discard)
         except BaseException as exc:
             if not self._ready.done():
                 self._ready.set_exception(exc)
             self._fail_pending()
         finally:
             self._connected = False
+
+    async def _perform(self, client, operation, payload, timeout, completed) -> None:
+        try:
+            if operation == "list_tools":
+                result = await asyncio.wait_for(client.list_tools(), timeout=timeout)
+            elif operation == "call_tool":
+                name, arguments = payload
+                result = await asyncio.wait_for(
+                    client.call_tool(
+                        name,
+                        arguments,
+                        read_timeout_seconds=timeout,
+                    ),
+                    timeout=timeout,
+                )
+            else:
+                raise McpProtocolError("Unknown MCP client operation.")
+        except asyncio.TimeoutError:
+            # A timed-out protocol exchange is not reused. The owning manager
+            # will reject later calls and close the connection at shutdown.
+            self._connected = False
+            completed.set_exception(
+                McpCallTimeoutError("The MCP call did not complete before its timeout.")
+            )
+        except asyncio.CancelledError:
+            self._connected = False
+            if not completed.done():
+                completed.set_exception(
+                    McpDisconnectedError(
+                        "The MCP server connection closed during a request."
+                    )
+                )
+            raise
+        except McpProtocolError as exc:
+            completed.set_exception(exc)
+        except Exception:
+            self._connected = False
+            completed.set_exception(
+                McpDisconnectedError(
+                    "The MCP server connection failed during a request."
+                )
+            )
+        else:
+            completed.set_result(result)
 
     def _fail_pending(self) -> None:
         while not self._commands.empty():

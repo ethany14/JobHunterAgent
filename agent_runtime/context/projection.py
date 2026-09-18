@@ -65,6 +65,7 @@ class SessionContextProjector:
         max_input_tokens: int = 12_000,
         memory_token_budget: int = 1_500,
         source_resolver: Callable[[SessionState], list[tuple[str, str]]] | None = None,
+        available_tool_names: Callable[[], frozenset[str]] | None = None,
     ) -> None:
         self._sessions = sessions
         self._snapshots = snapshots
@@ -77,6 +78,7 @@ class SessionContextProjector:
         self._max_input_tokens = max_input_tokens
         self._memory_token_budget = memory_token_budget
         self._source_resolver = source_resolver
+        self._available_tool_names = available_tool_names
 
     def prepare(self, state: SessionState) -> PreparedModelContext:
         persisted = self._sessions.messages(state.session_id)
@@ -89,6 +91,8 @@ class SessionContextProjector:
                         ContextTrustLevel.TRUSTED_POLICY, PERMISSION_EVIDENCE_POLICY),
         ]
         effective_tools = state.allowed_tools
+        if self._available_tool_names is not None:
+            effective_tools &= self._available_tool_names()
         skill_refs: list[SkillSnapshotRef] = []
         if self._skill_router and state.allowed_skills:
             routes = self._skill_router.route(
@@ -219,6 +223,13 @@ class SessionContextProjector:
             raise ContextSnapshotUnavailableError("Prepared context snapshot is unavailable.")
         if snapshot.system_prompt_version != self._system_prompt_version or snapshot.system_prompt_hash != self._hash(self._system_policy):
             raise ContextSnapshotUnavailableError("System policy changed after snapshot preparation.")
+        if (
+            self._available_tool_names is not None
+            and not snapshot.effective_tools <= self._available_tool_names()
+        ):
+            raise ContextSnapshotUnavailableError(
+                "A tool referenced by the prepared context is unavailable."
+            )
         for reference in snapshot.skill_versions:
             if self._skills is None:
                 raise ContextSnapshotUnavailableError("Referenced Skill registry is unavailable.")

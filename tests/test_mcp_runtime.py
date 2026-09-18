@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import sys
+import json
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -13,10 +18,12 @@ from agent_runtime.mcp import (
     McpRuntimeConfig,
     McpStdioServerConfig,
     McpToolManager,
+    load_mcp_runtime_config,
     normalize_mcp_result,
 )
 from agent_runtime.mcp.client import StdioMcpClient
 from agent_runtime.mcp.errors import (
+    McpConfigurationError,
     McpCallTimeoutError,
     McpDisconnectedError,
     McpStartupError,
@@ -139,6 +146,82 @@ def test_config_validates_ids_cwd_filters_and_duplicate_servers(tmp_path):
         McpRuntimeConfig(servers=[config(), config()])
 
 
+def test_trusted_config_is_optional_and_resolves_named_environment(tmp_path):
+    assert load_mcp_runtime_config(environ={}).servers == []
+    path = tmp_path / "mcp.json"
+    path.write_text(json.dumps({"servers": [{
+        "server_id": "configured",
+        "command": sys.executable,
+        "cwd": str(tmp_path),
+        "env_var_names": {"CHILD_TOKEN": "BACKEND_TOKEN"},
+        "tool_allowlist": ["echo_text"],
+        "read_only_tools": ["echo_text"],
+    }]}), encoding="utf-8")
+    loaded = load_mcp_runtime_config(path, environ={"BACKEND_TOKEN": "resolved-secret"})
+    assert loaded.servers[0].env == {"CHILD_TOKEN": "resolved-secret"}
+    assert "resolved-secret" not in loaded.model_dump_json()
+
+
+def test_trusted_config_accepts_windows_powershell_utf8_bom(tmp_path):
+    path = tmp_path / "powershell-config.json"
+    path.write_text(
+        json.dumps({"servers": []}),
+        encoding="utf-8-sig",
+    )
+    assert load_mcp_runtime_config(path, environ={}).servers == []
+
+
+def test_trusted_config_rejects_malformed_missing_env_and_relative_path(tmp_path):
+    malformed = tmp_path / "malformed.json"
+    malformed.write_text("not-json", encoding="utf-8")
+    with pytest.raises(McpConfigurationError, match="invalid"):
+        load_mcp_runtime_config(malformed, environ={})
+    missing = tmp_path / "missing-env.json"
+    missing.write_text(json.dumps({"servers": [{
+        "server_id": "configured",
+        "command": sys.executable,
+        "env_var_names": {"TOKEN": "NOT_SET"},
+    }]}), encoding="utf-8")
+    with pytest.raises(McpConfigurationError, match="missing"):
+        load_mcp_runtime_config(missing, environ={})
+    with pytest.raises(McpConfigurationError, match="absolute"):
+        load_mcp_runtime_config("relative.json", environ={})
+
+
+def test_required_failure_stops_startup_but_optional_failure_is_degraded():
+    optional = FakeClient(connect_error=McpStartupError("raw secret"))
+    ready = FakeClient()
+    clients = iter([optional, ready])
+    manager = McpToolManager(
+        config=McpRuntimeConfig(servers=[
+            config(server_id="optional", read_only_tools=set()),
+            config(server_id="ready"),
+        ]),
+        registry=ToolRegistry(),
+        client_factory=lambda _: next(clients),
+    )
+    tools = manager.start()
+    assert [tool.name for tool in tools] == ["mcp__ready__echo_text"]
+    assert manager.health().model_dump() == {
+        "configured_servers": 2,
+        "ready_servers": 1,
+        "failed_optional_servers": 1,
+        "registered_tools": 1,
+    }
+    assert optional.closed is True
+    manager.stop()
+
+    required = FakeClient(connect_error=McpStartupError("raw secret"))
+    manager = McpToolManager(
+        config=McpRuntimeConfig(servers=[config(required=True)]),
+        registry=ToolRegistry(),
+        client_factory=lambda _: required,
+    )
+    with pytest.raises(McpStartupError, match="Required MCP server"):
+        manager.start()
+    assert required.closed is True
+
+
 def test_disabled_server_is_not_started_and_filters_are_applied():
     disabled = FakeClient()
     enabled = FakeClient([remote_tool("echo_text"), remote_tool("hidden")])
@@ -172,7 +255,7 @@ def test_discovery_preserves_schema_metadata_and_calls_original_name():
     client = FakeClient()
     registry = ToolRegistry()
     manager = McpToolManager(
-        config=McpRuntimeConfig(servers=[config()]),
+        config=McpRuntimeConfig(servers=[config(required=True)]),
         registry=registry,
         client_factory=lambda _: client,
     )
@@ -359,7 +442,7 @@ def test_collisions_and_partial_startup_close_all_started_clients():
     registry.register(ExistingTool())
     first = FakeClient()
     manager = McpToolManager(
-        config=McpRuntimeConfig(servers=[config()]),
+        config=McpRuntimeConfig(servers=[config(required=True)]),
         registry=registry,
         client_factory=lambda _: first,
     )
@@ -372,7 +455,7 @@ def test_collisions_and_partial_startup_close_all_started_clients():
     clients = iter([good, bad])
     manager = McpToolManager(
         config=McpRuntimeConfig(
-            servers=[config(), config(server_id="second")]
+            servers=[config(), config(server_id="second", required=True)]
         ),
         registry=ToolRegistry(),
         client_factory=lambda _: next(clients),
@@ -445,3 +528,146 @@ def test_local_stdio_server_end_to_end_persists_both_tools(tmp_path):
     assert clients[0].connected is False
     with pytest.raises(UnknownToolError):
         registry.get("mcp__stdio-test__echo_text")
+
+
+def test_timed_out_stdio_connection_is_not_reused():
+    from agent_runtime.mcp.client import StdioMcpClient
+
+    client = StdioMcpClient(McpStdioServerConfig(
+        server_id="timeout-test",
+        command=sys.executable,
+        args=[str(SERVER)],
+        cwd=ROOT,
+        startup_timeout_seconds=10,
+        call_timeout_seconds=2,
+    ))
+    client.connect()
+    try:
+        with pytest.raises(McpCallTimeoutError):
+            client.call_tool(
+                "slow_echo",
+                {"text": "late", "delay_seconds": 0.5},
+                timeout_seconds=0.02,
+            )
+        with pytest.raises(McpDisconnectedError):
+            client.call_tool("echo_text", {"text": "must not reuse"})
+    finally:
+        client.close()
+
+
+def test_stdio_call_uses_owned_thread_boundary_from_running_event_loop():
+    from agent_runtime.mcp.client import StdioMcpClient
+
+    client = StdioMcpClient(McpStdioServerConfig(
+        server_id="async-boundary",
+        command=sys.executable,
+        args=[str(SERVER)],
+        cwd=ROOT,
+        startup_timeout_seconds=10,
+        call_timeout_seconds=2,
+    ))
+    client.connect()
+
+    async def scenario():
+        call = asyncio.create_task(asyncio.to_thread(
+            client.call_tool,
+            "slow_echo",
+            {"text": "concurrent", "delay_seconds": 0.05},
+            timeout_seconds=1,
+        ))
+        await asyncio.sleep(0.01)
+        assert call.done() is False
+        return await call
+
+    try:
+        response = asyncio.run(scenario())
+        assert response.structured_content == {"text": "concurrent"}
+    finally:
+        client.close()
+
+
+def test_one_stdio_connection_supports_two_concurrent_session_calls():
+    from agent_runtime.mcp.client import StdioMcpClient
+
+    client = StdioMcpClient(McpStdioServerConfig(
+        server_id="concurrent-stdio",
+        command=sys.executable,
+        args=[str(SERVER)],
+        cwd=ROOT,
+        startup_timeout_seconds=10,
+        call_timeout_seconds=2,
+    ))
+    client.connect()
+    try:
+        started = time.monotonic()
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [
+                pool.submit(
+                    client.call_tool,
+                    "slow_echo",
+                    {"text": f"session-{index}", "delay_seconds": 0.15},
+                    timeout_seconds=1,
+                )
+                for index in range(2)
+            ]
+            results = [future.result(timeout=2) for future in futures]
+        elapsed = time.monotonic() - started
+        assert elapsed < 0.28
+        assert {item.structured_content["text"] for item in results} == {
+            "session-0",
+            "session-1",
+        }
+    finally:
+        client.close()
+
+
+def test_manager_allows_concurrent_session_scopes_and_bounds_shutdown():
+    class ConcurrentClient(FakeClient):
+        def __init__(self):
+            super().__init__()
+            self.lock = threading.Lock()
+            self.entered = 0
+            self.both_active = threading.Event()
+            self.release = threading.Event()
+
+        def call_tool(self, name, arguments, *, timeout_seconds=None):
+            with self.lock:
+                self.entered += 1
+                if self.entered == 2:
+                    self.both_active.set()
+            self.both_active.wait(timeout=1)
+            self.release.wait(timeout=1)
+            return result(arguments["text"])
+
+        def close(self):
+            self.release.set()
+            super().close()
+
+    client = ConcurrentClient()
+    registry = ToolRegistry()
+    manager = McpToolManager(
+        config=McpRuntimeConfig(servers=[config()]),
+        registry=registry,
+        client_factory=lambda _: client,
+        shutdown_timeout_seconds=0.05,
+    )
+    manager.start()
+    outputs = []
+
+    def invoke(session_id):
+        outputs.append(manager.call_tool(
+            "local-test", "echo_text", {"text": session_id}, timeout_seconds=1
+        ))
+
+    threads = [threading.Thread(target=invoke, args=(f"session-{index}",)) for index in range(2)]
+    for thread in threads:
+        thread.start()
+    assert client.both_active.wait(timeout=1)
+    started = time.monotonic()
+    manager.stop()
+    elapsed = time.monotonic() - started
+    for thread in threads:
+        thread.join(timeout=1)
+    assert elapsed < 0.5
+    assert len(outputs) == 2
+    assert client.closed is True

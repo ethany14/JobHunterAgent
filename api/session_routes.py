@@ -7,9 +7,14 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, Query, status
 
 from agent_runtime.sessions.outcome import SessionOutcome
+from agent_runtime.errors import UnknownToolError
 from agent_runtime.sessions.state import SessionMessageVisibility, SessionState, SessionStatus
 from agent_runtime.tools.messages import AgentMessage
-from agent_runtime.types import ToolExecutionStatus, ToolSideEffect
+from agent_runtime.types import (
+    ToolDataClassification,
+    ToolExecutionStatus,
+    ToolSideEffect,
+)
 from api.session_dependencies import (
     CAPABILITY_PROFILES,
     CAPABILITY_SKILL_PROFILES,
@@ -34,9 +39,16 @@ from api.services.run_service import RunNotFoundError
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
-def _profile_for(state: SessionState) -> str:
-    for name, tools in CAPABILITY_PROFILES.items():
-        if state.allowed_tools == tools:
+def _profile_for(runtime: SessionRuntime, state: SessionState) -> str:
+    for name, base_tools in CAPABILITY_PROFILES.items():
+        extras = state.allowed_tools - base_tools
+        if (
+            state.allowed_tools == runtime.capability_tools(name)
+            or (
+                base_tools <= state.allowed_tools
+                and all(tool.startswith("mcp__") for tool in extras)
+            )
+        ):
             return name
     # Sessions created by this API always have a known server profile. Refuse to
     # expose a guessed profile for legacy/manual state.
@@ -47,7 +59,7 @@ def _public_session(runtime: SessionRuntime, state: SessionState) -> PublicSessi
     return PublicSession(
         session_id=state.session_id,
         title=state.title,
-        capability_profile=_profile_for(state),
+        capability_profile=_profile_for(runtime, state),
         status=state.status,
         version=state.version,
         active_run_id=state.active_run_id,
@@ -79,15 +91,26 @@ def _pending_approvals(runtime: SessionRuntime, state: SessionState) -> list[Pen
     for record in records:
         if record.status != ToolExecutionStatus.APPROVAL_REQUIRED:
             continue
-        tool = runtime.registry.get(record.request.tool_name)
+        try:
+            tool = runtime.registry.get(record.request.tool_name)
+        except UnknownToolError:
+            tool = None
         approvals.append(
             PendingToolApproval(
                 call_id=record.call_id,
                 tool_name=record.request.tool_name,
                 tool_version=record.tool_version,
-                description=tool.description,
-                side_effect=record.side_effect or getattr(tool, "side_effect", ToolSideEffect.NONE),
-                data_classification=tool.data_classification,
+                description=(
+                    tool.description
+                    if tool is not None
+                    else "This tool is currently unavailable."
+                ),
+                side_effect=record.side_effect or getattr(
+                    tool, "side_effect", ToolSideEffect.NONE
+                ),
+                data_classification=getattr(
+                    tool, "data_classification", ToolDataClassification.INTERNAL
+                ),
                 # Persisted ToolCallRecord arguments are the repository's redacted copy.
                 arguments=record.request.arguments,
                 created_at=record.created_at,
@@ -121,7 +144,7 @@ def create_session(
     state = runtime.coordinator.create_session(
         title=request.title,
         active_run_id=request.active_run_id,
-        allowed_tools=CAPABILITY_PROFILES[request.capability_profile],
+        allowed_tools=runtime.capability_tools(request.capability_profile),
         allowed_skills=CAPABILITY_SKILL_PROFILES[request.capability_profile],
     )
     return _response(runtime, state)

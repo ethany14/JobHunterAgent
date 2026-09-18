@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
-from typing import Any
+from typing import Any, Callable
 
 from fastapi import Request
 
@@ -20,6 +20,13 @@ from agent_runtime.context.repository import ContextSnapshotRepository
 from agent_runtime.memory.repository import MemoryRepository
 from agent_runtime.memory.retrieval import MemoryRetriever
 from agent_runtime.memory.policy import LocalOwnerResolver, MemoryPolicy
+from agent_runtime.mcp.client import McpClient
+from agent_runtime.mcp.config import (
+    McpRuntimeConfig,
+    McpStdioServerConfig,
+    load_mcp_runtime_config,
+)
+from agent_runtime.mcp.manager import McpHealth, McpToolManager
 from agent_runtime.skills.discovery import SkillDiscovery
 from agent_runtime.skills.loader import SkillLoader
 from agent_runtime.skills.repository import SkillRepository
@@ -66,8 +73,30 @@ class SessionRuntime:
     memory_policy: MemoryPolicy | None = None
     owner_resolver: LocalOwnerResolver | None = None
     project_id: str = LOCAL_PROJECT_ID
+    mcp_manager: McpToolManager | None = None
+
+    def capability_tools(self, profile: str) -> frozenset[str]:
+        base = CAPABILITY_PROFILES[profile]
+        mcp = (
+            self.mcp_manager.public_tool_names
+            if self.mcp_manager is not None
+            else frozenset()
+        )
+        return base | mcp
+
+    def mcp_health(self) -> McpHealth:
+        if self.mcp_manager is None:
+            return McpHealth(
+                configured_servers=0,
+                ready_servers=0,
+                failed_optional_servers=0,
+                registered_tools=0,
+            )
+        return self.mcp_manager.health()
 
     def close(self) -> None:
+        if self.mcp_manager is not None:
+            self.mcp_manager.stop()
         self.database.close()
 
 
@@ -75,6 +104,8 @@ def create_session_runtime(
     *,
     database_url: str | None = None,
     model: Any | None = None,
+    mcp_config: McpRuntimeConfig | None = None,
+    mcp_client_factory: Callable[[McpStdioServerConfig], McpClient] | None = None,
 ) -> SessionRuntime:
     """Build the production runtime after applying its Alembic schema."""
     upgrade_database(database_url)
@@ -84,8 +115,21 @@ def create_session_runtime(
     run_reader = SqlAlchemyRunReader(database.session_factory)
     registry = register_builtin_job_agent_tools(ToolRegistry(), run_reader)
     executor = ToolExecutor(registry, policy=ToolPolicy(), repository=tool_calls)
-    adapter = LangChainToolModelAdapter(model or create_model())
-    loop = ToolCallingLoop(model=adapter, registry=registry, executor=executor)
+    manager_options: dict[str, Any] = {
+        "config": mcp_config or load_mcp_runtime_config(),
+        "registry": registry,
+    }
+    if mcp_client_factory is not None:
+        manager_options["client_factory"] = mcp_client_factory
+    mcp_manager = McpToolManager(**manager_options)
+    try:
+        mcp_manager.start()
+        adapter = LangChainToolModelAdapter(model or create_model())
+        loop = ToolCallingLoop(model=adapter, registry=registry, executor=executor)
+    except Exception:
+        mcp_manager.stop()
+        database.close()
+        raise
     claims = SessionClaimRepository(database.session_factory)
     context_snapshots = ContextSnapshotRepository(database.session_factory)
     memory_policy = MemoryPolicy()
@@ -107,6 +151,7 @@ def create_session_runtime(
         memory_retriever=MemoryRetriever(memories),
         skills=skills,
         skill_router=skill_router,
+        available_tool_names=lambda: registry.names(),
     )
     coordinator = SessionCoordinator(
         sessions=sessions,
@@ -133,6 +178,7 @@ def create_session_runtime(
         memory_policy=memory_policy,
         owner_resolver=owner_resolver,
         project_id=project_id,
+        mcp_manager=mcp_manager,
     )
 
 

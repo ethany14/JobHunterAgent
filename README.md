@@ -390,3 +390,33 @@ try:
 finally:
     manager.stop()
 ```
+
+### Local FastAPI MCP test on PowerShell
+
+Copy `examples/mcp/local_test_config.json` to a local file and replace its three
+placeholder paths with absolute paths for this checkout. The JSON contains no
+secret values. If a child process needs a secret, map its child variable name to
+an existing backend environment variable with `env_var_names`, for example
+`{"REMOTE_TOKEN": "MY_BACKEND_TOKEN"}`.
+
+```powershell
+$env:MCP_CONFIG_PATH = "C:\absolute\path\to\local_test_config.json"
+.\.venv\Scripts\python.exe -m uvicorn api.main:app --host 127.0.0.1 --port 8000
+```
+
+In another terminal, check the sanitized readiness response:
+
+```powershell
+Invoke-RestMethod http://localhost:8000/health | ConvertTo-Json -Depth 4
+```
+
+Reload the unpacked Chrome extension, create an Assistant session, and ask it to
+use `mcp__local-test__echo_text` or `mcp__local-test__add_numbers`. Stop Uvicorn
+with `Ctrl+C`; application shutdown waits for active MCP calls for a bounded
+period, closes the stdio connection and subprocess, and unregisters its tools.
+For this example, confirm that no test server remains:
+
+```powershell
+Get-CimInstance Win32_Process |
+  Where-Object { $_.CommandLine -like "*examples*mcp*local_test_server.py*" }
+```

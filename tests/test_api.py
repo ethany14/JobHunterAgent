@@ -90,7 +90,15 @@ def run_repository(tmp_path):
 
 def test_health(api_client):
     client, _ = api_client
-    assert client.get("/health").json() == {"status": "ok"}
+    assert client.get("/health").json() == {
+        "status": "ok",
+        "mcp": {
+            "configured_servers": 0,
+            "ready_servers": 0,
+            "failed_optional_servers": 0,
+            "registered_tools": 0,
+        },
+    }
 
 
 def test_create_run_uses_fake_service_without_llm(api_client):

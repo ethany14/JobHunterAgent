@@ -2,7 +2,7 @@
 
 from contextlib import asynccontextmanager
 from collections.abc import Callable
-from typing import Literal
+from typing import Any
 
 import anyio
 from fastapi import FastAPI
@@ -59,8 +59,22 @@ def create_app(
     install_error_handlers(application)
 
     @application.get("/health", tags=["health"])
-    async def health() -> dict[str, Literal["ok"]]:
-        return {"status": "ok"}
+    async def health() -> dict[str, Any]:
+        runtime = application.state.session_runtime
+        mcp = (
+            runtime.mcp_health().model_dump(mode="json")
+            if runtime is not None
+            else {
+                "configured_servers": 0,
+                "ready_servers": 0,
+                "failed_optional_servers": 0,
+                "registered_tools": 0,
+            }
+        )
+        return {
+            "status": "degraded" if mcp["failed_optional_servers"] else "ok",
+            "mcp": mcp,
+        }
 
     return application
 
