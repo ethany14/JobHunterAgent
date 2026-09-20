@@ -394,6 +394,72 @@ This release still supports only client-side stdio tool discovery and calls. It
 does not implement Streamable HTTP, SSE, OAuth, reconnection, resources, prompts,
 sampling, elicitation, or external MCP service configuration from clients.
 
+## Job Workspace v0.2
+
+The Job Workspace is the internal source of truth for saved opportunities and
+application progress. A **Job** stores stable posting identity and metadata. A
+**JobSnapshot** stores one immutable, hashed capture of the untrusted job text.
+An **Application** points to a Job and its current snapshot while tracking the
+user's workflow. Analysis and resume output live in immutable, versioned
+**ApplicationArtifacts**, and application changes append safe **ApplicationEvents**.
+
+Application status transitions are deterministic:
+
+```text
+saved -> analyzing -> needs_evidence | materials_ready | analysis_failed
+analysis_failed -> analyzing | archived
+needs_evidence -> analyzing | materials_ready
+materials_ready -> ready_to_apply | analyzing
+ready_to_apply -> applied | analyzing
+applied -> interviewing | rejected | withdrawn
+interviewing -> offer | rejected | withdrawn
+offer | rejected | withdrawn -> archived
+```
+
+Entering `applied` requires `applied_at`. Same-state transitions are idempotent.
+Application mutations use an expected version, update the projection, increment
+the version, and append ordered events in one transaction. Artifact content and
+version are immutable; approval can supersede an older approved version.
+
+Existing `runs` and `agent_sessions` remain unchanged. Association tables allow
+many runs and sessions per Application. The focused run adapter attaches a
+completed run and idempotently projects its existing public Job Analysis, Match
+Report, and Tailored Resume into artifacts; it does not alter resume generation.
+
+URL normalization lowercases HTTP(S) scheme/host, removes fragments and known
+tracking parameters, and preserves job-identifying query parameters. Exact URLs
+or exact manual-content fingerprints can be reused. Company/title similarity is
+reported as duplicate candidates and never silently merged. Normalization does
+not fetch URLs or follow redirects, so redirects and site-specific aliases can
+still produce separate Jobs.
+
+Migration `0013_job_workspace` creates the workspace schema and
+`0014_workspace_failure` adds the safe analysis-failure state. Both are
+forward-only for production use. Back up the
+SQLite database before upgrading; automated tests never downgrade user data.
+Captured descriptions, resume-derived artifacts, and application history may
+contain personal data, so deployment still needs retention, deletion, encryption,
+and user authorization policies. This version intentionally defers scraping,
+autofill, job-board integrations, Interviewer/Multi-Agent features, cover-letter
+generation, and automatic application submission.
+
+The Side Panel saves a Job through `POST /api/workspaces` without starting a
+model call. One transaction finds or creates the Job and immutable snapshot and
+reopens an active Application when one exists. The Jobs tab loads compact list
+rows, then fetches detail, recent safe events, and artifact version metadata for
+the selected Application.
+
+Workspace analysis reuses the existing custom Run workflow and its human review
+behavior. The attached Run's public Job Analysis, Match Report, and Tailored
+Resume are projected idempotently into immutable artifacts. A failed run moves
+the Application to `analysis_failed` with a safe code and retry action.
+
+Assistant Sessions opened from a Workspace are explicitly attached through
+`application_sessions`. Context assembly includes a compact summary only for
+that Application and selected artifact references; immutable Context Snapshots
+record those source IDs. Full raw JDs, all events, and unrelated Workspaces are
+not injected.
+
 Example host initialization:
 
 ```python

@@ -102,14 +102,59 @@ export function reviewRun(runId, approved, feedback = null) {
   });
 }
 
-export function createSession(activeRunId = null) {
+export function createSession(activeRunId = null, applicationId = null) {
   return request("/sessions", {
     method: "POST",
     body: JSON.stringify({
       capability_profile: "job_assistant_readonly",
       active_run_id: activeRunId,
+      application_id: applicationId,
     }),
   });
+}
+
+export function saveWorkspace(workspace) {
+  return request("/api/workspaces", { method: "POST", body: JSON.stringify(workspace) });
+}
+
+export function listApplications({ status = "", search = "", limit = 25, cursor = "" } = {}) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (status) params.set("status", status);
+  if (search) params.set("search", search);
+  if (cursor) params.set("cursor", cursor);
+  return request(`/api/applications?${params.toString()}`);
+}
+
+export function getApplication(applicationId) {
+  return request(`/api/applications/${encodeURIComponent(applicationId)}`);
+}
+
+export function updateApplication(applicationId, values) {
+  return request(`/api/applications/${encodeURIComponent(applicationId)}`, {
+    method: "PATCH", body: JSON.stringify(values),
+  });
+}
+
+export function transitionApplication(applicationId, targetStatus, expectedVersion, appliedAt = null) {
+  return request(`/api/applications/${encodeURIComponent(applicationId)}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ target_status: targetStatus, expected_version: expectedVersion, applied_at: appliedAt }),
+  });
+}
+
+export function analyzeApplication(applicationId, snapshotId, resumeText, expectedVersion) {
+  return request(`/api/applications/${encodeURIComponent(applicationId)}/analyze`, {
+    method: "POST",
+    body: JSON.stringify({ snapshot_id: snapshotId, resume_text: resumeText, expected_version: expectedVersion }),
+  });
+}
+
+export function listApplicationArtifacts(applicationId) {
+  return request(`/api/applications/${encodeURIComponent(applicationId)}/artifacts`);
+}
+
+export function listApplicationEvents(applicationId) {
+  return request(`/api/applications/${encodeURIComponent(applicationId)}/events`);
 }
 
 export function listSessions(limit = 25) {

@@ -159,6 +159,21 @@ input, select {
 .message[data-kind="success"] { color: #175337; background: #ddf2e6; }
 
 .results { margin-top: 14px; }
+.workspace-save-actions { display: grid; gap: 6px; margin: 10px 0 14px; }
+.job-metadata-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+.job-metadata-grid label { display: grid; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.job-metadata-grid label:last-child { grid-column: 1 / -1; }
+.job-metadata-grid input { min-width: 0; padding: 8px; border: 1px solid #c9d4cc; border-radius: 8px; background: #fbfcfb; }
+.workspace-filters, .workspace-edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.workspace-filters input, .workspace-filters select, .workspace-edit-grid input, #workspace-status-select {
+  min-width: 0; padding: 8px; border: 1px solid #c9d4cc; border-radius: 8px; background: #fbfcfb;
+}
+.workspace-edit-grid label, #workspace-detail > label { display: grid; gap: 5px; margin: 10px 0; color: var(--muted); font-size: 12px; font-weight: 700; }
+.workspace-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.workspace-list-item button { margin-top: 7px; }
+.workspace-json { max-height: 280px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; }
+#workspace-detail details { margin-top: 12px; }
+#workspace-detail summary { cursor: pointer; color: var(--accent-dark); font-weight: 700; }
 .score-block { display: flex; flex-direction: column; align-items: flex-end; }
 .score { color: var(--accent); font-size: 26px; font-weight: 800; }
 .score-label { color: var(--muted); font-size: 11px; }

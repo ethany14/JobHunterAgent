@@ -17,6 +17,7 @@
 
     <nav class="panel-tabs" aria-label="Job Agent panels">
       <button id="analysis-tab" class="panel-tab active" type="button" aria-selected="true">Analysis</button>
+      <button id="jobs-tab" class="panel-tab" type="button" aria-selected="false">Jobs</button>
       <button id="assistant-tab" class="panel-tab" type="button" aria-selected="false">Assistant</button>
       <button id="context-tab" class="panel-tab" type="button" aria-selected="false">Context</button>
     </nav>
@@ -42,6 +43,11 @@
             <button id="extract-button" class="secondary-button" type="button">Extract Job Description</button>
           </div>
           <p class="hint">Select the job description on the page first for the cleanest extraction.</p>
+          <div class="job-metadata-grid">
+            <label>Job title<input id="job-title" maxlength="256" placeholder="Confirm or enter the title"></label>
+            <label>Company<input id="job-company" maxlength="256" placeholder="Confirm or enter the company"></label>
+            <label>Location<input id="job-location" maxlength="256" placeholder="Optional"></label>
+          </div>
           <label class="sr-only" for="job-description">Job description</label>
           <textarea id="job-description" rows="12" maxlength="50001" placeholder="Extract from the current page or paste the job description"></textarea>
           <div class="field-footer">
@@ -49,6 +55,12 @@
             <span id="job-count" class="character-count">0 / 50,000</span>
           </div>
         </section>
+
+        <div class="workspace-save-actions">
+          <button id="save-job-button" class="secondary-button full-width" type="button" disabled>Save Job</button>
+          <button id="open-workspace-button" class="text-button" type="button" hidden>Open Workspace</button>
+          <span id="saved-application-id" class="muted"></span>
+        </div>
 
         <button id="analyze-button" class="primary-button full-width" type="button">Analyze and Tailor Resume</button>
         <div id="message" class="message" role="status" aria-live="polite" hidden></div>
@@ -85,6 +97,36 @@
             <button id="reject-button" class="secondary-button full-width" type="button">Request Revision</button>
           </section>
         </section>
+      </div>
+
+      <div id="jobs-panel" class="app-panel" hidden>
+        <section class="card">
+          <div class="section-heading"><div><p class="step-label">Saved locally</p><h2>Applications</h2></div><button id="refresh-applications-button" class="text-button" type="button">Refresh</button></div>
+          <div class="workspace-filters">
+            <input id="application-search" maxlength="256" placeholder="Search company or title">
+            <select id="application-status-filter"><option value="">All statuses</option><option value="saved">Saved</option><option value="analyzing">Analyzing</option><option value="analysis_failed">Analysis failed</option><option value="needs_evidence">Needs evidence</option><option value="materials_ready">Materials ready</option><option value="ready_to_apply">Ready to apply</option><option value="applied">Applied</option><option value="interviewing">Interviewing</option><option value="offer">Offer</option><option value="rejected">Rejected</option><option value="withdrawn">Withdrawn</option><option value="archived">Archived</option></select>
+          </div>
+          <div id="application-list" class="context-list"><p class="muted">No saved applications loaded.</p></div>
+          <button id="load-more-applications-button" class="secondary-button full-width" type="button" hidden>Load More</button>
+        </section>
+        <section id="workspace-detail" class="card" hidden>
+          <div class="section-heading"><div><p class="step-label">Application workspace</p><h2 id="workspace-title">Workspace</h2></div><span id="workspace-status" class="status-badge"></span></div>
+          <p id="workspace-company" class="requirement-meta"></p>
+          <a id="workspace-source-link" target="_blank" rel="noopener noreferrer" hidden>Open source job</a>
+          <p id="workspace-application-id" class="muted"></p>
+          <div class="workspace-edit-grid"><label>Next action<input id="workspace-next-action" maxlength="2000"></label><label>Deadline<input id="workspace-deadline" type="datetime-local"></label></div>
+          <button id="update-workspace-button" class="secondary-button" type="button">Update</button>
+          <label>Status<select id="workspace-status-select"><option value="saved">Saved</option><option value="ready_to_apply">Ready to apply</option><option value="applied">Applied</option><option value="interviewing">Interviewing</option><option value="offer">Offer</option><option value="rejected">Rejected</option><option value="withdrawn">Withdrawn</option><option value="archived">Archived</option></select></label>
+          <button id="transition-workspace-button" class="secondary-button" type="button">Change status</button>
+          <div class="workspace-actions"><button id="analyze-workspace-button" class="primary-button" type="button">Analyze saved job</button><button id="workspace-assistant-button" class="secondary-button" type="button">Open Assistant</button></div>
+          <p id="workspace-match-score"></p>
+          <details><summary>Missing requirements</summary><div id="workspace-missing"></div></details>
+          <details><summary>Tailored resume</summary><div id="workspace-resume"></div></details>
+          <details><summary>Analysis runs</summary><div id="workspace-runs"></div></details>
+          <details><summary>Recent events</summary><div id="workspace-events"></div></details>
+          <details><summary>Artifact versions</summary><div id="workspace-artifacts"></div></details>
+        </section>
+        <div id="workspace-message" class="message" role="status" aria-live="polite" hidden></div>
       </div>
 
       <div id="assistant-panel" class="app-panel" hidden>

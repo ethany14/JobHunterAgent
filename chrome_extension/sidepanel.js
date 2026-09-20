@@ -30,6 +30,7 @@ import {
   supersedeMemory,
 } from "./api-client.js";
 import { extractJobDescriptionFromPage } from "./extractor.js";
+import { createWorkspaceController } from "./workspace-controller.js";
 
 const MAX_TEXT_LENGTH = 50_000;
 const POLL_INTERVAL_MS = 1_500;
@@ -50,6 +51,9 @@ const elements = {
   clearResume: document.querySelector("#clear-resume-button"),
   resumeCount: document.querySelector("#resume-count"),
   job: document.querySelector("#job-description"),
+  jobTitle: document.querySelector("#job-title"),
+  jobCompany: document.querySelector("#job-company"),
+  jobLocation: document.querySelector("#job-location"),
   jobCount: document.querySelector("#job-count"),
   extractionSource: document.querySelector("#extraction-source"),
   extract: document.querySelector("#extract-button"),
@@ -71,9 +75,11 @@ const elements = {
   reject: document.querySelector("#reject-button"),
   askRun: document.querySelector("#ask-run-button"),
   analysisTab: document.querySelector("#analysis-tab"),
+  jobsTab: document.querySelector("#jobs-tab"),
   assistantTab: document.querySelector("#assistant-tab"),
   contextTab: document.querySelector("#context-tab"),
   analysisPanel: document.querySelector("#analysis-panel"),
+  jobsPanel: document.querySelector("#jobs-panel"),
   assistantPanel: document.querySelector("#assistant-panel"),
   contextPanel: document.querySelector("#context-panel"),
   sessionMessage: document.querySelector("#session-message"),
@@ -104,6 +110,34 @@ const elements = {
   refreshMemories: document.querySelector("#refresh-memories-button"),
   skillList: document.querySelector("#skill-list"),
   refreshSkills: document.querySelector("#refresh-skills-button"),
+  saveJob: document.querySelector("#save-job-button"),
+  openWorkspace: document.querySelector("#open-workspace-button"),
+  savedApplicationId: document.querySelector("#saved-application-id"),
+  workspaceMessage: document.querySelector("#workspace-message"),
+  applicationList: document.querySelector("#application-list"),
+  applicationSearch: document.querySelector("#application-search"),
+  applicationStatusFilter: document.querySelector("#application-status-filter"),
+  refreshApplications: document.querySelector("#refresh-applications-button"),
+  loadMoreApplications: document.querySelector("#load-more-applications-button"),
+  workspaceDetail: document.querySelector("#workspace-detail"),
+  workspaceTitle: document.querySelector("#workspace-title"),
+  workspaceCompany: document.querySelector("#workspace-company"),
+  workspaceSourceLink: document.querySelector("#workspace-source-link"),
+  workspaceApplicationId: document.querySelector("#workspace-application-id"),
+  workspaceStatus: document.querySelector("#workspace-status"),
+  workspaceNextAction: document.querySelector("#workspace-next-action"),
+  workspaceDeadline: document.querySelector("#workspace-deadline"),
+  workspaceStatusSelect: document.querySelector("#workspace-status-select"),
+  updateWorkspace: document.querySelector("#update-workspace-button"),
+  transitionWorkspace: document.querySelector("#transition-workspace-button"),
+  analyzeWorkspace: document.querySelector("#analyze-workspace-button"),
+  workspaceAssistant: document.querySelector("#workspace-assistant-button"),
+  workspaceMatchScore: document.querySelector("#workspace-match-score"),
+  workspaceMissing: document.querySelector("#workspace-missing"),
+  workspaceResume: document.querySelector("#workspace-resume"),
+  workspaceRuns: document.querySelector("#workspace-runs"),
+  workspaceEvents: document.querySelector("#workspace-events"),
+  workspaceArtifacts: document.querySelector("#workspace-artifacts"),
 };
 
 let currentRunId = null;
@@ -112,6 +146,7 @@ let analysisBusy = false;
 let sessionBusy = false;
 let contextBusy = false;
 let currentSession = null;
+let currentExtraction = null;
 
 function setMessage(text, kind = "info") {
   elements.message.textContent = text;
@@ -489,16 +524,30 @@ async function extractJobDescription() {
       func: extractJobDescriptionFromPage,
     });
     const extracted = injection?.[0]?.result;
-    if (!extracted?.text) {
+    if (!extracted?.cleaned_job_description) {
       throw new Error("No job description text was found. Select the job text or paste it manually.");
     }
-    elements.job.value = extracted.text;
-    elements.extractionSource.textContent = `Extracted from ${extracted.source}`;
+    currentExtraction = extracted;
+    elements.job.value = extracted.cleaned_job_description;
+    elements.jobTitle.value = extracted.job_title || "";
+    elements.jobCompany.value = extracted.company || "";
+    elements.jobLocation.value = extracted.location || "";
+    const confidence = Number.isFinite(extracted.extraction_confidence)
+      ? `confidence ${Math.round(extracted.extraction_confidence * 100)}/100`
+      : "confidence unavailable";
+    elements.extractionSource.textContent = `Extracted from ${extracted.extraction_source} • ${confidence}`;
     updateCount(elements.job, elements.jobCount);
-    if (extracted.text.length > MAX_TEXT_LENGTH) {
+    if (extracted.cleaned_job_description.length > MAX_TEXT_LENGTH) {
       throw new Error("The extracted page exceeds 50,000 characters. Select only the job description and extract again, or edit the text below.");
     }
-    setMessage("Job description extracted. Review or edit it before analysis.", "success");
+    if (extracted.extraction_confidence < 0.6) {
+      setMessage(
+        "Chrome could not isolate a reliable JD container. Select the job-description text on the page and extract again, or edit the result before saving.",
+        "error",
+      );
+    } else {
+      setMessage("Job description and metadata extracted. Review or edit them before saving.", "success");
+    }
   } catch (error) {
     showError(pageAccessError(error, tab));
   } finally {
@@ -596,16 +645,20 @@ async function clearSavedResume() {
 function switchPanel(name) {
   const assistant = name === "assistant";
   const context = name === "context";
-  const analysis = !assistant && !context;
+  const jobs = name === "jobs";
+  const analysis = !assistant && !context && !jobs;
   elements.analysisPanel.hidden = !analysis;
   elements.assistantPanel.hidden = !assistant;
   elements.contextPanel.hidden = !context;
+  elements.jobsPanel.hidden = !jobs;
   elements.analysisTab.classList.toggle("active", analysis);
   elements.assistantTab.classList.toggle("active", assistant);
   elements.contextTab.classList.toggle("active", context);
+  elements.jobsTab.classList.toggle("active", jobs);
   elements.analysisTab.setAttribute("aria-selected", String(analysis));
   elements.assistantTab.setAttribute("aria-selected", String(assistant));
   elements.contextTab.setAttribute("aria-selected", String(context));
+  elements.jobsTab.setAttribute("aria-selected", String(jobs));
 }
 
 function sessionStatusLabel(status) {
@@ -728,9 +781,11 @@ function renderSession(response) {
   currentSession = response.session;
   elements.sessionStatus.textContent = sessionStatusLabel(currentSession.status);
   elements.sessionStatus.dataset.status = currentSession.status;
-  elements.sessionRun.textContent = currentSession.active_run_id
-    ? `Run ${currentSession.active_run_id}`
-    : "General run assistant";
+  elements.sessionRun.textContent = currentSession.active_application_id
+    ? `Workspace ${currentSession.active_application_id}`
+    : currentSession.active_run_id
+      ? `Run ${currentSession.active_run_id}`
+      : "General run assistant";
   elements.recoverSession.hidden = currentSession.recovery_available !== true;
   elements.cancelSession.hidden = TERMINAL_SESSION_STATUSES.has(currentSession.status);
   elements.sendSession.disabled = sessionBusy
@@ -823,21 +878,21 @@ async function openSession(sessionId) {
   }
 }
 
-async function startSession(activeRunId = null) {
+async function startSession(activeRunId = null, applicationId = null) {
   if (sessionBusy) {
     return;
   }
   setSessionBusy(true, "Creating a persistent session...");
   switchPanel("assistant");
   try {
-    const response = await createSession(activeRunId);
+    const response = await createSession(activeRunId, applicationId);
     currentSession = response.session;
     await chrome.storage.local.set({ [ACTIVE_SESSION_KEY]: currentSession.session_id });
     renderSession(response);
     renderSessionMessages([]);
     await loadSessionHistory();
     setSessionMessage(
-      activeRunId ? "Session created for the current run." : "New session created.",
+      applicationId ? "Session created for the current Workspace." : activeRunId ? "Session created for the current run." : "New session created.",
       "success",
     );
     elements.assistantInput.focus();
@@ -1330,8 +1385,53 @@ async function refreshContextPanel() {
   }
 }
 
+function setWorkspaceMessage(text, kind = "info") {
+  elements.workspaceMessage.textContent = text;
+  elements.workspaceMessage.dataset.kind = kind;
+  elements.workspaceMessage.hidden = !text;
+}
+
+const workspaceController = createWorkspaceController({
+  elements: {
+    save: elements.saveJob, open: elements.openWorkspace,
+    savedId: elements.savedApplicationId, refresh: elements.refreshApplications,
+    list: elements.applicationList, search: elements.applicationSearch,
+    filter: elements.applicationStatusFilter, more: elements.loadMoreApplications,
+    detail: elements.workspaceDetail, title: elements.workspaceTitle,
+    company: elements.workspaceCompany, source: elements.workspaceSourceLink,
+    id: elements.workspaceApplicationId, status: elements.workspaceStatus,
+    nextAction: elements.workspaceNextAction, deadline: elements.workspaceDeadline,
+    statusSelect: elements.workspaceStatusSelect, update: elements.updateWorkspace,
+    transition: elements.transitionWorkspace, analyze: elements.analyzeWorkspace,
+    assistant: elements.workspaceAssistant, score: elements.workspaceMatchScore,
+    missing: elements.workspaceMissing, resume: elements.workspaceResume,
+    runs: elements.workspaceRuns, events: elements.workspaceEvents,
+    artifacts: elements.workspaceArtifacts,
+  },
+  getResume: () => elements.resume.value,
+  getJobText: () => elements.job.value,
+  getExtraction: () => ({
+    ...(currentExtraction || {}),
+    job_title: elements.jobTitle.value.trim() || null,
+    company: elements.jobCompany.value.trim() || null,
+    location: elements.jobLocation.value.trim() || null,
+    extraction_source: currentExtraction?.extraction_source || "manual",
+  }),
+  onAnalyzeRun: async (runId) => {
+    currentRunId = runId;
+    renderRun(await getRun(runId));
+  },
+  onOpenAssistant: (applicationId) => startSession(null, applicationId),
+  onMessage: setWorkspaceMessage,
+});
+
 elements.healthButton.addEventListener("click", checkHealth);
 elements.analysisTab.addEventListener("click", () => switchPanel("analysis"));
+elements.jobsTab.addEventListener("click", () => {
+  switchPanel("jobs");
+  workspaceController.refresh();
+});
+elements.openWorkspace.addEventListener("click", () => switchPanel("jobs"));
 elements.assistantTab.addEventListener("click", () => switchPanel("assistant"));
 elements.contextTab.addEventListener("click", () => {
   switchPanel("context");
@@ -1386,7 +1486,10 @@ elements.refreshSkills.addEventListener("click", async () => {
 elements.createMemory.addEventListener("click", createMemoryCandidate);
 elements.assistantInput.addEventListener("input", updateSessionCount);
 elements.resume.addEventListener("input", () => updateCount(elements.resume, elements.resumeCount));
-elements.job.addEventListener("input", () => updateCount(elements.job, elements.jobCount));
+elements.job.addEventListener("input", () => {
+  updateCount(elements.job, elements.jobCount);
+  workspaceController.updateSaveState();
+});
 elements.saveResume.addEventListener("change", async () => {
   if (elements.saveResume.checked) {
     await chrome.storage.local.set({ [SAVED_RESUME_KEY]: elements.resume.value });
@@ -1406,4 +1509,5 @@ updateCount(elements.job, elements.jobCount);
 updateSessionCount();
 loadSavedResume().catch(showError);
 restoreSession().catch(showSessionError);
+workspaceController.restore().catch(() => {});
 checkHealth();

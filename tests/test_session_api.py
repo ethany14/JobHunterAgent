@@ -240,6 +240,9 @@ def test_approval_uses_persisted_redacted_arguments_and_resumes(tmp_path):
             visible = client.get(f"/sessions/{session['session_id']}/messages").json()
             assert all(item["role"] in {"user", "assistant"} for item in visible["messages"])
             assert all("do-not-store" not in item["content"] for item in visible["messages"])
+            assert [item["content"] for item in visible["messages"]] == [
+                "Render", "Approved result",
+            ]
     finally:
         runtime.close()
 

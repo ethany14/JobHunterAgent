@@ -12,6 +12,7 @@ from api.context_routes import router as context_router
 from api.routes.runs import router as runs_router
 from api.session_dependencies import SessionRuntime, create_session_runtime
 from api.session_routes import router as sessions_router
+from api.workspace_routes import router as workspace_router
 from api.services.run_service import BackendRoutingRunService, RunService
 
 
@@ -56,6 +57,7 @@ def create_app(
     application.include_router(runs_router)
     application.include_router(sessions_router)
     application.include_router(context_router)
+    application.include_router(workspace_router)
     install_error_handlers(application)
 
     @application.get("/health", tags=["health"])

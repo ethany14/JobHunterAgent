@@ -65,6 +65,10 @@ def _public_session(runtime: SessionRuntime, state: SessionState) -> PublicSessi
         status=state.status,
         version=state.version,
         active_run_id=state.active_run_id,
+        active_application_id=(
+            runtime.workspace.application_id_for_session(state.session_id)
+            if runtime.workspace is not None else None
+        ),
         loop_iteration=state.loop_iteration,
         executed_tool_calls=state.executed_tool_calls,
         total_input_tokens=state.total_input_tokens,
@@ -207,12 +211,24 @@ def create_session(
 ) -> SessionResponse:
     if request.active_run_id and runtime.run_reader.get_run(request.active_run_id) is None:
         raise RunNotFoundError(f"Run '{request.active_run_id}' was not found.")
+    application = None
+    if request.application_id:
+        if runtime.workspace is None:
+            raise ValueError("The Workspace runtime is unavailable.")
+        application = runtime.workspace.get_application(request.application_id)
     state = runtime.coordinator.create_session(
         title=request.title,
         active_run_id=request.active_run_id,
         allowed_tools=runtime.capability_tools(request.capability_profile),
         allowed_skills=CAPABILITY_SKILL_PROFILES[request.capability_profile],
     )
+    if application is not None:
+        runtime.workspace.attach_session(
+            application.application_id,
+            state.session_id,
+            role="workspace_assistant",
+            expected_version=application.version,
+        )
     return _response(runtime, state)
 
 
@@ -259,6 +275,12 @@ def get_messages(
         }:
             continue
         if stored.message.role not in {"user", "assistant"}:
+            continue
+        if stored.message.role == "assistant" and (
+            stored.message.tool_calls or not stored.message.content.strip()
+        ):
+            # Durable tool-call envelopes coordinate execution but are not
+            # user-facing assistant responses.
             continue
         messages.append(
             PublicSessionMessage(

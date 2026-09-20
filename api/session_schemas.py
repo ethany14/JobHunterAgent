@@ -23,6 +23,7 @@ class CreateSessionRequest(SessionApiModel):
     capability_profile: CapabilityProfile = "job_assistant_readonly"
     title: str | None = Field(default=None, max_length=256)
     active_run_id: str | None = Field(default=None, min_length=1, max_length=128)
+    application_id: str | None = Field(default=None, min_length=1, max_length=128)
 
 
 class SubmitMessageRequest(SessionApiModel):
@@ -46,6 +47,7 @@ class PublicSession(SessionApiModel):
     status: SessionStatus
     version: int
     active_run_id: str | None
+    active_application_id: str | None = None
     loop_iteration: int
     executed_tool_calls: int
     total_input_tokens: int

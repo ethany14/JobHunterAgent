@@ -13,6 +13,9 @@ REQUIRED_FILES = {
     "api-client.js",
     "extractor.js",
     "README.md",
+    "workspace-controller.js",
+    "workspace-renderer.js",
+    "workspace-state.js",
 }
 
 
@@ -301,3 +304,54 @@ def test_context_conflicts_refresh_without_automatic_retry() -> None:
     assert "error.status === 409" in skill_handler
     assert "await refreshSkills()" in skill_handler
     assert "await action(version.version_id, version.version)" in skill_handler
+
+
+def test_workspace_ui_is_modular_safe_and_backend_backed() -> None:
+    page = (EXTENSION / "sidepanel.html").read_text(encoding="utf-8")
+    client = (EXTENSION / "api-client.js").read_text(encoding="utf-8")
+    panel = (EXTENSION / "sidepanel.js").read_text(encoding="utf-8")
+    controller = (EXTENSION / "workspace-controller.js").read_text(encoding="utf-8")
+    renderer = (EXTENSION / "workspace-renderer.js").read_text(encoding="utf-8")
+    for element_id in {"jobs-tab", "jobs-panel", "save-job-button", "application-list",
+                       "workspace-detail", "analyze-workspace-button",
+                       "workspace-assistant-button"}:
+        assert f'id="{element_id}"' in page
+    for path in {"/api/workspaces", "/api/applications?", "/analyze`,",
+                 "/artifacts`", "/events`"}:
+        assert path in client
+    assert "createWorkspaceController" in panel
+    assert "currentSession.active_application_id" in panel
+    assert "jobAgentCurrentApplicationId" in (EXTENSION / "workspace-state.js").read_text(encoding="utf-8")
+    assert "duplicate_detected" in controller
+    assert "expected_version" in controller
+    assert "textContent" in renderer
+    assert "innerHTML" not in controller + renderer
+
+
+def test_extractor_returns_normalized_untrusted_text_contract() -> None:
+    extractor = (EXTENSION / "extractor.js").read_text(encoding="utf-8")
+    for field in {"source_url", "source_site", "page_title", "company", "job_title",
+                  "location", "raw_page_text", "cleaned_job_description",
+                  "extraction_source", "extraction_confidence", "extracted_at"}:
+        assert field in extractor
+    assert "outerHTML" not in extractor
+    assert "innerHTML" not in extractor
+    assert 'script[type="application/ld+json"]' in extractor
+    assert 'types.includes("JobPosting")' in extractor
+    assert '".jobs-description__content"' in extractor
+    assert '".jobs-box__html-content"' in extractor
+    assert "relevantFallback" in extractor
+
+
+def test_job_metadata_is_explicitly_editable_before_saving() -> None:
+    page = (EXTENSION / "sidepanel.html").read_text(encoding="utf-8")
+    panel = (EXTENSION / "sidepanel.js").read_text(encoding="utf-8")
+    controller = (EXTENSION / "workspace-controller.js").read_text(encoding="utf-8")
+    for element_id in {"job-title", "job-company", "job-location"}:
+        assert f'id="{element_id}"' in page
+    assert "elements.jobTitle.value = extracted.job_title" in panel
+    assert "elements.jobCompany.value = extracted.company" in panel
+    assert "elements.jobLocation.value = extracted.location" in panel
+    assert "title: extracted.job_title || null" in controller
+    assert "company: extracted.company || null" in controller
+    assert "location: extracted.location || null" in controller

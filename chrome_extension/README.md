@@ -57,6 +57,8 @@ The API base URL is fixed at `http://localhost:8000`. The extension calls:
 - Memory management under `/memories`
 - Skill discovery and lifecycle management under `/skills` and `/skill-versions`
 - `GET /sessions/{session_id}/context` for a privacy-filtered snapshot summary
+- `POST /api/workspaces` to save or reopen a Job Workspace
+- Workspace list, detail, status, analysis, event, and artifact routes under `/api/applications`
 
 It handles `running`, `awaiting_review`, `revising`, `approved`, and `failed` run states. A rejection requires feedback. The tailored resume can be copied after the run reaches a reviewable result.
 
@@ -108,6 +110,23 @@ The local FastAPI service and its SQLite database have their own storage behavio
 - `http://localhost:8000/*`: allows requests only to the local Job Agent API.
 
 The extension does not request optional website host patterns, automatic access to every page, cookies, history, downloads, network interception, or the `tabs` permission.
+
+## Job Workspace manual test
+
+1. Start FastAPI and reload the unpacked extension.
+2. Open a supported HTTP(S) job page and click the extension icon.
+3. Extract the JD and edit it in the Analysis tab.
+4. Click **Save Job**. Confirm an Application ID appears and no model call starts.
+5. Open **Jobs**, refresh, and open the saved Application.
+6. Enter or restore a resume and click **Analyze saved job**.
+7. Confirm human review is reached and three artifact types appear.
+8. Restart FastAPI, reopen the extension, and restore the same Workspace.
+9. Click **Open Assistant** and confirm it identifies this Application only.
+
+Chrome stores only the current and last-opened Application IDs. Workspace data
+remains in SQLite. Repeated saves reopen the active Application. Rejected,
+withdrawn, and archived Applications are not reopened; a later save creates a
+new Application for the existing Job.
 
 ## Current limits
 

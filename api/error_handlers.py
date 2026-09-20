@@ -44,6 +44,16 @@ from agent_runtime.skills.errors import (
     SkillVersionConflictError,
     StaleSkillVersionError,
 )
+from agent_runtime.workspace.errors import (
+    ApplicationNotFoundError,
+    ArtifactNotFoundError,
+    ArtifactValidationError,
+    InvalidApplicationTransitionError,
+    JobNotFoundError,
+    SnapshotNotFoundError,
+    StaleApplicationError,
+    WorkspaceAssociationError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +86,19 @@ def install_error_handlers(app: FastAPI) -> None:
     async def skill_not_found(_: Request, __: SkillNotFoundError) -> JSONResponse:
         return _response(404, "skill_not_found", "The Skill version was not found.")
 
+    async def workspace_not_found(_: Request, exc: Exception) -> JSONResponse:
+        code = (
+            "job_not_found" if isinstance(exc, JobNotFoundError)
+            else "snapshot_not_found" if isinstance(exc, SnapshotNotFoundError)
+            else "artifact_not_found" if isinstance(exc, ArtifactNotFoundError)
+            else "application_not_found"
+        )
+        return _response(404, code, "The requested workspace record was not found.")
+
+    for error_type in (JobNotFoundError, SnapshotNotFoundError,
+                       ApplicationNotFoundError, ArtifactNotFoundError):
+        app.add_exception_handler(error_type, workspace_not_found)
+
     conflict_errors = (
         SessionAlreadyExistsError,
         StaleSessionError,
@@ -96,6 +119,8 @@ def install_error_handlers(app: FastAPI) -> None:
         InvalidSkillTransitionError,
         SkillContentChangedError,
         ContextSnapshotUnavailableError,
+        StaleApplicationError,
+        InvalidApplicationTransitionError,
     )
 
     async def conflict(_: Request, exc: Exception) -> JSONResponse:
@@ -135,6 +160,14 @@ def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(MemoryConfirmationRequiredError)
     async def confirmation_required(_: Request, __: MemoryConfirmationRequiredError) -> JSONResponse:
         return _response(422, "memory_confirmation_required", "Explicit confirmation is required.")
+
+    @app.exception_handler(ArtifactValidationError)
+    async def invalid_artifact(_: Request, __: ArtifactValidationError) -> JSONResponse:
+        return _response(422, "invalid_artifact", "The artifact content is invalid.")
+
+    @app.exception_handler(WorkspaceAssociationError)
+    async def invalid_association(_: Request, __: WorkspaceAssociationError) -> JSONResponse:
+        return _response(422, "invalid_workspace_association", "The referenced record is invalid.")
 
     @app.exception_handler(ValueError)
     async def invalid_domain_input(_: Request, __: ValueError) -> JSONResponse:
