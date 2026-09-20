@@ -295,3 +295,56 @@ export function retireSkill(versionId, expectedVersion) {
 export function getSessionContext(sessionId) {
   return request(`/sessions/${encodeURIComponent(sessionId)}/context`);
 }
+
+export function listCareerEvidence(filters = {}) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) query.set(key, value);
+  }
+  return request(`/api/evidence${query.size ? `?${query}` : ""}`);
+}
+
+export function createCareerEvidence(body) {
+  return request("/api/evidence/candidates", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function getCareerEvidenceVersions(id) {
+  return request(`/api/evidence/${encodeURIComponent(id)}/versions`);
+}
+
+export function mutateCareerEvidence(id, action, expectedVersion, extra = {}) {
+  return request(`/api/evidence/${encodeURIComponent(id)}/${action}`, {
+    method: "POST", body: JSON.stringify({ expected_version: expectedVersion, ...extra }),
+  });
+}
+
+export function listApplicationEvidence(applicationId) {
+  return request(`/api/applications/${encodeURIComponent(applicationId)}/evidence`);
+}
+
+export function startInterview(applicationId, limits = {}) {
+  return request(`/api/applications/${encodeURIComponent(applicationId)}/interviews`, {
+    method: "POST", body: JSON.stringify(limits),
+  });
+}
+
+export function getActiveInterview(applicationId) {
+  return request(`/api/applications/${encodeURIComponent(applicationId)}/interviews/active`);
+}
+
+export function getInterview(interviewId) {
+  return request(`/api/interviews/${encodeURIComponent(interviewId)}`);
+}
+
+export function mutateInterview(interviewId, action, expectedVersion, extra = {}) {
+  return request(`/api/interviews/${encodeURIComponent(interviewId)}/${action}`, {
+    method: "POST",
+    body: JSON.stringify({ expected_version: expectedVersion,
+      idempotency_key: crypto.randomUUID(), ...extra }),
+  });
+}
+
+export function decideInterviewCandidate(interviewId, evidenceId, action, expectedVersion, extra = {}) {
+  return mutateInterview(interviewId, `candidates/${encodeURIComponent(evidenceId)}/${action}`,
+    expectedVersion, extra);
+}

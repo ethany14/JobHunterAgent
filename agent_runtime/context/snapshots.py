@@ -29,6 +29,13 @@ class MemorySnapshotRef(RuntimeModel):
     version: int = Field(ge=0)
 
 
+class EvidenceSnapshotRef(RuntimeModel):
+    evidence_id: str
+    evidence_version_id: str
+    version: int = Field(ge=1)
+    content_hash: str
+
+
 class ContextBlockManifest(RuntimeModel):
     block_id: str
     kind: ContextBlockKind
@@ -46,6 +53,7 @@ class ContextSnapshot(RuntimeModel):
     system_prompt_hash: str
     skill_versions: list[SkillSnapshotRef] = Field(default_factory=list)
     memory_versions: list[MemorySnapshotRef] = Field(default_factory=list)
+    evidence_versions: list[EvidenceSnapshotRef] = Field(default_factory=list)
     source_artifact_ids: list[str] = Field(default_factory=list)
     effective_tools: frozenset[str] = Field(default_factory=frozenset)
     included_message_ids: list[str] = Field(default_factory=list)
@@ -72,6 +80,13 @@ class ContextSnapshot(RuntimeModel):
             raise ValueError(
                 "Snapshot Memory references must match included Memory block manifests."
             )
+        evidence_manifest = {
+            block.block_id.removeprefix("evidence:")
+            for block in self.block_manifests if block.kind == ContextBlockKind.CAREER_EVIDENCE
+        }
+        evidence_refs = {reference.evidence_id for reference in self.evidence_versions}
+        if len(evidence_refs) != len(self.evidence_versions) or evidence_refs != evidence_manifest:
+            raise ValueError("Snapshot Evidence references must match included Evidence blocks.")
         return self
 
     @property

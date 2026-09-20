@@ -1,5 +1,7 @@
 # Job Agent Chrome Extension MVP
 
+The Context tab now includes a Career Evidence manager. Enter a statement in your own words, choose a category, and save it as a candidate. Confirm it separately before it can appear in model context. Existing resume evidence can only be imported by the backend from the original resume; the panel cannot claim resume provenance from typed text. The list shows confirmed and pending items by default, supports search/category filtering, and lets you inspect immutable version history. When a saved Application is open, linked evidence is labeled. Statements and quotes are stored by the local SQLite backend; the extension does not cache them.
+
 This Manifest V3 extension opens Job Agent in Chrome's Side Panel. It extracts text only when the user clicks **Extract Job Description**, leaves the result editable, and sends it to the local FastAPI service only after the user clicks **Analyze and Tailor Resume**.
 
 ## Local installation
@@ -137,3 +139,20 @@ new Application for the existing Job.
 - Resume persistence is local to the Chrome profile and is not encrypted by the extension.
 - Session access currently follows the backend's trusted local single-user model;
   there is no account or tenant authorization boundary.
+# Manually test Improve Evidence
+
+Start the local FastAPI backend after `alembic upgrade head` and reload the
+unpacked extension at `chrome://extensions`. Save a Job in Workspace, run its
+analysis so the current Job Snapshot has a match report, then open that
+Application's Workspace detail and choose **Start or resume interview** under
+**Improve Evidence**. Answer one question with a concrete fact; inspect the
+pending candidate and its original answer before clicking **Confirm exactly**
+or **Edit and confirm**. Try **I don't have this experience** on a separate
+Application: it should create only an Application-specific confirmed gap.
+
+To test recovery manually, start another interview, leave it waiting on a
+question, close the Side Panel, restart FastAPI, reopen the same Application,
+and verify that the same question and interview progress return. Submit an
+answer once. If a model request fails, use **Recover interview**; the saved
+answer should not be duplicated. This local-only flow has no user login and
+does not grant the interviewer any MCP tools.

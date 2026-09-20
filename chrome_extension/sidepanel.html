@@ -125,6 +125,18 @@
           <details><summary>Analysis runs</summary><div id="workspace-runs"></div></details>
           <details><summary>Recent events</summary><div id="workspace-events"></div></details>
           <details><summary>Artifact versions</summary><div id="workspace-artifacts"></div></details>
+          <section class="interview-section">
+            <div class="section-heading"><h3>Improve Evidence</h3><button id="start-interview-button" class="secondary-button" type="button">Start or resume interview</button></div>
+            <p id="interview-progress" class="muted">No active evidence interview.</p>
+            <p id="interview-requirement"></p>
+            <p id="interview-question"></p>
+            <label for="interview-answer">Your answer</label>
+            <textarea id="interview-answer" rows="4" maxlength="20000" placeholder="Describe what you personally did, or say you have no experience."></textarea>
+            <div class="workspace-actions"><button id="submit-interview-answer" class="primary-button" type="button">Submit answer</button><button id="interview-no-experience" class="secondary-button" type="button">I don't have this experience</button><button id="interview-skip" class="text-button" type="button">Skip</button></div>
+            <div id="interview-candidate" class="context-list"></div>
+            <div class="workspace-actions"><button id="interview-save-later" class="text-button" type="button">Save and continue later</button><button id="interview-resume" class="secondary-button" type="button" hidden>Recover interview</button><button id="interview-cancel" class="text-button danger-text" type="button">Cancel interview</button></div>
+            <div id="interview-status-list" class="context-list"></div>
+          </section>
         </section>
         <div id="workspace-message" class="message" role="status" aria-live="polite" hidden></div>
       </div>
@@ -208,6 +220,15 @@
             <button id="refresh-skills-button" class="text-button" type="button">Refresh</button>
           </div>
           <div id="skill-list" class="context-list"></div>
+        </section>
+        <section class="card">
+          <div class="section-heading"><div><p class="step-label">Candidate facts</p><h2>Career Evidence</h2></div><button id="refresh-evidence-button" class="text-button" type="button">Refresh</button></div>
+          <p class="hint">Confirmed means you approved the wording or it was grounded in an accepted source. It is not independent fact checking.</p>
+          <label>New statement<textarea id="evidence-claim" rows="3" maxlength="5000" placeholder="Describe your experience in your own words"></textarea></label>
+          <label>Category<select id="evidence-category"><option value="experience">Experience</option><option value="project">Project</option><option value="skill">Skill</option><option value="education">Education</option><option value="achievement">Achievement</option><option value="leadership">Leadership</option><option value="responsibility">Responsibility</option></select></label>
+          <button id="create-evidence-button" class="secondary-button full-width" type="button">Save candidate statement</button>
+          <div class="workspace-filters"><input id="evidence-search" maxlength="256" placeholder="Search evidence"><select id="evidence-filter"><option value="">All categories</option><option value="experience">Experience</option><option value="project">Project</option><option value="skill">Skill</option><option value="education">Education</option><option value="achievement">Achievement</option><option value="leadership">Leadership</option><option value="responsibility">Responsibility</option></select></div>
+          <div id="evidence-list" class="context-list"></div>
         </section>
       </div>
     </main>

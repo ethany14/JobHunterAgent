@@ -4,7 +4,7 @@ import { analyzeApplication, getApplication, listApplicationArtifacts, listAppli
 import { CURRENT_APPLICATION_KEY, LAST_OPENED_APPLICATION_KEY, canSaveJob, createWorkspaceState } from "./workspace-state.js";
 import { renderApplicationDetail, renderApplicationList } from "./workspace-renderer.js";
 
-export function createWorkspaceController({ elements, getResume, getJobText, getExtraction, onAnalyzeRun, onOpenAssistant, onMessage }) {
+export function createWorkspaceController({ elements, getResume, getJobText, getExtraction, onAnalyzeRun, onOpenAssistant, onWorkspaceOpen, onMessage }) {
   const state = createWorkspaceState();
   const message = (text, kind = "info") => onMessage(text, kind);
   const setBusy = (busy) => { state.busy = busy; elements.save.disabled = !canSaveJob(getJobText(), busy); elements.refresh.disabled = busy; elements.analyze.disabled = busy; };
@@ -42,6 +42,7 @@ export function createWorkspaceController({ elements, getResume, getJobText, get
       state.current = detail;
       await chrome.storage.local.set({ [CURRENT_APPLICATION_KEY]: applicationId, [LAST_OPENED_APPLICATION_KEY]: applicationId });
       renderApplicationDetail(elements, detail, events.events, artifacts.artifacts); message("Workspace loaded.", "success");
+      if (onWorkspaceOpen) onWorkspaceOpen(applicationId);
     } catch (error) {
       if (error.status === 404) await chrome.storage.local.remove(CURRENT_APPLICATION_KEY);
       message(error.message || "Could not open the Workspace.", "error");

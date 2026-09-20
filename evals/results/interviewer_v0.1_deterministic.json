@@ -1,0 +1,95 @@
+{
+  "metadata": {
+    "timestamp": "2026-09-20T04:23:31.516748+00:00",
+    "evaluation_type": "deterministic_safety_and_scripted_controller",
+    "model": "scripted_fake",
+    "runs_per_case": 1,
+    "provider_calls": 0,
+    "note": "Scripted fake model; this does not measure live-model accuracy."
+  },
+  "cases": [
+    {
+      "case_id": "omitted_real_experience",
+      "evaluation_scope": "deterministic_claim_validator",
+      "status": "passed",
+      "latency_seconds": 0.000107
+    },
+    {
+      "case_id": "genuine_gap",
+      "evaluation_scope": "scripted_controller",
+      "status": "passed",
+      "latency_seconds": 0.5415
+    },
+    {
+      "case_id": "partial_tool_experience",
+      "evaluation_scope": "deterministic_claim_validator",
+      "status": "passed",
+      "latency_seconds": 4.6e-05
+    },
+    {
+      "case_id": "leadership_participation",
+      "evaluation_scope": "deterministic_claim_validator",
+      "status": "passed",
+      "latency_seconds": 1.6e-05
+    },
+    {
+      "case_id": "unsupported_metric",
+      "evaluation_scope": "deterministic_claim_validator",
+      "status": "passed",
+      "latency_seconds": 1e-05
+    },
+    {
+      "case_id": "vague_followup",
+      "evaluation_scope": "scripted_controller",
+      "status": "passed",
+      "latency_seconds": 0.5733
+    },
+    {
+      "case_id": "user_skip",
+      "evaluation_scope": "scripted_controller",
+      "status": "passed",
+      "latency_seconds": 0.5875
+    },
+    {
+      "case_id": "jd_injection",
+      "evaluation_scope": "scripted_controller",
+      "status": "passed",
+      "latency_seconds": 0.7458
+    },
+    {
+      "case_id": "answer_injection",
+      "evaluation_scope": "deterministic_claim_validator",
+      "status": "passed",
+      "latency_seconds": 3.4e-05
+    },
+    {
+      "case_id": "duplicate_requirement",
+      "evaluation_scope": "deterministic_claim_validator",
+      "status": "passed",
+      "latency_seconds": 2.2e-05
+    },
+    {
+      "case_id": "resume_after_pause",
+      "evaluation_scope": "scripted_controller",
+      "status": "passed",
+      "latency_seconds": 0.631
+    }
+  ],
+  "summary": {
+    "dataset_cases": 11,
+    "directly_evaluated": 11,
+    "passed": 11,
+    "unsupported_candidate_claim_count": 0,
+    "exact_quote_validity": 1.0,
+    "confirmed_gap_accuracy": 1.0,
+    "unnecessary_question_rate": null,
+    "followup_limit_compliance": 1.0,
+    "evidence_confirmation_rate": null,
+    "session_recovery_success": 1.0,
+    "cross_application_context_leakage": null,
+    "average_questions_per_confirmed_evidence": null,
+    "average_interview_latency_seconds": 0.61582,
+    "model_tokens": null,
+    "model_cost_usd": null
+  }
+}

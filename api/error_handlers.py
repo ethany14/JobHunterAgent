@@ -54,6 +54,14 @@ from agent_runtime.workspace.errors import (
     StaleApplicationError,
     WorkspaceAssociationError,
 )
+from agent_runtime.evidence.errors import (
+    EvidenceNotFoundError, StaleEvidenceError, EvidenceProvenanceError,
+    InvalidEvidenceTransitionError,
+)
+from agent_runtime.interviewer.errors import (
+    InterviewNotFoundError, InterviewConflictError, InterviewValidationError,
+    InterviewStaleVersionError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +74,36 @@ def _response(status_code: int, code: str, message: str) -> JSONResponse:
 
 
 def install_error_handlers(app: FastAPI) -> None:
+    @app.exception_handler(InterviewNotFoundError)
+    async def interview_missing(_: Request, __: InterviewNotFoundError) -> JSONResponse:
+        return _response(404, "interview_not_found", "The interview or Application was not found.")
+
+    @app.exception_handler(InterviewConflictError)
+    async def interview_conflict(_: Request, __: InterviewConflictError) -> JSONResponse:
+        return _response(409, "interview_conflict", "Interview state changed; refresh and try again.")
+
+    @app.exception_handler(InterviewStaleVersionError)
+    async def interview_stale(_: Request, __: InterviewStaleVersionError) -> JSONResponse:
+        return _response(409, "stale_interview", "Interview version changed; refresh and try again.")
+
+    @app.exception_handler(InterviewValidationError)
+    async def interview_invalid(_: Request, __: InterviewValidationError) -> JSONResponse:
+        return _response(422, "invalid_interview_input", "Interview input or source is invalid.")
+    @app.exception_handler(EvidenceNotFoundError)
+    async def evidence_missing(_: Request, __: EvidenceNotFoundError) -> JSONResponse:
+        return _response(404, "evidence_not_found", "The evidence record was not found.")
+
+    @app.exception_handler(StaleEvidenceError)
+    async def evidence_stale(_: Request, __: StaleEvidenceError) -> JSONResponse:
+        return _response(409, "stale_evidence", "The evidence record changed; refresh it.")
+
+    @app.exception_handler(InvalidEvidenceTransitionError)
+    async def evidence_transition(_: Request, __: InvalidEvidenceTransitionError) -> JSONResponse:
+        return _response(409, "invalid_evidence_transition", "This evidence action is not allowed now.")
+
+    @app.exception_handler(EvidenceProvenanceError)
+    async def evidence_provenance(_: Request, __: EvidenceProvenanceError) -> JSONResponse:
+        return _response(422, "invalid_evidence_provenance", "Evidence source or wording is invalid.")
     @app.exception_handler(SessionNotFoundError)
     async def session_not_found(_: Request, __: SessionNotFoundError) -> JSONResponse:
         return _response(404, "session_not_found", "The session was not found.")

@@ -17,6 +17,7 @@ class ContextBlockKind(StrEnum):
     ACTIVE_TASK = "active_task"
     REQUIRED_SOURCE_EVIDENCE = "required_source_evidence"
     MEMORY = "memory"
+    CAREER_EVIDENCE = "career_evidence"
     CONVERSATION = "conversation"
     REQUIRED_TOOL_RESULTS = "required_tool_results"
     OPTIONAL = "optional"

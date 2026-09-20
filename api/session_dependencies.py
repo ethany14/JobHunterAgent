@@ -19,6 +19,10 @@ from agent_runtime.context.projection import SessionContextProjector
 from agent_runtime.context.repository import ContextSnapshotRepository
 from agent_runtime.memory.repository import MemoryRepository
 from agent_runtime.memory.retrieval import MemoryRetriever
+from agent_runtime.evidence.repository import CareerEvidenceRepository
+from agent_runtime.evidence.retrieval import CareerEvidenceRetriever
+from agent_runtime.interviewer.repository import InterviewRepository
+from agent_runtime.interviewer.controller import InterviewController
 from agent_runtime.memory.policy import LocalOwnerResolver, MemoryPolicy
 from agent_runtime.mcp.client import McpClient
 from agent_runtime.mcp.config import (
@@ -76,6 +80,8 @@ class SessionRuntime:
     project_id: str = LOCAL_PROJECT_ID
     mcp_manager: McpToolManager | None = None
     workspace: JobWorkspaceRepository | None = None
+    evidence: CareerEvidenceRepository | None = None
+    interviewer: InterviewController | None = None
 
     def capability_tools(self, profile: str) -> frozenset[str]:
         base = CAPABILITY_PROFILES[profile]
@@ -141,6 +147,7 @@ def create_session_runtime(
     memories = MemoryRepository(database.session_factory, policy=memory_policy)
     skills = SkillRepository(database.session_factory)
     workspace = JobWorkspaceRepository(database.session_factory)
+    evidence = CareerEvidenceRepository(database.session_factory)
     skill_registry = SkillRegistry(skills)
     skill_router = SkillRouter(SkillDiscovery(skills), SkillLoader(skills))
     projector = SessionContextProjector(
@@ -157,6 +164,9 @@ def create_session_runtime(
         ),
         memories=memories,
         memory_retriever=MemoryRetriever(memories),
+        evidence=evidence,
+        evidence_retriever=CareerEvidenceRetriever(evidence),
+        application_for_session=workspace.application_id_for_session,
         skills=skills,
         skill_router=skill_router,
         available_tool_names=lambda: registry.names(),
@@ -173,6 +183,11 @@ def create_session_runtime(
         context_projector=projector,
         context_snapshots=context_snapshots,
         default_allowed_skills=CAPABILITY_SKILL_PROFILES["job_assistant_readonly"],
+    )
+    interviewer = InterviewController(
+        interviews=InterviewRepository(database.session_factory),
+        sessions=sessions, snapshots=context_snapshots,
+        workspace=workspace, evidence=evidence,
     )
     return SessionRuntime(
         database=database,
@@ -191,6 +206,8 @@ def create_session_runtime(
         project_id=project_id,
         mcp_manager=mcp_manager,
         workspace=workspace,
+        evidence=evidence,
+        interviewer=interviewer,
     )
 
 

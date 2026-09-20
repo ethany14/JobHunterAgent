@@ -15,6 +15,9 @@ import agent_runtime.sessions.models  # noqa: F401
 import agent_runtime.memory.models  # noqa: F401
 import agent_runtime.skills.models  # noqa: F401
 import agent_runtime.context.models  # noqa: F401
+import agent_runtime.evidence.models  # noqa: F401
+import agent_runtime.interviewer.models  # noqa: F401
+import agent_runtime.workspace.models  # noqa: F401
 import custom_agent.models  # noqa: F401
 
 config = context.config

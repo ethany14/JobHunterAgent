@@ -484,6 +484,8 @@ finally:
     manager.stop()
 ```
 
+Career Evidence Vault v0.1 is documented in [agent_runtime/evidence/README.md](agent_runtime/evidence/README.md). Its confirmed/source-grounded records are distinct from Memory, Skills, job requirements, and generated artifacts. The Chrome Context panel supports manually attested candidates and confirmation; resume imports require the original resume on the server.
+
 ### Local FastAPI MCP test on PowerShell
 
 Copy `examples/mcp/local_test_config.json` to a local file and replace its three
@@ -513,3 +515,51 @@ For this example, confirm that no test server remains:
 Get-CimInstance Win32_Process |
   Where-Object { $_.CommandLine -like "*examples*mcp*local_test_server.py*" }
 ```
+# Interviewer Agent v0.1 (local evidence discovery)
+
+For a saved Application with a current Job Snapshot and a MATCH_REPORT, open its
+Workspace detail and choose **Improve Evidence**. The interviewer prioritizes
+unresolved required requirements, asks one short question at a time, and saves
+answers and questions as immutable turns. It uses an existing local Agent Session
+for messages and a Context Snapshot for each model decision. Close and reopen the
+Side Panel, then reopen the same Application to restore the interview. A failed
+model decision can be resumed; a confirmed gap applies only to that Application.
+
+The state flow is `planning → awaiting_answer → planning →
+awaiting_evidence_confirmation → planning`, ending in `completed`, `cancelled`,
+or `failed`. The controller caps questions (10 by default, 20 maximum) and
+follow-ups (2 by default, 3 maximum). An exhausted clarification remains
+unresolved; it is not treated as a user skip or as proof of no experience.
+Questions may not suggest accomplishments or demographic answers. Generated
+claims must be literal spans of the saved user answer. An Evidence Candidate is
+not reusable confirmed evidence: the user must explicitly confirm or edit and
+confirm it. A rejection does not confirm it. An edit must remain grounded in the
+original answer. An explicit no-experience answer records only an
+Application-specific gap.
+
+The interviewer sees only the current Application, its current Snapshot and
+requirement, the matching artifact, a few related confirmed Career Evidence
+items, and recent turns. Its effective tool set is empty. It does not receive
+other Applications, unrelated evidence, or MCP tools. Snapshot references record
+the exact source and evidence versions; `interviewer-v1` identifies the trusted
+prompt procedure. A saved answer is not repeated after a recoverable model
+failure. The immutable interview turns are authoritative if a crash occurs
+before their Session message mirrors are synchronized. The first restore or
+resume repairs those mirrors. Model calls may be repeated if a process crashes
+before a question or classification is persisted; no external write tools run.
+
+Local APIs use `/api/applications/{application_id}/interviews` to start and
+`/api/interviews/{interview_session_id}` for state. Answer, skip, confirm-gap,
+candidate confirm/reject, cancel, and resume are POST subroutes. Mutations
+require `expected_version` and `idempotency_key`. This local deployment does
+not provide multi-user authorization. Resume/JD and interview answers remain in
+the local SQLite database; protect and delete that file according to your own
+privacy needs.
+
+Run deterministic safety evaluation with
+`python -m evals.run_interviewer_evals`. Its versioned artifact reports only
+deterministic claim-validation and scripted-model controller cases. Additional
+integration checks are in `tests/test_interviewer.py`. Model tokens, cost, and real-world interview
+quality are not measured by this fake-model suite. A live-model evaluation is
+still needed before claiming general accuracy. Mock behavioral interviews,
+automatic resume rewriting, and automatic evidence confirmation are deferred.

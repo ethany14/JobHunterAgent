@@ -9,6 +9,8 @@ from fastapi import FastAPI
 
 from api.error_handlers import install_error_handlers
 from api.context_routes import router as context_router
+from api.evidence_routes import router as evidence_router
+from api.interview_routes import router as interview_router
 from api.routes.runs import router as runs_router
 from api.session_dependencies import SessionRuntime, create_session_runtime
 from api.session_routes import router as sessions_router
@@ -57,6 +59,8 @@ def create_app(
     application.include_router(runs_router)
     application.include_router(sessions_router)
     application.include_router(context_router)
+    application.include_router(evidence_router)
+    application.include_router(interview_router)
     application.include_router(workspace_router)
     install_error_handlers(application)
 

@@ -31,6 +31,8 @@ import {
 } from "./api-client.js";
 import { extractJobDescriptionFromPage } from "./extractor.js";
 import { createWorkspaceController } from "./workspace-controller.js";
+import { createEvidenceController } from "./evidence-controller.js";
+import { createInterviewController } from "./interview-controller.js";
 
 const MAX_TEXT_LENGTH = 50_000;
 const POLL_INTERVAL_MS = 1_500;
@@ -110,6 +112,26 @@ const elements = {
   refreshMemories: document.querySelector("#refresh-memories-button"),
   skillList: document.querySelector("#skill-list"),
   refreshSkills: document.querySelector("#refresh-skills-button"),
+  evidenceList: document.querySelector("#evidence-list"),
+  evidenceRefresh: document.querySelector("#refresh-evidence-button"),
+  evidenceClaim: document.querySelector("#evidence-claim"),
+  evidenceCategory: document.querySelector("#evidence-category"),
+  evidenceCreate: document.querySelector("#create-evidence-button"),
+  evidenceSearch: document.querySelector("#evidence-search"),
+  evidenceFilter: document.querySelector("#evidence-filter"),
+  interviewStart: document.querySelector("#start-interview-button"),
+  interviewProgress: document.querySelector("#interview-progress"),
+  interviewRequirement: document.querySelector("#interview-requirement"),
+  interviewQuestion: document.querySelector("#interview-question"),
+  interviewAnswer: document.querySelector("#interview-answer"),
+  interviewSubmit: document.querySelector("#submit-interview-answer"),
+  interviewNoExperience: document.querySelector("#interview-no-experience"),
+  interviewSkip: document.querySelector("#interview-skip"),
+  interviewCandidate: document.querySelector("#interview-candidate"),
+  interviewSaveLater: document.querySelector("#interview-save-later"),
+  interviewRecover: document.querySelector("#interview-resume"),
+  interviewCancel: document.querySelector("#interview-cancel"),
+  interviewStatusList: document.querySelector("#interview-status-list"),
   saveJob: document.querySelector("#save-job-button"),
   openWorkspace: document.querySelector("#open-workspace-button"),
   savedApplicationId: document.querySelector("#saved-application-id"),
@@ -141,6 +163,7 @@ const elements = {
 };
 
 let currentRunId = null;
+let interviewController = null;
 let currentResumeText = "";
 let analysisBusy = false;
 let sessionBusy = false;
@@ -1422,7 +1445,32 @@ const workspaceController = createWorkspaceController({
     renderRun(await getRun(runId));
   },
   onOpenAssistant: (applicationId) => startSession(null, applicationId),
+  onWorkspaceOpen: (applicationId) => interviewController?.load(applicationId),
   onMessage: setWorkspaceMessage,
+});
+
+interviewController = createInterviewController({
+  elements: {
+    start: elements.interviewStart, progress: elements.interviewProgress,
+    requirement: elements.interviewRequirement, question: elements.interviewQuestion,
+    answer: elements.interviewAnswer, submit: elements.interviewSubmit,
+    noExperience: elements.interviewNoExperience, skip: elements.interviewSkip,
+    candidate: elements.interviewCandidate, saveLater: elements.interviewSaveLater,
+    recover: elements.interviewRecover, cancel: elements.interviewCancel,
+    statusList: elements.interviewStatusList,
+  },
+  onMessage: setWorkspaceMessage,
+});
+
+const evidenceController = createEvidenceController({
+  elements: {
+    list: elements.evidenceList, refresh: elements.evidenceRefresh,
+    claim: elements.evidenceClaim, category: elements.evidenceCategory,
+    create: elements.evidenceCreate, search: elements.evidenceSearch,
+    filter: elements.evidenceFilter,
+  },
+  applicationId: () => workspaceController.state.current?.application_id || null,
+  onError: (error) => setContextMessage(error?.message || "Career Evidence request failed.", "error"),
 });
 
 elements.healthButton.addEventListener("click", checkHealth);
@@ -1436,6 +1484,7 @@ elements.assistantTab.addEventListener("click", () => switchPanel("assistant"));
 elements.contextTab.addEventListener("click", () => {
   switchPanel("context");
   refreshContextPanel();
+  evidenceController.refresh();
 });
 elements.extract.addEventListener("click", extractJobDescription);
 elements.analyze.addEventListener("click", analyze);
