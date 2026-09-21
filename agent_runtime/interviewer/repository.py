@@ -23,6 +23,7 @@ from agent_runtime.interviewer.types import (
     ApplicationRequirementAssessment, EvidenceAssessmentStatus, InterviewSession,
     InterviewStatus, InterviewTurn, InterviewTurnType,
 )
+from agent_runtime.sessions.models import AgentSessionRow
 from agent_runtime.security import canonical_json
 from agent_runtime.workspace.models import ApplicationArtifactRow, ApplicationRow, JobSnapshotRow
 from job_agent.domain import normalize_text
@@ -56,7 +57,9 @@ class InterviewRepository:
     def _interview(row: InterviewSessionRow) -> InterviewSession:
         return InterviewSession(
             interview_session_id=row.interview_session_id, application_id=row.application_id,
-            snapshot_id=row.snapshot_id, agent_session_id=row.agent_session_id,
+            snapshot_id=row.snapshot_id,
+            source_match_artifact_id=row.source_match_artifact_id,
+            agent_session_id=row.agent_session_id,
             status=row.status, current_assessment_id=row.current_assessment_id,
             pending_answer_turn_id=row.pending_answer_turn_id,
             pending_candidate_evidence_id=row.pending_candidate_evidence_id,
@@ -129,10 +132,9 @@ class InterviewRepository:
             existing = session.scalars(select(AssessmentRow).where(
                 AssessmentRow.application_id == application_id,
                 AssessmentRow.snapshot_id == app.current_snapshot_id,
+                AssessmentRow.source_match_artifact_id == match.artifact_id,
             )).all()
             if existing:
-                if any(row.source_match_artifact_id != match.artifact_id for row in existing):
-                    raise InterviewConflictError("A newer match report requires a new interview assessment.")
                 return [self._assessment(row) for row in sorted(existing, key=lambda r: r.jd_order)]
             seen: set[str] = set()
             now = datetime.now(UTC)
@@ -164,7 +166,8 @@ class InterviewRepository:
             return [self._assessment(row) for row in rows]
 
     def create(self, application_id: str, agent_session_id: str, snapshot_id: str,
-               *, max_questions: int = 10, max_followups: int = 2) -> InterviewSession:
+               *, source_match_artifact_id: str | None = None,
+               max_questions: int = 10, max_followups: int = 2) -> InterviewSession:
         if not 1 <= max_questions <= 20 or not 0 <= max_followups <= 3:
             raise InterviewValidationError("Interview limits are out of range.")
         with self._factory.begin() as session:
@@ -179,7 +182,9 @@ class InterviewRepository:
             now = datetime.now(UTC)
             row = InterviewSessionRow(
                 interview_session_id=str(uuid4()), application_id=application_id,
-                snapshot_id=snapshot_id, agent_session_id=agent_session_id,
+                snapshot_id=snapshot_id,
+                source_match_artifact_id=source_match_artifact_id,
+                agent_session_id=agent_session_id,
                 status=InterviewStatus.PLANNING.value, current_assessment_id=None,
                 pending_answer_turn_id=None, pending_candidate_evidence_id=None,
                 questions_asked=0, max_questions=max_questions,
@@ -195,6 +200,15 @@ class InterviewRepository:
         with self._factory() as session:
             return self._interview(self._require(session, interview_id))
 
+    def for_task(self, task_id: str) -> InterviewSession | None:
+        with self._factory() as session:
+            row = session.scalar(select(InterviewSessionRow).join(
+                AgentSessionRow,
+                AgentSessionRow.session_id == InterviewSessionRow.agent_session_id).where(
+                AgentSessionRow.task_id == task_id).order_by(
+                InterviewSessionRow.created_at.desc()))
+            return self._interview(row) if row else None
+
     def active_for_application(self, application_id: str) -> InterviewSession | None:
         with self._factory() as session:
             row = session.scalar(select(InterviewSessionRow).where(
@@ -203,12 +217,16 @@ class InterviewRepository:
             ))
             return self._interview(row) if row else None
 
-    def assessments(self, application_id: str, snapshot_id: str) -> list[ApplicationRequirementAssessment]:
+    def assessments(self, application_id: str, snapshot_id: str,
+                    *, source_match_artifact_id: str | None = None) -> list[ApplicationRequirementAssessment]:
         with self._factory() as session:
-            rows = session.scalars(select(AssessmentRow).where(
+            query = select(AssessmentRow).where(
                 AssessmentRow.application_id == application_id,
                 AssessmentRow.snapshot_id == snapshot_id,
-            ).order_by(AssessmentRow.jd_order)).all()
+            )
+            if source_match_artifact_id is not None:
+                query = query.where(AssessmentRow.source_match_artifact_id == source_match_artifact_id)
+            rows = session.scalars(query.order_by(AssessmentRow.jd_order)).all()
             return [self._assessment(row) for row in rows]
 
     def turns(self, interview_id: str, *, limit: int = 100) -> list[InterviewTurn]:

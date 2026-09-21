@@ -33,6 +33,9 @@ class Database:
         import agent_runtime.context.models  # noqa: F401
         import agent_runtime.evidence.models  # noqa: F401
         import agent_runtime.interviewer.models  # noqa: F401
+        import agent_runtime.mock_interview.models  # noqa: F401
+        import agent_runtime.application_pack.models  # noqa: F401
+        import agent_runtime.multi_agent.models  # noqa: F401
         import agent_runtime.workspace.models  # noqa: F401
         import custom_agent.models  # noqa: F401
 
@@ -65,6 +68,7 @@ def create_database(
         def enable_foreign_keys(dbapi_connection, _) -> None:
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute("PRAGMA busy_timeout=2000")
             cursor.close()
     database = Database(
         engine=engine,

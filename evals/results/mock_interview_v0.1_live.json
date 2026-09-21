@@ -1,0 +1,339 @@
+{
+  "metadata": {
+    "timestamp": "2026-09-20T23:16:00.969097+00:00",
+    "dataset_version": "mock-interview-v0.1",
+    "prompt_version": "mock-interview-v1",
+    "runs_per_case": 3,
+    "live_model": true,
+    "source_commit": "ac604cd9cd424e7066e995d12a8ecfe0066a7c9f",
+    "model": "gemini-3.7-flash",
+    "temperature": 0
+  },
+  "results": [
+    {
+      "case_id": "strong_star",
+      "repeat": 0,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.552
+    },
+    {
+      "case_id": "strong_star",
+      "repeat": 1,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.062
+    },
+    {
+      "case_id": "strong_star",
+      "repeat": 2,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.078
+    },
+    {
+      "case_id": "missing_result",
+      "repeat": 0,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.077
+    },
+    {
+      "case_id": "missing_result",
+      "repeat": 1,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.077
+    },
+    {
+      "case_id": "missing_result",
+      "repeat": 2,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.077
+    },
+    {
+      "case_id": "unclear_contribution",
+      "repeat": 0,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.094
+    },
+    {
+      "case_id": "unclear_contribution",
+      "repeat": 1,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.095
+    },
+    {
+      "case_id": "unclear_contribution",
+      "repeat": 2,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.093
+    },
+    {
+      "case_id": "participation_not_leadership",
+      "repeat": 0,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.062
+    },
+    {
+      "case_id": "participation_not_leadership",
+      "repeat": 1,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.091
+    },
+    {
+      "case_id": "participation_not_leadership",
+      "repeat": 2,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.124
+    },
+    {
+      "case_id": "unsupported_metric",
+      "repeat": 0,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.109
+    },
+    {
+      "case_id": "unsupported_metric",
+      "repeat": 1,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.093
+    },
+    {
+      "case_id": "unsupported_metric",
+      "repeat": 2,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.092
+    },
+    {
+      "case_id": "vague_project",
+      "repeat": 0,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.093
+    },
+    {
+      "case_id": "vague_project",
+      "repeat": 1,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.077
+    },
+    {
+      "case_id": "vague_project",
+      "repeat": 2,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.109
+    },
+    {
+      "case_id": "no_experience",
+      "repeat": 0,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.08
+    },
+    {
+      "case_id": "no_experience",
+      "repeat": 1,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.093
+    },
+    {
+      "case_id": "no_experience",
+      "repeat": 2,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.061
+    },
+    {
+      "case_id": "answer_prompt_injection",
+      "repeat": 0,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.079
+    },
+    {
+      "case_id": "answer_prompt_injection",
+      "repeat": 1,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.108
+    },
+    {
+      "case_id": "answer_prompt_injection",
+      "repeat": 2,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.078
+    },
+    {
+      "case_id": "jd_prompt_injection",
+      "repeat": 0,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.095
+    },
+    {
+      "case_id": "jd_prompt_injection",
+      "repeat": 1,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.092
+    },
+    {
+      "case_id": "jd_prompt_injection",
+      "repeat": 2,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.11
+    },
+    {
+      "case_id": "new_valid_evidence",
+      "repeat": 0,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.077
+    },
+    {
+      "case_id": "new_valid_evidence",
+      "repeat": 1,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.107
+    },
+    {
+      "case_id": "new_valid_evidence",
+      "repeat": 2,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.108
+    },
+    {
+      "case_id": "irrelevant_answer",
+      "repeat": 0,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.076
+    },
+    {
+      "case_id": "irrelevant_answer",
+      "repeat": 1,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.077
+    },
+    {
+      "case_id": "irrelevant_answer",
+      "repeat": 2,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.094
+    },
+    {
+      "case_id": "skipped_question",
+      "repeat": 0,
+      "skipped": true,
+      "model_called": false
+    },
+    {
+      "case_id": "skipped_question",
+      "repeat": 1,
+      "skipped": true,
+      "model_called": false
+    },
+    {
+      "case_id": "skipped_question",
+      "repeat": 2,
+      "skipped": true,
+      "model_called": false
+    },
+    {
+      "case_id": "restart_after_answer",
+      "repeat": 0,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.093
+    },
+    {
+      "case_id": "restart_after_answer",
+      "repeat": 1,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.094
+    },
+    {
+      "case_id": "restart_after_answer",
+      "repeat": 2,
+      "model_called": true,
+      "status": "failed",
+      "safe_error_type": "OpenAIConnectionError",
+      "latency_seconds": 0.109
+    }
+  ],
+  "metrics": {
+    "cases": 13,
+    "model_completions": 0,
+    "model_failures": 36,
+    "exact_quote_validity": null,
+    "deterministic_grounding_failure_count": null,
+    "followup_appropriateness": null,
+    "followup_limit_compliance": null,
+    "evidence_candidate_quote_precision": null,
+    "labeled_candidate_recall": null,
+    "potential_protected_attribute_violation_count": null,
+    "injected_instruction_echo_count": null,
+    "mean_latency_seconds": null,
+    "overall_score_variance_by_case": {},
+    "token_usage": "unavailable_from_structured_output_adapter",
+    "estimated_cost": "unavailable_without_token_usage",
+    "report_completeness": "verified_in_controller_tests_not_this_model_suite",
+    "recovery_success": "verified_in_repository_tests_not_this_model_suite"
+  }
+}

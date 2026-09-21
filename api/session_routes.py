@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from agent_runtime.sessions.outcome import SessionOutcome
 from agent_runtime.errors import UnknownToolError
@@ -37,6 +37,14 @@ from api.session_schemas import (
 )
 from agent_runtime.mcp.types import McpToolProvenance
 from api.services.run_service import RunNotFoundError
+
+
+def _require_public_session(runtime: SessionRuntime, session_id: str) -> SessionState:
+    state = runtime.sessions.require(session_id)
+    if state.task_id is not None:
+        raise HTTPException(status_code=403, detail={
+            "code": "child_session_private", "message": "Child task sessions are private."})
+    return state
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -249,6 +257,7 @@ def list_sessions(
                 updated_at=state.updated_at,
             )
             for state in runtime.sessions.list_recent(limit=limit)
+            if state.task_id is None
         ]
     )
 
@@ -258,7 +267,7 @@ def get_session(
     session_id: str,
     runtime: SessionRuntime = Depends(get_session_runtime),
 ) -> SessionResponse:
-    return _response(runtime, runtime.sessions.require(session_id))
+    return _response(runtime, _require_public_session(runtime, session_id))
 
 
 @router.get("/{session_id}/messages", response_model=SessionMessagesResponse)
@@ -266,7 +275,7 @@ def get_messages(
     session_id: str,
     runtime: SessionRuntime = Depends(get_session_runtime),
 ) -> SessionMessagesResponse:
-    runtime.sessions.require(session_id)
+    _require_public_session(runtime, session_id)
     messages = []
     for stored in runtime.sessions.messages(session_id):
         if stored.visibility not in {
@@ -300,6 +309,7 @@ def submit_message(
     request: SubmitMessageRequest,
     runtime: SessionRuntime = Depends(get_session_runtime),
 ) -> SessionResponse:
+    _require_public_session(runtime, session_id)
     if not request.content.strip():
         raise ValueError("Message content must not be blank.")
     outcome = runtime.coordinator.submit_user_message(
@@ -324,6 +334,7 @@ def approve_tool_call(
     request: VersionedMutationRequest,
     runtime: SessionRuntime = Depends(get_session_runtime),
 ) -> SessionResponse:
+    _require_public_session(runtime, session_id)
     outcome = runtime.coordinator.approve_tool_call(
         session_id, tool_call_id, expected_version=request.expected_version
     )
@@ -340,6 +351,7 @@ def reject_tool_call(
     request: VersionedMutationRequest,
     runtime: SessionRuntime = Depends(get_session_runtime),
 ) -> SessionResponse:
+    _require_public_session(runtime, session_id)
     outcome = runtime.coordinator.reject_tool_call(
         session_id, tool_call_id, expected_version=request.expected_version
     )
@@ -352,6 +364,7 @@ def cancel_session(
     request: CancelSessionRequest,
     runtime: SessionRuntime = Depends(get_session_runtime),
 ) -> SessionResponse:
+    _require_public_session(runtime, session_id)
     state = runtime.coordinator.request_cancel(
         session_id,
         request.reason,
@@ -366,6 +379,7 @@ def recover_session(
     request: VersionedMutationRequest,
     runtime: SessionRuntime = Depends(get_session_runtime),
 ) -> SessionResponse:
+    _require_public_session(runtime, session_id)
     outcome = runtime.coordinator.recover_session(
         session_id,
         worker_id=f"api-recovery-{uuid4()}",

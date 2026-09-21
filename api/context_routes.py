@@ -340,6 +340,10 @@ def _public_snapshot(runtime: SessionRuntime, snapshot: ContextSnapshot) -> Publ
 def session_context(session_id: str,
                     runtime: SessionRuntime = Depends(get_session_runtime)) -> SessionContextResponse:
     state = runtime.sessions.require(session_id)
+    if state.task_id is not None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail={
+            "code": "child_session_private", "message": "Child task context is private."})
     profile = _owner(runtime)
     if state.user_id not in {None, profile.owner_id}:
         from agent_runtime.sessions.errors import SessionNotFoundError

@@ -5,7 +5,7 @@ import {
   mutateInterview, startInterview,
 } from "./api-client.js";
 
-export function createInterviewController({ elements, onMessage }) {
+export function createInterviewController({ elements, onMessage, onChange = () => {} }) {
   let applicationId = null;
   let view = null;
   let busy = false;
@@ -97,6 +97,7 @@ export function createInterviewController({ elements, onMessage }) {
       const key = mutationKey(kind, view.interview.version, extra);
       render(await mutateInterview(view.interview.interview_session_id,
         kind, view.interview.version, { ...extra, idempotency_key: key }));
+      onChange(view?.interview?.status);
       retry = null;
       elements.answer.value = "";
     } catch (error) {
@@ -118,6 +119,7 @@ export function createInterviewController({ elements, onMessage }) {
       render(await decideInterviewCandidate(view.interview.interview_session_id,
         view.candidate.evidence_id, kind, view.interview.version,
         { ...extra, idempotency_key: key }));
+      onChange(view?.interview?.status);
       retry = null;
     } catch (error) {
       if (error.status === 409) {

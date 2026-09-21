@@ -1,0 +1,28 @@
+{
+  "run_metadata": {
+    "timestamp": "2026-09-20T20:49:58.039905+00:00",
+    "dataset_version": "multi-agent-v0.1-fake",
+    "model_calls": 0
+  },
+  "metrics": {
+    "plan_completion_rate": 0.75,
+    "expected_behavior_achieved": 4,
+    "task_retry_rate": 0.2,
+    "recovery_success": true,
+    "cancellation_latency_seconds": 0.004778,
+    "dependency_correct": true,
+    "context_leakage_count": 0,
+    "duplicate_artifact_count": 0,
+    "parallel_speedup": null,
+    "scheduling_overhead_seconds": 0.071151,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_cost_usd": 0.0
+  },
+  "cases": {
+    "sequential": "succeeded",
+    "retry": "succeeded",
+    "recovery": "succeeded",
+    "cancel": "cancelled"
+  }
+}

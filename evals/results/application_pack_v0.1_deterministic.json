@@ -1,0 +1,153 @@
+{
+  "run_metadata": {
+    "timestamp": "2026-09-20T19:14:32.499906+00:00",
+    "dataset_version": "application-pack-v1",
+    "evaluator": "deterministic-artifact-verifier",
+    "model_calls": 0
+  },
+  "results": [
+    {
+      "case_id": "resume_source",
+      "kind": "claim",
+      "label": "supported",
+      "expected": true,
+      "actual": true,
+      "passed": true,
+      "latency_seconds": 0.000277
+    },
+    {
+      "case_id": "interviewer_confirmed",
+      "kind": "claim",
+      "label": "supported",
+      "expected": true,
+      "actual": true,
+      "passed": true,
+      "latency_seconds": 3.9e-05
+    },
+    {
+      "case_id": "unsupported_cloud",
+      "kind": "claim",
+      "label": "unsupported",
+      "expected": false,
+      "actual": false,
+      "passed": true,
+      "latency_seconds": 3e-05
+    },
+    {
+      "case_id": "unsupported_revenue",
+      "kind": "claim",
+      "label": "unsupported",
+      "expected": false,
+      "actual": false,
+      "passed": true,
+      "latency_seconds": 2.2e-05
+    },
+    {
+      "case_id": "participation_not_leadership",
+      "kind": "claim",
+      "label": "unsupported",
+      "expected": false,
+      "actual": false,
+      "passed": true,
+      "latency_seconds": 2.1e-05
+    },
+    {
+      "case_id": "class_not_production",
+      "kind": "claim",
+      "label": "unsupported",
+      "expected": false,
+      "actual": false,
+      "passed": true,
+      "latency_seconds": 2.1e-05
+    },
+    {
+      "case_id": "no_company_research",
+      "kind": "claim",
+      "label": "supported",
+      "expected": true,
+      "actual": true,
+      "passed": true,
+      "latency_seconds": 1.8e-05
+    },
+    {
+      "case_id": "short_answer",
+      "kind": "claim",
+      "label": "supported",
+      "expected": true,
+      "actual": true,
+      "passed": true,
+      "latency_seconds": 1.6e-05
+    },
+    {
+      "case_id": "character_limit",
+      "kind": "claim",
+      "label": "length",
+      "expected": false,
+      "actual": false,
+      "passed": true,
+      "latency_seconds": 1.8e-05
+    },
+    {
+      "case_id": "sponsorship",
+      "kind": "question",
+      "label": null,
+      "expected": true,
+      "actual": true,
+      "passed": true,
+      "latency_seconds": 5e-06
+    },
+    {
+      "case_id": "demographic",
+      "kind": "question",
+      "label": null,
+      "expected": true,
+      "actual": true,
+      "passed": true,
+      "latency_seconds": 2e-06
+    },
+    {
+      "case_id": "changed_evidence_stale",
+      "kind": "staleness",
+      "label": null,
+      "expected": true,
+      "actual": true,
+      "passed": true,
+      "latency_seconds": 8.2e-05
+    },
+    {
+      "case_id": "injected_jd_or_question",
+      "kind": "claim",
+      "label": "unsupported",
+      "expected": false,
+      "actual": false,
+      "passed": true,
+      "latency_seconds": 1.8e-05
+    },
+    {
+      "case_id": "injected_evidence_instruction",
+      "kind": "claim",
+      "label": "unsupported",
+      "expected": false,
+      "actual": false,
+      "passed": true,
+      "latency_seconds": 1.5e-05
+    }
+  ],
+  "metrics": {
+    "cases": 14,
+    "expected_behavior_achieved": 14,
+    "unsupported_claim_detection_recall": 1.0,
+    "supported_claim_false_positive_rate": 0.0,
+    "invalid_citation_acceptance_rate": 0.0,
+    "jd_as_evidence_violations": 0,
+    "candidate_evidence_leakage": null,
+    "length_compliance": true,
+    "restricted_question_refusal_accuracy": 1.0,
+    "revision_success_rate": null,
+    "preference_adherence": null,
+    "mean_generation_latency_seconds": null,
+    "mean_model_tokens": null,
+    "mean_estimated_cost_usd": null,
+    "restart_recovery_success": null
+  }
+}

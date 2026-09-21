@@ -98,6 +98,7 @@ class ToolExecutor:
                 **effective_request.model_dump(exclude={"arguments"}), arguments=canonical_arguments),
             tool_version=_tool_version(tool), risk_level=tool.risk_level,
             scope_type=scope_type, scope_id=scope_id, arguments_hash=digest,
+            task_id=context.task_id, attempt_id=context.attempt_id,
             redacted_arguments=redact_sensitive(canonical_arguments),
             side_effect=getattr(tool, "side_effect", None),
             idempotent=getattr(tool, "idempotent", None),

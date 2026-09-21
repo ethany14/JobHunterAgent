@@ -62,6 +62,15 @@ from agent_runtime.interviewer.errors import (
     InterviewNotFoundError, InterviewConflictError, InterviewValidationError,
     InterviewStaleVersionError,
 )
+from agent_runtime.application_pack.errors import (
+    PackNotFoundError, PackConflictError, PackValidationError,
+)
+from agent_runtime.multi_agent.errors import (
+    TaskNotFoundError, TaskConflictError, InvalidPlanError, BudgetExceededError,
+)
+from agent_runtime.mock_interview.errors import (
+    MockInterviewNotFound, MockInterviewConflict, MockInterviewValidation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +83,45 @@ def _response(status_code: int, code: str, message: str) -> JSONResponse:
 
 
 def install_error_handlers(app: FastAPI) -> None:
+    @app.exception_handler(MockInterviewNotFound)
+    async def mock_missing(_: Request, __: MockInterviewNotFound) -> JSONResponse:
+        return _response(404, "mock_interview_not_found", "The mock interview was not found.")
+
+    @app.exception_handler(MockInterviewConflict)
+    async def mock_conflict(_: Request, __: MockInterviewConflict) -> JSONResponse:
+        return _response(409, "mock_interview_conflict", "Interview state changed; refresh and try again.")
+
+    @app.exception_handler(MockInterviewValidation)
+    async def mock_invalid(_: Request, __: MockInterviewValidation) -> JSONResponse:
+        return _response(422, "invalid_mock_interview", "Interview input or source is invalid.")
+
+    @app.exception_handler(TaskNotFoundError)
+    async def task_missing(_: Request, __: TaskNotFoundError) -> JSONResponse:
+        return _response(404, "task_not_found", "The task was not found.")
+
+    @app.exception_handler(InvalidPlanError)
+    async def invalid_plan(_: Request, __: InvalidPlanError) -> JSONResponse:
+        return _response(422, "invalid_plan", "The server-approved plan is invalid or unavailable.")
+
+    @app.exception_handler((TaskConflictError))
+    async def task_conflict(_: Request, __: TaskConflictError) -> JSONResponse:
+        return _response(409, "task_conflict", "Task state changed; refresh and try again.")
+
+    @app.exception_handler(BudgetExceededError)
+    async def task_budget(_: Request, __: BudgetExceededError) -> JSONResponse:
+        return _response(409, "task_budget_exceeded", "The task budget was reached.")
+
+    @app.exception_handler(PackNotFoundError)
+    async def pack_missing(_: Request, __: PackNotFoundError) -> JSONResponse:
+        return _response(404, "pack_not_found", "The Pack, item, or Application was not found.")
+
+    @app.exception_handler(PackConflictError)
+    async def pack_conflict(_: Request, __: PackConflictError) -> JSONResponse:
+        return _response(409, "pack_conflict", "Pack state changed; refresh and try again.")
+
+    @app.exception_handler(PackValidationError)
+    async def pack_invalid(_: Request, __: PackValidationError) -> JSONResponse:
+        return _response(422, "invalid_pack_input", "Pack inputs or source are invalid.")
     @app.exception_handler(InterviewNotFoundError)
     async def interview_missing(_: Request, __: InterviewNotFoundError) -> JSONResponse:
         return _response(404, "interview_not_found", "The interview or Application was not found.")

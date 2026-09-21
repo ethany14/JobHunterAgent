@@ -125,6 +125,21 @@
           <details><summary>Analysis runs</summary><div id="workspace-runs"></div></details>
           <details><summary>Recent events</summary><div id="workspace-events"></div></details>
           <details><summary>Artifact versions</summary><div id="workspace-artifacts"></div></details>
+          <section class="interview-section" id="multi-agent-workflow-section">
+            <h3>Workflow</h3>
+            <label>Mode<select id="workflow-mode"><option value="single_custom">Standard</option><option value="multi_agent_v1">Multi-Agent</option></select></label>
+            <div id="multi-agent-options" hidden>
+              <p class="muted">Uses the saved Application, an attached analyzed resume run, and confirmed evidence.</p>
+              <label><input id="multi-agent-resume" type="checkbox" checked> Tailored resume</label>
+              <label><input id="multi-agent-cover" type="checkbox"> Cover letter</label>
+              <label><input id="multi-agent-interview" type="checkbox"> Ask evidence questions when needed</label>
+              <label>Application question (optional)<textarea id="multi-agent-question" rows="2" maxlength="5000"></textarea></label>
+              <div class="workspace-actions"><button id="multi-agent-start" class="primary-button" type="button">Start Multi-Agent workflow</button><button id="multi-agent-cancel" class="text-button danger-text" type="button" hidden>Cancel</button><button id="multi-agent-skip-interview" class="secondary-button" type="button" hidden>Continue after cancelling interview</button></div>
+            </div>
+            <p id="multi-agent-status" class="muted">Standard workflow selected.</p>
+            <div id="multi-agent-progress" class="context-list"></div>
+          </section>
+          <details id="task-activity-panel"><summary>Task Activity</summary><div id="task-activity-list" class="context-list"></div></details>
           <section class="interview-section">
             <div class="section-heading"><h3>Improve Evidence</h3><button id="start-interview-button" class="secondary-button" type="button">Start or resume interview</button></div>
             <p id="interview-progress" class="muted">No active evidence interview.</p>
@@ -136,6 +151,34 @@
             <div id="interview-candidate" class="context-list"></div>
             <div class="workspace-actions"><button id="interview-save-later" class="text-button" type="button">Save and continue later</button><button id="interview-resume" class="secondary-button" type="button" hidden>Recover interview</button><button id="interview-cancel" class="text-button danger-text" type="button">Cancel interview</button></div>
             <div id="interview-status-list" class="context-list"></div>
+          </section>
+          <section class="interview-section" id="pack-section">
+            <div class="section-heading"><h3>Application Pack</h3><button id="pack-create" class="secondary-button" type="button">Generate new Pack</button></div>
+            <p id="pack-status" class="muted">No Pack loaded.</p>
+            <div class="workspace-actions"><button id="pack-resume" class="secondary-button" type="button">Resume</button><button id="pack-cover" class="secondary-button" type="button">Cover Letter</button></div>
+            <label>Application question<textarea id="pack-question" rows="3" maxlength="5000" placeholder="Paste an application question to answer"></textarea></label>
+            <label>Character limit (optional)<input id="pack-max-length" type="number" min="1" max="10000"></label>
+            <button id="pack-answer" class="secondary-button" type="button">Generate Answer</button>
+            <div class="workspace-actions"><button id="pack-tab-resume" class="text-button" type="button">Resume</button><button id="pack-tab-cover" class="text-button" type="button">Cover Letter</button><button id="pack-tab-answers" class="text-button" type="button">Application Answers</button></div>
+            <div id="pack-items" class="context-list"></div>
+          </section>
+          <section class="interview-section" id="mock-interview-section">
+            <h3>Mock Interview</h3>
+            <div class="workspace-edit-grid">
+              <label>Mode<select id="mock-mode"><option value="mixed">Mixed</option><option value="recruiter_screen">Recruiter screen</option><option value="behavioral">Behavioral</option><option value="project_deep_dive">Project deep dive</option><option value="role_specific">Role specific</option></select></label>
+              <label>Difficulty<select id="mock-difficulty"><option value="introductory">Introductory</option><option value="standard" selected>Standard</option><option value="challenging">Challenging</option></select></label>
+              <label>Questions<input id="mock-count" type="number" min="3" max="12" value="5"></label>
+            </div>
+            <div class="workspace-actions"><button id="mock-start" class="primary-button" type="button">Start mock interview</button><button id="mock-new" class="secondary-button" type="button" hidden>New attempt</button></div>
+            <p id="mock-progress" class="muted">No active mock interview.</p>
+            <p id="mock-competency" class="muted"></p>
+            <p id="mock-question"></p>
+            <label for="mock-answer">Your answer</label>
+            <textarea id="mock-answer" rows="5" maxlength="20000"></textarea>
+            <div class="workspace-actions"><button id="mock-submit" class="primary-button" type="button">Submit</button><button id="mock-skip" class="secondary-button" type="button">Skip</button><button id="mock-save" class="text-button" type="button">Save and continue later</button></div>
+            <div class="workspace-actions"><button id="mock-resume" class="secondary-button" type="button" hidden>Recover</button><button id="mock-end" class="text-button" type="button">End early</button><button id="mock-cancel" class="text-button danger-text" type="button">Cancel</button></div>
+            <details><summary>Feedback</summary><div id="mock-feedback" class="context-list"></div></details>
+            <details><summary>Final report and evidence candidates</summary><div id="mock-report" class="context-list"></div></details>
           </section>
         </section>
         <div id="workspace-message" class="message" role="status" aria-live="polite" hidden></div>

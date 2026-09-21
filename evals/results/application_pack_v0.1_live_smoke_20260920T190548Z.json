@@ -1,0 +1,136 @@
+{
+  "run_metadata": {
+    "timestamp": "2026-09-20T19:05:48.174412+00:00",
+    "dataset_version": "application-pack-v1-live-smoke",
+    "prompt_version": "application-pack-v1",
+    "model_calls": 6,
+    "tokens": {
+      "input": 3745,
+      "output": 941,
+      "total": 4686
+    },
+    "estimated_cost_usd": null,
+    "model_configuration": {
+      "model_id": "gemini-3.7-flash",
+      "temperature": 0.0,
+      "max_retries": 0,
+      "endpoint_hash": "255bf6f41a5be8b978ed5d850a85c473d3fc164829a2a58ad726ab07e7f28708"
+    },
+    "logical_model_calls": 6,
+    "cost_basis": "unavailable"
+  },
+  "items": [
+    {
+      "artifact_type": "tailored_resume",
+      "status": "awaiting_review",
+      "revision_count": 1,
+      "verification": {
+        "passed": true,
+        "issues": []
+      },
+      "content": {
+        "experience_bullets": [
+          {
+            "evidence_ids": [
+              "3cc9e99e-9758-47bd-b561-b1622a7b93b8"
+            ],
+            "text": "Built Python APIs."
+          }
+        ],
+        "highlighted_skills": [
+          {
+            "evidence_ids": [
+              "3cc9e99e-9758-47bd-b561-b1622a7b93b8"
+            ],
+            "text": "Python APIs"
+          }
+        ],
+        "professional_summary": [
+          {
+            "evidence_ids": [
+              "3cc9e99e-9758-47bd-b561-b1622a7b93b8"
+            ],
+            "text": "Built Python APIs."
+          }
+        ]
+      },
+      "latency_seconds": 6.57
+    },
+    {
+      "artifact_type": "cover_letter",
+      "status": "awaiting_review",
+      "revision_count": 1,
+      "verification": {
+        "passed": true,
+        "issues": []
+      },
+      "content": {
+        "blocks": [
+          {
+            "block_id": "block-intro",
+            "block_type": "motivation",
+            "evidence_ids": [],
+            "evidence_version_ids": [],
+            "text": "I am writing to express my interest in the Backend Engineer position at Example Company."
+          },
+          {
+            "block_id": "block-factual-python",
+            "block_type": "factual",
+            "evidence_ids": [
+              "afcb0e5d-0a15-4a86-8859-c63e51f37d55"
+            ],
+            "evidence_version_ids": [
+              "3cc9e99e-9758-47bd-b561-b1622a7b93b8"
+            ],
+            "text": "Built Python APIs."
+          },
+          {
+            "block_id": "block-close",
+            "block_type": "closing",
+            "evidence_ids": [],
+            "evidence_version_ids": [],
+            "text": "Thank you for your time and consideration."
+          }
+        ],
+        "closing": "Sincerely,",
+        "greeting": "Dear Hiring Team,"
+      },
+      "latency_seconds": 4.598
+    },
+    {
+      "artifact_type": "application_answer",
+      "status": "awaiting_review",
+      "revision_count": 0,
+      "verification": {
+        "passed": true,
+        "issues": []
+      },
+      "content": {
+        "answer_blocks": [
+          {
+            "block_id": "block-1",
+            "block_type": "factual",
+            "evidence_ids": [
+              "afcb0e5d-0a15-4a86-8859-c63e51f37d55"
+            ],
+            "evidence_version_ids": [
+              "3cc9e99e-9758-47bd-b561-b1622a7b93b8"
+            ],
+            "text": "Built Python APIs."
+          }
+        ],
+        "character_count": 18,
+        "question": "What experience do you have with Python?",
+        "word_count": 3
+      },
+      "latency_seconds": 1.874
+    }
+  ],
+  "manual_question": {
+    "requires_manual_answer": true,
+    "content": null
+  },
+  "error_code": null,
+  "elapsed_seconds": 13.619,
+  "model_error_codes": []
+}

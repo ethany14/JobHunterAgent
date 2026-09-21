@@ -563,3 +563,275 @@ integration checks are in `tests/test_interviewer.py`. Model tokens, cost, and r
 quality are not measured by this fake-model suite. A live-model evaluation is
 still needed before claiming general accuracy. Mock behavioral interviews,
 automatic resume rewriting, and automatic evidence confirmation are deferred.
+
+## Application Pack v0.1
+
+An Application Pack belongs to one saved Application and one immutable Job
+Snapshot. It captures selected **confirmed** Career Evidence versions, their
+content hashes, relevant confirmed writing preferences, and the Pack prompt
+version before generating a tailored resume, cover letter, or an answer to an
+explicitly supplied application question. The Pack uses the existing custom
+resume writer and verifier; the LangGraph baseline remains unchanged. The
+cover-letter and answer writer use the shared model configuration. No job
+requirement or model-generated artifact is treated as candidate evidence.
+When the current analysis run is attached to the Application, its extracted
+resume quotes are checked against that run's original resume and imported as
+confirmed Career Evidence before Pack selection. Interviewer evidence is
+available only after confirmation and an explicit link to the Application.
+
+Pack status moves through `draft`, `generating`, `verifying`,
+`needs_revision`, `awaiting_review`, and `approved` (or `failed`/`stale`).
+Each item has its own status, version and bounded three-revision loop. The
+Pack and item state, immutable ApplicationArtifact version, and audit event
+are saved transactionally. A crash after a model response but before the
+artifact transaction can cause the model call to be repeated; saved artifacts
+are not overwritten. A `verifying` item resumes from its saved artifact.
+Review and edits use optimistic versions and idempotency keys. The old Pack
+remains readable if its Job Snapshot, selected evidence, preference, or prompt
+version changes, but cannot be edited or approved; create a new Pack explicitly.
+Edit and review events record block IDs and accepted, edited, or rejected
+decisions without repeating block text. The generation snapshot stores the
+selected evidence and preference versions plus a safe model ID, temperature,
+retry count, and endpoint hash; it does not store API keys or endpoint URLs.
+
+The deterministic verifier requires each factual block to cite a confirmed
+evidence version captured in that Pack and to be a literal supported excerpt.
+It checks the full block even when the model labels it `motivation` or
+`transition`. This deliberately favors rejecting a useful paraphrase over
+publishing an unsupported claim. A confirmed summary sentence preference is
+checked during verification. Human edits create a new artifact version and
+are verified again. Legal/identity, demographic, logistics, and unknown
+application questions require a manual answer; the agent does not guess
+sponsorship, disability, salary, availability, or similar facts. A manual
+question does not block approval of the required resume and cover letter.
+
+The local API uses `POST /api/applications/{id}/packs` to create a Pack,
+`GET /api/applications/{id}/packs` for history and `GET /api/packs/{id}` for
+detail. Item generation uses `/resume`, `/cover-letter`, or `/questions` under
+the Pack URL. Item actions use `/items/{item_id}/edit`, `/approve`, `/reject`,
+and `/regenerate`; read-only `/evidence`, `/versions`, and Pack `/events`
+support review. A creation `expected_version` is the Application version;
+generation uses the Pack version; item actions use the item version. All
+mutations require an idempotency key. Application Pack tables are created by
+Alembic revision `0017_application_pack`; production does not call
+`create_all()`.
+
+To inspect the bounded synthetic safety evaluation, run
+`python -m evals.run_application_pack_evals`. Its versioned result is
+`evals/results/application_pack_v0.1_deterministic.json`. It makes no model
+calls; generation quality, token use, cost, and live revision success are not
+measured by that artifact. With a configured model endpoint, run the optional
+synthetic smoke test using `python -m evals.run_application_pack_live_smoke`.
+Its unedited model outputs and observed latency/token counts are saved in
+timestamped `evals/results/application_pack_v0.1_live_smoke_*.json` files.
+Cost is reported only
+when the provider or configured per-token rates supply it. Neither artifact
+is a real-world accuracy estimate. Normal unit tests use fake models and
+separate temporary SQLite databases.
+
+For a manual end-to-end check, upgrade the database, start the API, reload
+the unpacked Chrome extension, then open a saved and analyzed Application.
+In **Improve Evidence**, answer one Interviewer question and confirm the
+resulting Evidence Candidate. Click **Generate new Pack** in Workspace and
+generate **Resume**. Inspect its **Evidence** citation and **Verification**
+details, then generate **Cover Letter** and an explicit question such as
+“Why are you a good fit?”. Add a sponsorship question; it must display
+“Manual answer required” with no generated answer. Edit a cited resume
+block and inspect **Versions**; the older version must remain. Restart the
+API, reopen the same Workspace and continue reviewing the saved Pack. Approve
+only versions whose latest verification passed. The Side Panel renders Pack
+content with safe DOM text APIs and does not store Pack content in Chrome
+storage. This remains a trusted local single-user deployment without account
+authorization or automatic application submission.
+
+## Multi-Agent Runtime v0.1 (deterministic infrastructure)
+
+The custom runtime can persist a server-approved task DAG under a parent Session.
+`AgentPlanValidator` checks registered worker types, dependencies, cycles, depth,
+task count, tool permissions, active Skill versions, and explicit input artifact
+references before the repository creates a plan. Each task has its own status,
+version, event stream, attempts, deadline, and immutable output links. The
+parent receives bounded status/summary/artifact references; child Session
+messages and context are hidden from the public Session API.
+
+The task state path is `blocked/pending -> ready -> claimed -> running ->
+succeeded/failed`, with separate `awaiting_approval`, `awaiting_input`,
+`cancel_requested`, `cancelled`, and `timed_out` branches. Only the current
+attempt can finish a task. A successful output and `succeeded` state commit in
+one transaction. Dependency conditions are evaluated in Python from persisted
+task states; a failed `requires_success` predecessor leaves its child blocked.
+An explicit retry uses a fresh attempt and child Session. An expired claim can
+be reclaimed after restart; an approval/input pause is never automatically
+re-executed.
+
+`AgentContextPolicy` starts from explicit input artifact links and a bounded
+selection of parent user/assistant turns. It can include explicitly selected,
+confirmed Memory and Career Evidence, plus active Skill versions. It hashes an
+immutable attempt manifest containing IDs/versions/hashes, effective tools,
+included message IDs, and a token estimate. It never copies a sibling's
+conversation. Effective tools are the intersection of task, parent Session,
+registered, task-type, and current MCP availability; Skill restrictions narrow
+that set further. Workers receive this scoped context and a `ToolContext`
+factory with `task_id` and `attempt_id`; ToolExecutor remains the authority for
+approval and idempotency. Skill procedures cannot override system policy,
+permissions, evidence rules, cancellation, or limits.
+
+One in-process scheduler starts after Alembic and MCP initialization in FastAPI
+lifespan. It uses a conditional SQLite update with expected version to claim
+work, heartbeats without changing the business version, and scans expired
+claims. Shutdown stops new claims before MCP shutdown and waits up to a grace
+period for active workers. Transactions are short and SQLite connections use a
+bounded busy timeout. This is **single-process/local infrastructure**: no
+distributed worker queue or multi-user authorization. Python threads cannot be
+forcibly stopped. A worker/model/tool may run more than once after a crash,
+while task finalization is fenced by attempt ID. External writes retain Tool
+Runtime's `outcome_unknown` semantics; this task layer cannot prove exactly-once
+side effects. Model/tool usage budgets rely on trusted worker instrumentation;
+the opt-in Job workflow registers a fixed business template; browser clients
+cannot launch arbitrary worker code. Automatic LLM planning remains deferred.
+
+Read-focused routes are `POST /api/agent-plans`, `GET /api/agent-tasks/{id}`,
+`GET /api/agent-tasks/{id}/children|events|artifacts`, and versioned
+`cancel|retry|resume` mutations. Plan creation accepts only a server-registered
+template ID. The Workspace **Task Activity** details are diagnostic and render
+text with safe DOM APIs. No prompts, raw tool results, secrets, or unrestricted
+context snapshots are returned. For a no-model infrastructure benchmark run
+`python -m evals.run_multi_agent_evals`; it writes
+`evals/results/multi_agent_v0.1_fake.json`. The benchmark's fake workers do not
+establish real-model latency, cost, or production concurrency behavior.
+
+## Multi-Agent Job Workflow v0.1 (opt-in)
+
+Workspace keeps **Standard** as the default. Choosing **Multi-Agent** calls the
+server-owned `job_application_multi_agent_v1` template. The selected mode is
+persisted on the plan, Pack, and generated artifacts, so restarting the backend
+does not reinterpret an existing execution. Historic Standard Packs remain
+Standard. The REST entry point is
+`POST /api/applications/{application_id}/multi-agent-runs` with the current
+Application version, an idempotency key, a requested artifact set, up to three
+explicit questions, and an optional interview flag. The client cannot submit
+worker definitions, prompts, tools, Skills, or dependencies. Read-only run,
+task, and timeline endpoints plus versioned cancel/resume endpoints live under
+`/api/multi-agent-runs/{root_task_id}`.
+
+The fixed task order is source validation, parallel Candidate and Job analyses,
+matching, evidence-gap classification, optional evidence interview, evidence
+freeze, independent requested writers, verification/revision for each draft,
+and deterministic Pack assembly. Candidate analysis receives the original
+resume without the JD; Job analysis receives the current JobSnapshot without
+the resume. Matching sees only the two typed analyses and up to 50 explicitly
+linked, confirmed Career Evidence items. Writers see one frozen confirmed-evidence snapshot and
+relevant writing preferences. The verifier sees only its draft and that
+snapshot. The assembler sees final draft/report references, not raw source
+text. All worker tool allowlists are empty in this release. Existing business
+prompts, schemas, score rules, evidence selection, writer/verifier services,
+and public Pack schemas are reused.
+
+Each artifact has at most three revisions. Revision tasks are predeclared in
+the bounded DAG and become no-ops after verification passes. An unsupported
+claim at the limit remains `needs_revision`; it cannot be approved as a
+verified artifact. Required failure blocks assembly; optional artifact failure
+permits a partial Pack without erasing a verified required item. Restricted
+application questions stay manual. When an interview requires input, the task
+pauses without holding a worker thread or transaction; its persisted interview
+ID is used after backend restart. The user can complete or cancel that
+interview, then explicitly continue without clarification or cancel the root.
+
+One immutable GenerationEvidenceSnapshot is shared by writers and revisions.
+If the current JobSnapshot, confirmed evidence, or selected preferences change
+after freezing, assembly refuses to publish the old result; start a new
+execution to use the new facts. Task claims fence stale attempts, but model
+calls may be repeated after a crash. No exactly-once model-execution guarantee
+is claimed. Task status and bounded summaries appear in Workspace; complete
+worker prompts, child conversations, and raw provider errors do not.
+
+Behavioral parity gates for a future live paired evaluation are declared before
+looking at model output: no additional forbidden claims, citation validity at
+least as high as Standard, no lower required-artifact review rate, no increase
+in unsupported-claim false negatives, and no restricted question answered by
+the model. Latency, token use, and estimated cost are reported as observed,
+without a claimed improvement threshold. The existing deterministic runtime
+benchmark uses fake workers and does not establish these live-model gates.
+Until a same-dataset, same-model paired evaluation passes, Multi-Agent remains
+opt-in and Standard remains the production default.
+Run `python -m evals.run_job_workflow_component_evals` for the shared,
+deterministic 14-case safety gate. Its result is
+`evals/results/multi_agent_job_workflow_v0.1_component.json`. This runs the
+same verifier and restricted-question rules used by both modes, with zero
+model calls; it explicitly does not measure end-to-end parity, parallel
+speedup, generation quality, latency, tokens, or cost.
+The current release does not yet record per-worker provider token/cost usage
+or write task lifecycle messages into the parent Session; the task/timeline
+API is the supervisor progress source. Revision steps are predeclared rather
+than inserted after a failed verifier result. Live paired parity and ablation
+measurements, including parallel speedup, remain outstanding release gates.
+
+Manual check: run Alembic upgrade, start FastAPI, reload the unpacked extension,
+and open a saved Application with an attached analyzed run and confirmed Career
+Evidence. Select **Multi-Agent**, choose resume, cover letter, and one ordinary
+application question, then start. In the task view, confirm Candidate and Job
+analyses become ready together and matching waits for both. With Interview
+enabled, answer a question and confirm or skip its Evidence Candidate; the
+paused task must resume from the same interview after a backend restart. Watch
+the frozen snapshot, independent writer tasks, and each verification report;
+review the resulting Pack and its artifact provenance. Also try a restricted
+question, cancel an interview and continue without clarification, and verify
+that an approved artifact can still use the existing explicit MCP export path.
+
+### Mock Interview v0.1
+
+The Workspace now has a **Mock Interview** section for a current saved Application.
+It requires a current JobSnapshot, Job Analysis, an approved Pack for that
+snapshot, and unchanged confirmed Career Evidence pinned by the Pack. This is
+practice and coaching, distinct from **Improve Evidence**, which asks questions
+to clarify missing resume evidence. Modes are recruiter screen, behavioral,
+project deep dive, role specific, and mixed. The server builds an immutable,
+deterministic 3–12 question plan, then asks one question at a time. Each main
+question permits at most two follow-ups; the default is one. The model proposes
+questions and coaching, while Python enforces the plan, score bounds (1–5),
+exact answer quotes, and follow-up count. Scores assess an individual practice
+answer, not employability or offer likelihood. No demographic, emotion, accent,
+or personality assessment is performed.
+
+The interview stores its question, original answer, evaluation, event, and
+version separately. The panel can close while awaiting an answer; reopening
+the Application restores the active interview. After a backend restart, a
+saved answer is evaluated once and an evaluated answer is not asked again.
+A failed model step may be retried with **Recover**. Model calls can repeat if
+the process stops before the response is saved; this is not exactly-once
+execution. The final immutable Interview Report includes dimension averages,
+practice priorities, coverage, and candidate evidence references. New facts
+quoted exactly from an answer enter Career Evidence only as **candidate**;
+confirm or reject them explicitly in the report or Evidence Vault. Viewing an
+approved Pack later refreshes staleness if confirmed evidence changed; the
+interview never regenerates the Pack itself.
+
+The optional `mock_interviewer` Multi-Agent worker uses the same persisted
+controller and pauses at `awaiting_input` with an interview ID. Its runtime
+tool allowlist is empty. The independently started Workspace interview does
+not rerun the application workflow. No external research, export, document
+rewrite, evidence confirmation, or application submission is available to
+this worker. Candidate, Job, Pack, and evidence excerpts are pinned to this
+Application and treated as untrusted source data; unrelated interviews and
+private session messages are not sent to the model.
+
+Run `python -m pytest tests/test_mock_interview.py` for the fake-model and
+migration checks. The 13-case synthetic dataset is
+`evals/mock_interview_cases_v0.1.json`; run
+`python -m evals.run_mock_interview_evals --live --runs-per-case 3` for an
+optional real-model result. The runner saves raw evaluations and validity
+checks without repairing outputs. Token use and cost remain unavailable until
+the structured-output adapter exposes provider usage. A deterministic dry run
+without `--live` checks dataset wiring only, not answer quality.
+
+Manual check: apply Alembic migrations, start FastAPI, reload the extension,
+and open a completed Application with an approved Pack. Start a five-question
+mixed interview. Give an incomplete answer and inspect whether a relevant
+follow-up appears. Close and reopen the panel; the same question must remain.
+Give a new real experience with an exact quote, finish early or complete all
+questions, and inspect the report. Confirm its Evidence Candidate explicitly,
+then reload the Pack to observe staleness. For recovery, start another
+interview, stop the backend while awaiting an answer, restart it, reopen the
+same Application, and verify the answer and question sequence are preserved.
+Model-based coaching can still be inconsistent or overinterpret a response;
+review any candidate and suggested phrasing before relying on it.

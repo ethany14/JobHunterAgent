@@ -156,3 +156,55 @@ and verify that the same question and interview progress return. Submit an
 answer once. If a model request fails, use **Recover interview**; the saved
 answer should not be duplicated. This local-only flow has no user login and
 does not grant the interviewer any MCP tools.
+
+## Application Pack manual check
+
+After confirming one Evidence Candidate and analyzing a saved Application,
+open that Workspace and select **Generate new Pack**. Generate the resume,
+cover letter, and an answer to a question you paste. Inspect each item's
+verification, evidence, and immutable version history. Sponsorship and
+demographic questions must request a manual answer. Edit a cited block to
+create a new verified version. Restart FastAPI, reopen the same Workspace,
+and verify that the Pack and its review state return from SQLite. Approve
+verified items only. Pack content is fetched from the backend and never
+cached in Chrome storage.
+
+## Task Activity diagnostics
+
+When a saved Application has server-created Agent tasks, its Workspace shows
+them under **Task Activity**. Expand a task to see its role, status, dependency
+IDs, attempt count, elapsed time, safe failure code, and bounded result summary.
+The panel offers Cancel and, for a failed task with remaining attempts, Retry.
+It does not show child conversations, full context snapshots, prompts, secrets,
+or artifact contents. The Job workflow registers one fixed, opt-in business
+plan; the browser cannot supply worker code or dependencies. This remains
+local single-user infrastructure.
+
+## Multi-Agent Job workflow manual check
+
+After `alembic upgrade head`, start FastAPI and reload the extension. Open an
+analyzed saved Application with confirmed Career Evidence. In Workspace choose
+**Multi-Agent** and select resume, cover letter, and one ordinary application
+question. Start the execution and inspect progress: Candidate and Job analyses
+should become ready together; matching waits for both; writing starts only
+after evidence freezes. Each generated artifact must be verified before the
+Pack appears for review. With the interview option enabled, complete or skip
+an evidence question; a paused interview survives a backend restart. A
+restricted question, such as sponsorship, stays manual. The same Pack review
+and explicit export controls used by Standard mode apply to verified output.
+The Multi-Agent option is experimental; Standard remains the default.
+
+## Mock Interview manual check
+
+Open a saved Application with a current approved Pack. In Workspace, choose a
+mode, difficulty and 3–12 main questions, then start **Mock Interview**. Give
+an incomplete answer, inspect the coaching and any bounded follow-up, and
+close the Side Panel. Reopen the same Application to resume the pending
+question. **Save and continue later** simply leaves the persisted interview
+paused; it does not submit the draft answer. After completion, expand the
+report and review any Evidence Candidate. Confirming it is a separate user
+action and may make the old Pack stale. To test restart recovery, stop and
+restart FastAPI while awaiting an answer, then reopen the Application. The
+panel fetches the interview from the server; it does not store the answer or
+report in Chrome storage. A failed, planning or evaluating interview offers
+**Recover**. All question, feedback and report text is rendered as inert text.

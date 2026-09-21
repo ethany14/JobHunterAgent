@@ -31,8 +31,12 @@ import {
 } from "./api-client.js";
 import { extractJobDescriptionFromPage } from "./extractor.js";
 import { createWorkspaceController } from "./workspace-controller.js";
+import { createMultiAgentController } from "./multi-agent-controller.js";
 import { createEvidenceController } from "./evidence-controller.js";
 import { createInterviewController } from "./interview-controller.js";
+import { createMockInterviewController } from "./mock-interview-controller.js";
+import { createPackController } from "./pack-controller.js";
+import { createTaskActivity } from "./task-activity.js";
 
 const MAX_TEXT_LENGTH = 50_000;
 const POLL_INTERVAL_MS = 1_500;
@@ -160,10 +164,24 @@ const elements = {
   workspaceRuns: document.querySelector("#workspace-runs"),
   workspaceEvents: document.querySelector("#workspace-events"),
   workspaceArtifacts: document.querySelector("#workspace-artifacts"),
+  packStatus: document.querySelector("#pack-status"),
+  packCreate: document.querySelector("#pack-create"),
+  packResume: document.querySelector("#pack-resume"),
+  packCover: document.querySelector("#pack-cover"),
+  packQuestion: document.querySelector("#pack-question"),
+  packMaxLength: document.querySelector("#pack-max-length"),
+  packAnswer: document.querySelector("#pack-answer"),
+  packTabResume: document.querySelector("#pack-tab-resume"),
+  packTabCover: document.querySelector("#pack-tab-cover"),
+  packTabAnswers: document.querySelector("#pack-tab-answers"),
+  packItems: document.querySelector("#pack-items"),
 };
 
 let currentRunId = null;
 let interviewController = null;
+let mockInterviewController = null;
+let packController = null;
+let multiAgentController = null;
 let currentResumeText = "";
 let analysisBusy = false;
 let sessionBusy = false;
@@ -1445,8 +1463,19 @@ const workspaceController = createWorkspaceController({
     renderRun(await getRun(runId));
   },
   onOpenAssistant: (applicationId) => startSession(null, applicationId),
-  onWorkspaceOpen: (applicationId) => interviewController?.load(applicationId),
+  onWorkspaceOpen: (applicationId) => {
+    interviewController?.load(applicationId);
+    mockInterviewController?.load(applicationId);
+    packController?.load(applicationId);
+    taskActivity.load(applicationId);
+    multiAgentController?.load(applicationId);
+  },
   onMessage: setWorkspaceMessage,
+});
+
+const taskActivity = createTaskActivity({
+  container: document.querySelector("#task-activity-list"),
+  onError: (message) => setWorkspaceMessage(message, "error"),
 });
 
 interviewController = createInterviewController({
@@ -1460,6 +1489,66 @@ interviewController = createInterviewController({
     statusList: elements.interviewStatusList,
   },
   onMessage: setWorkspaceMessage,
+  onChange: (status) => {
+    if (status === "completed") multiAgentController?.resumeInterview();
+    else multiAgentController?.refresh();
+  },
+});
+
+mockInterviewController = createMockInterviewController({
+  elements: {
+    mode: document.querySelector("#mock-mode"),
+    difficulty: document.querySelector("#mock-difficulty"),
+    count: document.querySelector("#mock-count"),
+    start: document.querySelector("#mock-start"),
+    newAttempt: document.querySelector("#mock-new"),
+    progress: document.querySelector("#mock-progress"),
+    competency: document.querySelector("#mock-competency"),
+    question: document.querySelector("#mock-question"),
+    answer: document.querySelector("#mock-answer"),
+    submit: document.querySelector("#mock-submit"),
+    skip: document.querySelector("#mock-skip"),
+    save: document.querySelector("#mock-save"),
+    resume: document.querySelector("#mock-resume"),
+    end: document.querySelector("#mock-end"),
+    cancel: document.querySelector("#mock-cancel"),
+    feedback: document.querySelector("#mock-feedback"),
+    report: document.querySelector("#mock-report"),
+  },
+  onMessage: setWorkspaceMessage,
+});
+
+packController = createPackController({
+  elements: {
+    status: elements.packStatus, create: elements.packCreate,
+    resume: elements.packResume, cover: elements.packCover,
+    question: elements.packQuestion, maxLength: elements.packMaxLength,
+    answer: elements.packAnswer, tabResume: elements.packTabResume,
+    tabCover: elements.packTabCover, tabAnswers: elements.packTabAnswers,
+    items: elements.packItems,
+  },
+  getApplication: () => workspaceController.state.current,
+  onMessage: setWorkspaceMessage,
+});
+
+multiAgentController = createMultiAgentController({
+  elements: {
+    mode: document.querySelector("#workflow-mode"),
+    options: document.querySelector("#multi-agent-options"),
+    resume: document.querySelector("#multi-agent-resume"),
+    cover: document.querySelector("#multi-agent-cover"),
+    interview: document.querySelector("#multi-agent-interview"),
+    question: document.querySelector("#multi-agent-question"),
+    start: document.querySelector("#multi-agent-start"),
+    cancel: document.querySelector("#multi-agent-cancel"),
+    skipInterview: document.querySelector("#multi-agent-skip-interview"),
+    status: document.querySelector("#multi-agent-status"),
+    progress: document.querySelector("#multi-agent-progress"),
+  },
+  getApplication: () => workspaceController.state.current,
+  onMessage: setWorkspaceMessage,
+  onTasksChanged: (applicationId) => taskActivity.load(applicationId),
+  onInterviewNeeded: (applicationId) => interviewController?.load(applicationId),
 });
 
 const evidenceController = createEvidenceController({

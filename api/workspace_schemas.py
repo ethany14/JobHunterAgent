@@ -1,7 +1,7 @@
 """Public Job Workspace API contracts."""
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -139,6 +139,7 @@ class ApplicationEventsResponse(WorkspaceApiModel):
 
 class PublicApplicationArtifact(WorkspaceApiModel):
     artifact_id: str
+    workflow_mode: Literal["single_custom", "multi_agent_v1"] = "single_custom"
     artifact_type: ArtifactType
     version: int
     status: ArtifactStatus

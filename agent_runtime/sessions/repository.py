@@ -6,7 +6,7 @@ import json
 from datetime import UTC, datetime
 from collections.abc import Sequence
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import inspect, insert, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -39,6 +39,11 @@ def ensure_utc(value: datetime) -> datetime:
 class SessionRepository:
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self._session_factory = session_factory
+        # Historical migration tests open a populated pre-task schema with the
+        # current repository before upgrading. Keep those writes compatible.
+        bind = session_factory.kw.get("bind")
+        self._has_task_columns = bind is None or "task_id" in {
+            column["name"] for column in inspect(bind).get_columns("agent_sessions")}
 
     @property
     def session_factory(self) -> sessionmaker[Session]:
@@ -60,9 +65,14 @@ class SessionRepository:
         now = datetime.now(UTC)
         try:
             with self._session_factory.begin() as session:
-                row = self._row_from_state(state)
-                session.add(row)
-                session.flush()
+                if self._has_task_columns:
+                    row = self._row_from_state(state)
+                    session.add(row)
+                    session.flush()
+                else:
+                    row = None
+                    session.execute(insert(AgentSessionRow.__table__).values(
+                        **self._projection_values(state)))
                 message_sequence = self._insert_messages(
                     session,
                     state.session_id,
@@ -80,7 +90,12 @@ class SessionRepository:
                         "updated_at": now,
                     },
                 )
-                self._apply_state(row, persisted)
+                if row is not None:
+                    self._apply_state(row, persisted)
+                else:
+                    session.execute(update(AgentSessionRow.__table__).where(
+                        AgentSessionRow.__table__.c.session_id == state.session_id).values(
+                        **self._projection_values(persisted)))
                 session.add(self._event_row(persisted_event))
         except IntegrityError as exc:
             if self.get(state.session_id) is not None:
@@ -303,18 +318,15 @@ class SessionRepository:
             {**state.model_dump(mode="python"), **updates}
         )
 
-    @classmethod
-    def _row_from_state(cls, state: SessionState) -> AgentSessionRow:
-        return AgentSessionRow(**cls._projection_values(state))
+    def _row_from_state(self, state: SessionState) -> AgentSessionRow:
+        return AgentSessionRow(**self._projection_values(state))
 
-    @classmethod
-    def _apply_state(cls, row: AgentSessionRow, state: SessionState) -> None:
-        for key, value in cls._projection_values(state).items():
+    def _apply_state(self, row: AgentSessionRow, state: SessionState) -> None:
+        for key, value in self._projection_values(state).items():
             setattr(row, key, value)
 
-    @staticmethod
-    def _projection_values(state: SessionState) -> dict:
-        return {
+    def _projection_values(self, state: SessionState) -> dict:
+        values = {
             "session_id": state.session_id,
             "schema_version": state.schema_version,
             "user_id": state.user_id,
@@ -324,6 +336,9 @@ class SessionRepository:
             "event_sequence": state.event_sequence,
             "message_sequence": state.message_sequence,
             "active_run_id": state.active_run_id,
+            "parent_session_id": state.parent_session_id,
+            "task_id": state.task_id,
+            "agent_role": state.agent_role,
             "pending_assistant_message_id": state.pending_assistant_message_id,
             "pending_tool_call_ids_json": canonical_json(state.pending_tool_call_ids),
             "allowed_tools_json": canonical_json(sorted(state.allowed_tools)),
@@ -351,6 +366,10 @@ class SessionRepository:
             "created_at": state.created_at,
             "updated_at": state.updated_at,
         }
+        if not self._has_task_columns:
+            for key in ("parent_session_id", "task_id", "agent_role"):
+                values.pop(key)
+        return values
 
     @staticmethod
     def _event_row(event: SessionEvent) -> AgentSessionEventRow:

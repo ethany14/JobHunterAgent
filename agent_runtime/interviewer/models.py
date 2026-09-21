@@ -10,7 +10,8 @@ from api.db import Base
 class ApplicationRequirementAssessmentRow(Base):
     __tablename__ = "application_requirement_assessments"
     __table_args__ = (
-        UniqueConstraint("application_id", "snapshot_id", "requirement_id", name="uq_app_requirement_snapshot"),
+        UniqueConstraint("application_id", "snapshot_id", "source_match_artifact_id",
+                         "requirement_id", name="uq_app_requirement_match"),
     )
     assessment_id: Mapped[str] = mapped_column(String(36), primary_key=True)
     application_id: Mapped[str] = mapped_column(ForeignKey("applications.application_id", ondelete="CASCADE"), nullable=False, index=True)
@@ -38,6 +39,8 @@ class InterviewSessionRow(Base):
     interview_session_id: Mapped[str] = mapped_column(String(36), primary_key=True)
     application_id: Mapped[str] = mapped_column(ForeignKey("applications.application_id", ondelete="CASCADE"), nullable=False, index=True)
     snapshot_id: Mapped[str] = mapped_column(ForeignKey("job_snapshots.snapshot_id"), nullable=False)
+    source_match_artifact_id: Mapped[str | None] = mapped_column(
+        ForeignKey("application_artifacts.artifact_id"))
     agent_session_id: Mapped[str] = mapped_column(ForeignKey("agent_sessions.session_id"), nullable=False, unique=True)
     status: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
     current_assessment_id: Mapped[str | None] = mapped_column(ForeignKey("application_requirement_assessments.assessment_id"))

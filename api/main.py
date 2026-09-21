@@ -11,6 +11,10 @@ from api.error_handlers import install_error_handlers
 from api.context_routes import router as context_router
 from api.evidence_routes import router as evidence_router
 from api.interview_routes import router as interview_router
+from api.pack_routes import router as pack_router
+from api.agent_task_routes import router as agent_task_router
+from api.multi_agent_routes import router as multi_agent_router
+from api.mock_interview_routes import router as mock_interview_router
 from api.routes.runs import router as runs_router
 from api.session_dependencies import SessionRuntime, create_session_runtime
 from api.session_routes import router as sessions_router
@@ -61,6 +65,10 @@ def create_app(
     application.include_router(context_router)
     application.include_router(evidence_router)
     application.include_router(interview_router)
+    application.include_router(pack_router)
+    application.include_router(agent_task_router)
+    application.include_router(multi_agent_router)
+    application.include_router(mock_interview_router)
     application.include_router(workspace_router)
     install_error_handlers(application)
 

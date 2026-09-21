@@ -23,6 +23,23 @@ from agent_runtime.evidence.repository import CareerEvidenceRepository
 from agent_runtime.evidence.retrieval import CareerEvidenceRetriever
 from agent_runtime.interviewer.repository import InterviewRepository
 from agent_runtime.interviewer.controller import InterviewController
+from agent_runtime.mock_interview.controller import MockInterviewController
+from agent_runtime.mock_interview.repository import MockInterviewRepository
+from agent_runtime.mock_interview.worker import MockInterviewerWorker
+from agent_runtime.application_pack.repository import PackRepository
+from agent_runtime.application_pack.workflow import ApplicationPackWorkflow
+from agent_runtime.multi_agent.context import AgentContextPolicy
+from agent_runtime.multi_agent.registry import AgentWorkerRegistry
+from agent_runtime.multi_agent.repository import AgentTaskRepository
+from agent_runtime.multi_agent.scheduler import AgentTaskScheduler
+from agent_runtime.multi_agent.templates import AgentPlanTemplateRegistry
+from agent_runtime.job_workflow.workers import (
+    AnalysisProjectionWorker, ApplicationSourceReader, ArtifactRevisionWorker,
+    ArtifactVerifierWorker, ArtifactWriterWorker, CandidateAnalysisWorker,
+    EvidenceFreezeWorker, EvidenceGapWorker, InterviewerWorker,
+    JobAnalysisWorker, PackAssemblerWorker, RequirementMatchWorker,
+    SourceProvisionWorker,
+)
 from agent_runtime.memory.policy import LocalOwnerResolver, MemoryPolicy
 from agent_runtime.mcp.client import McpClient
 from agent_runtime.mcp.config import (
@@ -82,6 +99,13 @@ class SessionRuntime:
     workspace: JobWorkspaceRepository | None = None
     evidence: CareerEvidenceRepository | None = None
     interviewer: InterviewController | None = None
+    mock_interviewer: MockInterviewController | None = None
+    packs: PackRepository | None = None
+    pack_workflow: ApplicationPackWorkflow | None = None
+    agent_tasks: AgentTaskRepository | None = None
+    agent_workers: AgentWorkerRegistry | None = None
+    agent_plan_templates: AgentPlanTemplateRegistry | None = None
+    agent_scheduler: AgentTaskScheduler | None = None
 
     def capability_tools(self, profile: str) -> frozenset[str]:
         base = CAPABILITY_PROFILES[profile]
@@ -104,6 +128,8 @@ class SessionRuntime:
         return self.mcp_manager.health()
 
     def close(self) -> None:
+        if self.agent_scheduler is not None:
+            self.agent_scheduler.stop()
         if self.mcp_manager is not None:
             self.mcp_manager.stop()
         self.database.close()
@@ -189,6 +215,39 @@ def create_session_runtime(
         sessions=sessions, snapshots=context_snapshots,
         workspace=workspace, evidence=evidence,
     )
+    packs = PackRepository(database.session_factory)
+    pack_workflow = ApplicationPackWorkflow(
+        packs=packs, workspace=workspace, evidence=evidence, memories=memories)
+    mock_interviewer = MockInterviewController(
+        interviews=MockInterviewRepository(database.session_factory),
+        sessions=sessions, workspace=workspace, packs=packs, evidence=evidence,
+        context_snapshots=context_snapshots, pack_workflow=pack_workflow)
+    agent_tasks = AgentTaskRepository(database.session_factory)
+    agent_workers = AgentWorkerRegistry()
+    for worker in (
+        SourceProvisionWorker(ApplicationSourceReader(workspace, packs)),
+        CandidateAnalysisWorker(evidence=evidence), JobAnalysisWorker(),
+        RequirementMatchWorker(),
+        EvidenceGapWorker(InterviewRepository(database.session_factory)),
+        AnalysisProjectionWorker(workspace),
+        InterviewerWorker(interviewer),
+        EvidenceFreezeWorker(workspace=workspace, evidence=evidence,
+                             pack_workflow=pack_workflow),
+        MockInterviewerWorker(mock_interviewer),
+        ArtifactWriterWorker(), ArtifactVerifierWorker(), ArtifactRevisionWorker(),
+        PackAssemblerWorker(packs=packs, workspace=workspace, pack_workflow=pack_workflow),
+    ):
+        agent_workers.register(worker)
+    agent_plan_templates = AgentPlanTemplateRegistry()
+    agent_context = AgentContextPolicy(tasks=agent_tasks, sessions=sessions,
+        registered_tools=registry.names(),
+        task_type_tools={name: frozenset() for name in agent_workers.names()},
+        parent_allowed_tools=registry.names(),
+        available_mcp_tools=mcp_manager.public_tool_names,
+        memories=memories, evidence=evidence, skills=skills, project_id=project_id)
+    agent_scheduler = AgentTaskScheduler(tasks=agent_tasks, sessions=sessions,
+        workers=agent_workers, contexts=agent_context)
+    agent_scheduler.start()
     return SessionRuntime(
         database=database,
         sessions=sessions,
@@ -208,6 +267,13 @@ def create_session_runtime(
         workspace=workspace,
         evidence=evidence,
         interviewer=interviewer,
+        mock_interviewer=mock_interviewer,
+        packs=packs,
+        pack_workflow=pack_workflow,
+        agent_tasks=agent_tasks,
+        agent_workers=agent_workers,
+        agent_plan_templates=agent_plan_templates,
+        agent_scheduler=agent_scheduler,
     )
 
 

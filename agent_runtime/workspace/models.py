@@ -60,6 +60,7 @@ class ApplicationArtifactRow(Base):
         CheckConstraint("status IN ('draft','verified','approved','superseded')", name="ck_application_artifact_status"),
     )
     artifact_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    workflow_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="single_custom")
     application_id: Mapped[str] = mapped_column(ForeignKey("applications.application_id", ondelete="CASCADE"), nullable=False, index=True)
     artifact_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False)

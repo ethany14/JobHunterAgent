@@ -332,6 +332,36 @@ export function getActiveInterview(applicationId) {
   return request(`/api/applications/${encodeURIComponent(applicationId)}/interviews/active`);
 }
 
+export function startMockInterview(applicationId, options) {
+  return request(`/api/applications/${encodeURIComponent(applicationId)}/mock-interviews`, {
+    method: "POST", body: JSON.stringify(options),
+  });
+}
+
+export function getActiveMockInterview(applicationId) {
+  return request(`/api/applications/${encodeURIComponent(applicationId)}/mock-interviews/active`);
+}
+
+export function getMockInterview(id) {
+  return request(`/api/mock-interviews/${encodeURIComponent(id)}`);
+}
+
+export function getMockInterviewReport(id) {
+  return request(`/api/mock-interviews/${encodeURIComponent(id)}/report`);
+}
+
+export function getMockInterviewCandidates(id) {
+  return request(`/api/mock-interviews/${encodeURIComponent(id)}/evidence-candidates`);
+}
+
+export function mutateMockInterview(id, action, expectedVersion, idempotencyKey, extra = {}) {
+  return request(`/api/mock-interviews/${encodeURIComponent(id)}/${action}`, {
+    method: "POST", body: JSON.stringify({
+      expected_version: expectedVersion, idempotency_key: idempotencyKey, ...extra,
+    }),
+  });
+}
+
 export function getInterview(interviewId) {
   return request(`/api/interviews/${encodeURIComponent(interviewId)}`);
 }
@@ -347,4 +377,92 @@ export function mutateInterview(interviewId, action, expectedVersion, extra = {}
 export function decideInterviewCandidate(interviewId, evidenceId, action, expectedVersion, extra = {}) {
   return mutateInterview(interviewId, `candidates/${encodeURIComponent(evidenceId)}/${action}`,
     expectedVersion, extra);
+}
+
+export function createApplicationPack(applicationId, expectedVersion, idempotencyKey) {
+  return request(`/api/applications/${encodeURIComponent(applicationId)}/packs`, {
+    method: "POST", body: JSON.stringify({ expected_version: expectedVersion, idempotency_key: idempotencyKey }),
+  });
+}
+
+export function listApplicationPacks(applicationId) {
+  return request(`/api/applications/${encodeURIComponent(applicationId)}/packs`);
+}
+
+export function getApplicationPack(packId) {
+  return request(`/api/packs/${encodeURIComponent(packId)}`);
+}
+
+export function generatePackItem(packId, action, expectedVersion, idempotencyKey, extra = {}) {
+  return request(`/api/packs/${encodeURIComponent(packId)}/${action}`, {
+    method: "POST", body: JSON.stringify({ expected_version: expectedVersion,
+      idempotency_key: idempotencyKey, ...extra }),
+  });
+}
+
+export function mutatePackItem(packId, itemId, action, expectedVersion, idempotencyKey, extra = {}) {
+  return request(`/api/packs/${encodeURIComponent(packId)}/items/${encodeURIComponent(itemId)}/${action}`, {
+    method: "POST", body: JSON.stringify({ expected_version: expectedVersion,
+      idempotency_key: idempotencyKey, ...extra }),
+  });
+}
+
+export function getPackItemEvidence(packId, itemId) {
+  return request(`/api/packs/${encodeURIComponent(packId)}/items/${encodeURIComponent(itemId)}/evidence`);
+}
+
+export function getPackItemVersions(packId, itemId) {
+  return request(`/api/packs/${encodeURIComponent(packId)}/items/${encodeURIComponent(itemId)}/versions`);
+}
+
+export function getPackEvents(packId) {
+  return request(`/api/packs/${encodeURIComponent(packId)}/events`);
+}
+
+export function createMultiAgentRun(applicationId, options) {
+  return request(`/api/applications/${encodeURIComponent(applicationId)}/multi-agent-runs`, {
+    method: "POST", body: JSON.stringify(options),
+  });
+}
+
+export function getMultiAgentRun(rootTaskId) {
+  return request(`/api/multi-agent-runs/${encodeURIComponent(rootTaskId)}`);
+}
+
+export function getMultiAgentTasks(rootTaskId) {
+  return request(`/api/multi-agent-runs/${encodeURIComponent(rootTaskId)}/tasks`);
+}
+
+export function getMultiAgentTimeline(rootTaskId) {
+  return request(`/api/multi-agent-runs/${encodeURIComponent(rootTaskId)}/timeline`);
+}
+
+export function cancelMultiAgentRun(rootTaskId, expectedVersion) {
+  return request(`/api/multi-agent-runs/${encodeURIComponent(rootTaskId)}/cancel`, {
+    method: "POST", body: JSON.stringify({ expected_version: expectedVersion }),
+  });
+}
+
+export function resumeMultiAgentRun(rootTaskId, taskId, expectedVersion, continueWithoutClarification = false) {
+  return request(`/api/multi-agent-runs/${encodeURIComponent(rootTaskId)}/resume`, {
+    method: "POST", body: JSON.stringify({ task_id: taskId,
+      expected_version: expectedVersion,
+      continue_without_clarification: continueWithoutClarification }),
+  });
+}
+
+export function listApplicationAgentTasks(applicationId) {
+  return request(`/api/applications/${encodeURIComponent(applicationId)}/agent-tasks`);
+}
+
+export function cancelAgentTask(taskId, expectedVersion, subtree = false) {
+  return request(`/api/agent-tasks/${encodeURIComponent(taskId)}/cancel`, {
+    method: "POST", body: JSON.stringify({ expected_version: expectedVersion, subtree }),
+  });
+}
+
+export function retryAgentTask(taskId, expectedVersion) {
+  return request(`/api/agent-tasks/${encodeURIComponent(taskId)}/retry`, {
+    method: "POST", body: JSON.stringify({ expected_version: expectedVersion }),
+  });
 }

@@ -30,6 +30,7 @@ class ToolCallRepository:
                       arguments_hash: str, redacted_arguments: dict,
                       side_effect: ToolSideEffect | None = None,
                       idempotent: bool | None = None,
+                      task_id: str | None = None, attempt_id: str | None = None,
                       event_payload: dict | None = None) -> tuple[ToolCallRecord, bool]:
         if not request.idempotency_key:
             raise ValueError("A persisted tool call requires an idempotency key.")
@@ -38,6 +39,7 @@ class ToolCallRepository:
                 risk_level=risk_level, scope_type=scope_type, scope_id=scope_id,
                 arguments_hash=arguments_hash, redacted_arguments=redacted_arguments,
                 side_effect=side_effect, idempotent=idempotent,
+                task_id=task_id, attempt_id=attempt_id,
                 event_payload=event_payload)
         except IntegrityError:
             # A concurrent creator may win the unique-key race. Only translate
@@ -58,6 +60,7 @@ class ToolCallRepository:
                             arguments_hash: str, redacted_arguments: dict,
                             side_effect: ToolSideEffect | None = None,
                             idempotent: bool | None = None,
+                            task_id: str | None = None, attempt_id: str | None = None,
                             event_payload: dict | None = None) -> tuple[ToolCallRecord, bool]:
         with self._session_factory.begin() as session:
             row = session.scalar(self._idempotency_query(request, scope_type, scope_id))
@@ -72,6 +75,7 @@ class ToolCallRepository:
                 arguments_json=canonical_json(redacted_arguments), risk_level=risk_level.value,
                 tool_side_effect=side_effect.value if side_effect is not None else None,
                 tool_idempotent=idempotent,
+                task_id=task_id, attempt_id=attempt_id,
                 status=ToolExecutionStatus.REQUESTED.value, retryable=False, attempt_count=0,
                 max_attempts=request.max_attempts, timeout_seconds=request.timeout_seconds,
                 version=0, event_sequence=1, created_at=now, updated_at=now)

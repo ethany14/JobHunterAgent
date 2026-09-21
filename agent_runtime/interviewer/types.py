@@ -114,6 +114,7 @@ class InterviewSession(InterviewModel):
     interview_session_id: str
     application_id: str
     snapshot_id: str
+    source_match_artifact_id: str | None = None
     agent_session_id: str
     status: InterviewStatus
     current_assessment_id: str | None = None

@@ -114,6 +114,7 @@ class ApplicationRecord(WorkspaceModel):
 
 class ApplicationArtifactRecord(WorkspaceModel):
     artifact_id: str
+    workflow_mode: str = "single_custom"
     application_id: str
     artifact_type: ArtifactType
     version: int

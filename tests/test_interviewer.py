@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+import json
 from uuid import uuid4
 from types import SimpleNamespace
 
@@ -106,6 +107,45 @@ def interview_setup(tmp_path):
     )
     yield controller, fake, db, application_id
     db.close()
+
+
+def test_new_match_report_gets_own_assessment_cohort_without_rewriting_old(interview_setup):
+    controller, _, db, application_id = interview_setup
+    repository = controller._interviews
+    original = repository.prepare_assessments(application_id)
+    assert len(original) == 2
+    old_ids = {item.assessment_id for item in original}
+    with db.session_factory.begin() as session:
+        previous_job = session.get(ApplicationArtifactRow, "artifact-0")
+        previous_match = session.get(ApplicationArtifactRow, "artifact-1")
+        changed = json.loads(previous_match.content_json)
+        changed["matches"][1]["match_status"] = "partial"
+        changed["matches"][1]["resume_evidence"] = ["Used AWS in a class project"]
+        changed["overall_score"] = 75
+        for artifact_id, artifact_type, content in (
+            ("new-job", "job_analysis", previous_job.content_json),
+            ("new-match", "match_report", canonical_json(changed)),
+        ):
+            session.add(ApplicationArtifactRow(
+                artifact_id=artifact_id, application_id=application_id,
+                artifact_type=artifact_type, version=2, status="verified",
+                content_json=content, evidence_ids_json="[]",
+                created_by="test", source_run_id=None,
+                created_at=datetime.now(UTC) + timedelta(seconds=1),
+            ))
+    current = repository.prepare_assessments(application_id)
+    assert len(current) == 2
+    assert {item.assessment_id for item in current}.isdisjoint(old_ids)
+    assert {item.source_match_artifact_id for item in current} == {"new-match"}
+    assert repository.prepare_assessments(application_id) == current
+    assert {item.assessment_id for item in repository.assessments(
+        application_id, original[0].snapshot_id,
+        source_match_artifact_id="artifact-1")} == old_ids
+    started = controller.start(application_id)
+    assert started.source_match_artifact_id == "new-match"
+    assert {item["assessment_id"] for item in controller.view(
+        started.interview_session_id)["assessments"]} == {
+        item.assessment_id for item in current}
 
 
 def test_start_answer_confirm_and_restart(interview_setup):

@@ -22,6 +22,8 @@ class ToolCallRow(Base):
     tool_side_effect: Mapped[str | None] = mapped_column(String(32))
     tool_idempotent: Mapped[bool | None] = mapped_column(Boolean)
     execution_attempt_id: Mapped[str | None] = mapped_column(String(36), index=True)
+    task_id: Mapped[str | None] = mapped_column(String(36), index=True)
+    attempt_id: Mapped[str | None] = mapped_column(String(36))
     execution_lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     result_json: Mapped[str | None] = mapped_column(Text)

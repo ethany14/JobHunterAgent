@@ -478,7 +478,8 @@ class JobWorkspaceRepository:
                         content: dict[str, Any], evidence_ids: list[str], created_by: str,
                         expected_version: int, status: ArtifactStatus = ArtifactStatus.DRAFT,
                         verification_status: str | None = None, source_run_id: str | None = None,
-                        source_session_id: str | None = None) -> ApplicationArtifactRecord:
+                        source_session_id: str | None = None,
+                        workflow_mode: str = "single_custom") -> ApplicationArtifactRecord:
         validated = self._validate_artifact(artifact_type, content)
         with self._session_factory.begin() as session:
             application = self._locked_application(session, application_id, expected_version)
@@ -497,6 +498,7 @@ class JobWorkspaceRepository:
                 ApplicationArtifactRow.artifact_type == artifact_type.value)) or 0) + 1
             now = datetime.now(UTC)
             row = ApplicationArtifactRow(artifact_id=str(uuid4()), application_id=application_id,
+                workflow_mode=workflow_mode,
                 artifact_type=artifact_type.value, version=version, status=status.value,
                 content_json=canonical_json(validated), evidence_ids_json=canonical_json(sorted(set(evidence_ids))),
                 verification_status=verification_status, created_by=created_by,
@@ -515,6 +517,54 @@ class JobWorkspaceRepository:
                     ApplicationRow.version == expected_version + 1,
                 ).values(event_sequence=sequence))
             session.flush(); return self._artifact(row)
+
+    def project_multi_analysis(self, application_id: str, *, snapshot_id: str,
+                               source_task_id: str, job: JobAnalysis,
+                               match: SkillMatch) -> tuple[ApplicationArtifactRecord, ApplicationArtifactRecord]:
+        """Idempotent, atomic public projection of a completed multi-agent match."""
+        owner = f"multi-agent:{source_task_id}"
+        with self._session_factory.begin() as session:
+            app = session.get(ApplicationRow, application_id)
+            if app is None:
+                raise ApplicationNotFoundError("Application was not found.")
+            if app.current_snapshot_id != snapshot_id:
+                raise StaleApplicationError("The Job snapshot changed during analysis.")
+            existing = session.scalars(select(ApplicationArtifactRow).where(
+                ApplicationArtifactRow.application_id == application_id,
+                ApplicationArtifactRow.created_by == owner)).all()
+            if existing:
+                by_kind = {row.artifact_type: row for row in existing}
+                if set(by_kind) != {"job_analysis", "match_report"}:
+                    raise WorkspaceAssociationError("Analysis projection is incomplete.")
+                if (json.loads(by_kind["job_analysis"].content_json) != job.model_dump(mode="json")
+                        or json.loads(by_kind["match_report"].content_json) != match.model_dump(mode="json")):
+                    raise WorkspaceAssociationError("Analysis task produced conflicting results.")
+                return self._artifact(by_kind["job_analysis"]), self._artifact(by_kind["match_report"])
+            now = datetime.now(UTC)
+            records = []
+            for kind, content in ((ArtifactType.JOB_ANALYSIS, job.model_dump(mode="json")),
+                                  (ArtifactType.MATCH_REPORT, match.model_dump(mode="json"))):
+                version = (session.scalar(select(func.max(ApplicationArtifactRow.version)).where(
+                    ApplicationArtifactRow.application_id == application_id,
+                    ApplicationArtifactRow.artifact_type == kind.value)) or 0) + 1
+                row = ApplicationArtifactRow(artifact_id=str(uuid4()), application_id=application_id,
+                    workflow_mode="multi_agent_v1", artifact_type=kind.value,
+                    version=version, status=ArtifactStatus.VERIFIED.value,
+                    content_json=canonical_json(content), evidence_ids_json="[]",
+                    verification_status="passed", created_by=owner, created_at=now)
+                session.add(row)
+                records.append(row)
+            start_version, start_sequence = app.version, app.event_sequence
+            self._conditional_update(session, app, start_version,
+                {"version": start_version + 1, "event_sequence": start_sequence + 2,
+                 "updated_at": now})
+            for offset, row in enumerate(records, start=1):
+                session.add(self._event(app, start_sequence + offset,
+                    ApplicationEventType.ARTIFACT_CREATED,
+                    {"artifact_id": row.artifact_id, "artifact_type": row.artifact_type,
+                     "workflow_mode": "multi_agent_v1"}, now))
+            session.flush()
+            return self._artifact(records[0]), self._artifact(records[1])
 
     def approve_artifact(self, artifact_id: str, *, expected_version: int) -> ApplicationArtifactRecord:
         with self._session_factory.begin() as session:
@@ -609,6 +659,7 @@ class JobWorkspaceRepository:
     @staticmethod
     def _artifact(row):
         return ApplicationArtifactRecord(artifact_id=row.artifact_id, application_id=row.application_id,
+            workflow_mode=row.workflow_mode,
             artifact_type=row.artifact_type, version=row.version, status=row.status,
             content=json.loads(row.content_json), evidence_ids=json.loads(row.evidence_ids_json),
             verification_status=row.verification_status, created_by=row.created_by,

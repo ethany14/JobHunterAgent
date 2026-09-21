@@ -47,12 +47,23 @@ class InterviewController:
         self._policy = policy or InterviewPriorityPolicy()
 
     def start(self, application_id: str, *, max_questions: int = 10,
-              max_followups_per_requirement: int = 2) -> InterviewSession:
+              max_followups_per_requirement: int = 2,
+              task_id: str | None = None,
+              parent_session_id: str | None = None) -> InterviewSession:
         application = self._workspace.get_application(application_id)
+        if task_id:
+            prior = self._interviews.for_task(task_id)
+            if prior:
+                if prior.application_id != application_id or prior.snapshot_id != application.current_snapshot_id:
+                    raise InterviewConflictError("Task interview source changed.")
+                self._sync_session(prior)
+                return prior
         active = self._interviews.active_for_application(application_id)
         if active:
             if active.snapshot_id != application.current_snapshot_id:
                 raise InterviewConflictError("Current Job snapshot differs from the active interview.")
+            if task_id and self._sessions.require(active.agent_session_id).task_id != task_id:
+                raise InterviewConflictError("An independent interview already owns this Application.")
             self._sync_session(active)
             return active
         assessments = self._interviews.prepare_assessments(application_id)
@@ -60,12 +71,15 @@ class InterviewController:
         self._sessions.create(SessionState(
             session_id=session_id, user_id="local-user", title="Evidence interview",
             status=SessionStatus.ACTIVE, allowed_tools=frozenset(),
+            task_id=task_id, parent_session_id=parent_session_id,
         ), SessionEvent(session_id=session_id, event_type=SessionEventType.SESSION_CREATED),
             messages=[SessionMessageDraft(message=AgentMessage(
                 message_id=f"interview-policy-{session_id}", role="system",
                 content="Application-scoped evidence interview; tools are disabled."))])
         interview = self._interviews.create(
             application_id, session_id, application.current_snapshot_id,
+            source_match_artifact_id=(assessments[0].source_match_artifact_id
+                                      if assessments else None),
             max_questions=max_questions, max_followups=max_followups_per_requirement,
         )
         if interview.agent_session_id != session_id:
@@ -76,7 +90,9 @@ class InterviewController:
 
     def view(self, interview_id: str) -> dict:
         interview = self._interviews.get(interview_id)
-        assessments = self._interviews.assessments(interview.application_id, interview.snapshot_id)
+        assessments = self._interviews.assessments(interview.application_id,
+            interview.snapshot_id,
+            source_match_artifact_id=interview.source_match_artifact_id)
         turns = self._interviews.turns(interview_id)
         current = next((a for a in assessments if a.assessment_id == interview.current_assessment_id), None)
         question = next((t for t in reversed(turns) if t.turn_type in {
@@ -232,7 +248,9 @@ class InterviewController:
             return interview
         if interview.pending_answer_turn_id:
             return self._classify_pending(interview)
-        items = assessments or self._interviews.assessments(interview.application_id, interview.snapshot_id)
+        items = assessments or self._interviews.assessments(
+            interview.application_id, interview.snapshot_id,
+            source_match_artifact_id=interview.source_match_artifact_id)
         current = next((a for a in items if a.assessment_id == interview.current_assessment_id), None)
         target = current if current and self._policy.eligible(current) else self._policy.select(items)
         if target is None or interview.questions_asked >= interview.max_questions:
@@ -274,7 +292,9 @@ class InterviewController:
     def _classify_pending(self, interview: InterviewSession) -> InterviewSession:
         turns = self._interviews.turns(interview.interview_session_id)
         answer = next((t for t in turns if t.turn_id == interview.pending_answer_turn_id), None)
-        assessment = next((a for a in self._interviews.assessments(interview.application_id, interview.snapshot_id)
+        assessment = next((a for a in self._interviews.assessments(
+            interview.application_id, interview.snapshot_id,
+            source_match_artifact_id=interview.source_match_artifact_id)
                            if a.assessment_id == interview.current_assessment_id), None)
         if answer is None or assessment is None:
             raise InterviewConflictError("Pending answer or requirement is unavailable.")
