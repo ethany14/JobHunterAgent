@@ -70,6 +70,8 @@ class SessionState(RuntimeModel):
     terminal_reason: str | None = Field(default=None, max_length=128)
     manual_recovery_tool_call_ids: list[str] = Field(default_factory=list)
     allowed_skills: frozenset[str] = Field(default_factory=frozenset)
+    canary_skill_version_ids: frozenset[str] = Field(default_factory=frozenset)
+    shadow_skill_version_ids: frozenset[str] = Field(default_factory=frozenset)
     current_context_snapshot_id: str | None = Field(default=None, max_length=36)
     last_context_snapshot_id: str | None = Field(default=None, max_length=36)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

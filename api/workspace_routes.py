@@ -16,6 +16,9 @@ from api.workspace_schemas import (
 from api.routes.runs import get_run_service
 from api.services.workspace_service import WorkspaceAnalysisService
 from agent_runtime.workspace.types import ArtifactType
+from agent_runtime.feedback.types import FeedbackSourceType
+from api.feedback_instrumentation import record_action
+from api.session_dependencies import SessionRuntime, get_session_runtime
 
 router = APIRouter(prefix="/api", tags=["job-workspace"])
 
@@ -117,10 +120,15 @@ async def analyze_application(application_id: str, request: AnalyzeApplicationRe
 
 @router.patch("/applications/{application_id}/status", response_model=PublicApplication)
 def transition_application(application_id: str, request: TransitionApplicationRequest,
-                           repository: JobWorkspaceRepository = Depends(get_workspace_repository)):
-    return _application(repository.transition_status(application_id,
+                           repository: JobWorkspaceRepository = Depends(get_workspace_repository),
+                           runtime: SessionRuntime = Depends(get_session_runtime)):
+    changed = repository.transition_status(application_id,
         target_status=request.target_status, expected_version=request.expected_version,
-        applied_at=request.applied_at))
+        applied_at=request.applied_at)
+    record_action(runtime, source_type=FeedbackSourceType.APPLICATION_STATUS,
+        source_action_id=f"application-status:{application_id}:{request.expected_version}",
+        content=changed.status.value, application_id=application_id)
+    return _application(changed)
 
 
 @router.patch("/applications/{application_id}", response_model=PublicApplication)

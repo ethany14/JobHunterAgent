@@ -52,6 +52,7 @@ class ContextSnapshot(RuntimeModel):
     system_prompt_version: str
     system_prompt_hash: str
     skill_versions: list[SkillSnapshotRef] = Field(default_factory=list)
+    shadow_skill_versions: list[SkillSnapshotRef] = Field(default_factory=list)
     memory_versions: list[MemorySnapshotRef] = Field(default_factory=list)
     evidence_versions: list[EvidenceSnapshotRef] = Field(default_factory=list)
     source_artifact_ids: list[str] = Field(default_factory=list)

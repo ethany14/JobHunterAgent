@@ -3,6 +3,8 @@ from fastapi import APIRouter, Depends
 
 from api.pack_schemas import EditItemRequest, GenerateRequest, PackMutation, QuestionRequest
 from api.session_dependencies import SessionRuntime, get_session_runtime
+from agent_runtime.feedback.types import FeedbackSourceType
+from api.feedback_instrumentation import record_action
 
 
 router = APIRouter(prefix="/api", tags=["application-pack"])
@@ -79,15 +81,24 @@ def regenerate(pack_id: str, item_id: str, body: PackMutation,
     workflow, _ = _runtime(runtime)
     workflow.regenerate(pack_id, item_id, expected_version=body.expected_version,
                         idempotency_key=body.idempotency_key)
+    record_action(runtime, source_type=(FeedbackSourceType.MANUAL_FEEDBACK if body.feedback
+        else FeedbackSourceType.ARTIFACT_REJECTED),
+        source_action_id=f"pack-regenerate:{body.idempotency_key}",
+        content=body.feedback or "Regeneration requested without an explicit reason.", artifact_id=item_id)
     return _detail(pack_id, runtime)
 
 
 @router.post("/packs/{pack_id}/items/{item_id}/edit")
 def edit(pack_id: str, item_id: str, body: EditItemRequest,
          runtime: SessionRuntime = Depends(get_session_runtime)):
-    workflow, _ = _runtime(runtime)
+    workflow, repository = _runtime(runtime)
+    before = repository.artifact(pack_id, item_id)
     workflow.edit(pack_id, item_id, expected_version=body.expected_version,
                   content=body.content, idempotency_key=body.idempotency_key)
+    record_action(runtime, source_type=FeedbackSourceType.ARTIFACT_EDITED,
+        source_action_id=f"pack-edit:{body.idempotency_key}",
+        before=str(before)[:20000] if before is not None else None,
+        after=str(body.content)[:20000], artifact_id=item_id)
     return _detail(pack_id, runtime)
 
 
@@ -98,6 +109,10 @@ def approve(pack_id: str, item_id: str, body: PackMutation,
     workflow.refresh_staleness(pack_id)
     repository.review(pack_id, item_id, expected_version=body.expected_version,
                       approve=True, idempotency_key=body.idempotency_key)
+    record_action(runtime, source_type=FeedbackSourceType.ARTIFACT_ACCEPTED,
+        source_action_id=f"pack-approve:{body.idempotency_key}",
+        content="User approved this artifact.", artifact_id=item_id,
+        context_metadata_json={"artifact_type":repository.item(pack_id, item_id).artifact_type.value})
     return _detail(pack_id, runtime)
 
 
@@ -108,6 +123,9 @@ def reject(pack_id: str, item_id: str, body: PackMutation,
     workflow.refresh_staleness(pack_id)
     repository.review(pack_id, item_id, expected_version=body.expected_version,
                       approve=False, idempotency_key=body.idempotency_key)
+    record_action(runtime, source_type=FeedbackSourceType.ARTIFACT_REJECTED,
+        source_action_id=f"pack-reject:{body.idempotency_key}",
+        content="User rejected this artifact without a replacement instruction.", artifact_id=item_id)
     return _detail(pack_id, runtime)
 
 

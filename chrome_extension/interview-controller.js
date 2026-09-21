@@ -3,6 +3,7 @@
 import {
   decideInterviewCandidate, getActiveInterview, getInterview,
   mutateInterview, startInterview,
+  submitInterviewStyleFeedback,
 } from "./api-client.js";
 
 export function createInterviewController({ elements, onMessage, onChange = () => {} }) {
@@ -144,5 +145,15 @@ export function createInterviewController({ elements, onMessage, onChange = () =
   elements.cancel.addEventListener("click", () => action("cancel"));
   elements.saveLater.addEventListener("click", () => onMessage(
     "Interview saved. Open this Application later to continue.", "success"));
+  elements.styleSubmit?.addEventListener("click", async () => {
+    const feedback = elements.styleFeedback.value.trim();
+    if (!feedback) { onMessage("Enter question-style feedback first.", "error"); return; }
+    if (!view?.interview) { onMessage("Open an evidence interview first.", "error"); return; }
+    try {
+      await submitInterviewStyleFeedback(view.interview.interview_session_id, feedback);
+      elements.styleFeedback.value = "";
+      onMessage("Question-style feedback saved for review.", "success");
+    } catch { onMessage("Could not save question-style feedback.", "error"); }
+  });
   return { load, render };
 }

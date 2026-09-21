@@ -20,6 +20,8 @@ from agent_runtime.context.repository import ContextSnapshotRepository
 from agent_runtime.memory.repository import MemoryRepository
 from agent_runtime.memory.retrieval import MemoryRetriever
 from agent_runtime.evidence.repository import CareerEvidenceRepository
+from agent_runtime.feedback.repository import FeedbackRepository
+from agent_runtime.feedback.service import FeedbackService
 from agent_runtime.evidence.retrieval import CareerEvidenceRetriever
 from agent_runtime.interviewer.repository import InterviewRepository
 from agent_runtime.interviewer.controller import InterviewController
@@ -53,6 +55,8 @@ from agent_runtime.skills.loader import SkillLoader
 from agent_runtime.skills.repository import SkillRepository
 from agent_runtime.skills.registry import SkillRegistry
 from agent_runtime.skills.routing import SkillRouter
+from agent_runtime.skills.evolution import SkillEvolutionService
+from agent_runtime.skills.evolution_types import ActivationMode
 from agent_runtime.tools.job_agent_tools import register_builtin_job_agent_tools
 from agent_runtime.tools.loop import ToolCallingLoop
 from agent_runtime.tools.model_adapter import LangChainToolModelAdapter
@@ -106,6 +110,23 @@ class SessionRuntime:
     agent_workers: AgentWorkerRegistry | None = None
     agent_plan_templates: AgentPlanTemplateRegistry | None = None
     agent_scheduler: AgentTaskScheduler | None = None
+    feedback: FeedbackService | None = None
+    skill_evolution: SkillEvolutionService | None = None
+
+    def capability_skills(self, profile: str) -> frozenset[str]:
+        base = CAPABILITY_SKILL_PROFILES[profile]
+        if self.skill_evolution is None or self.owner_resolver is None:
+            return base
+        owner_id = self.owner_resolver.resolve().owner_id
+        generated = {item["name"] for item in self.skill_evolution.skills(owner_id=owner_id)
+            if any(version["activation_mode"] == "active" for version in item["versions"])}
+        return base | frozenset(generated)
+
+    def test_skill_versions(self, mode: ActivationMode) -> frozenset[str]:
+        if self.skill_evolution is None or self.owner_resolver is None:
+            return frozenset()
+        return self.skill_evolution.test_versions(
+            owner_id=self.owner_resolver.resolve().owner_id, mode=mode)
 
     def capability_tools(self, profile: str) -> frozenset[str]:
         base = CAPABILITY_PROFILES[profile]
@@ -174,8 +195,12 @@ def create_session_runtime(
     skills = SkillRepository(database.session_factory)
     workspace = JobWorkspaceRepository(database.session_factory)
     evidence = CareerEvidenceRepository(database.session_factory)
+    feedback = FeedbackService(FeedbackRepository(database.session_factory),
+        memories=memories, evidence=evidence)
     skill_registry = SkillRegistry(skills)
     skill_router = SkillRouter(SkillDiscovery(skills), SkillLoader(skills))
+    skill_evolution = SkillEvolutionService(database.session_factory, feedback.repository,
+        available_tools=registry.names())
     projector = SessionContextProjector(
         sessions=sessions,
         snapshots=context_snapshots,
@@ -196,6 +221,8 @@ def create_session_runtime(
         skills=skills,
         skill_router=skill_router,
         available_tool_names=lambda: registry.names(),
+        available_test_skill_versions=lambda mode: skill_evolution.test_versions(
+            owner_id=owner_resolver.resolve().owner_id, mode=ActivationMode(mode)),
         source_resolver=lambda state: workspace.workspace_context_for_session(
             state.session_id
         ),
@@ -274,6 +301,8 @@ def create_session_runtime(
         agent_workers=agent_workers,
         agent_plan_templates=agent_plan_templates,
         agent_scheduler=agent_scheduler,
+        feedback=feedback,
+        skill_evolution=skill_evolution,
     )
 
 

@@ -1,11 +1,32 @@
 """Synchronous endpoints: model calls execute in FastAPI's threadpool."""
 from fastapi import APIRouter, Depends
 
-from api.mock_interview_schemas import MockAnswerRequest, MockMutation, StartMockInterviewRequest
+from api.mock_interview_schemas import MockAnswerRequest, MockMutation, StartMockInterviewRequest, MockFeedbackRequest
 from api.session_dependencies import SessionRuntime, get_session_runtime
 from api.evidence_routes import _public as public_evidence
+from agent_runtime.feedback.errors import FeedbackValidationError
+from agent_runtime.feedback.types import FeedbackSourceType
 
 router = APIRouter(prefix="/api", tags=["mock-interview"])
+
+
+@router.post("/mock-interviews/{mock_interview_id}/feedback")
+def submit_mock_feedback(mock_interview_id: str, body: MockFeedbackRequest,
+                         runtime: SessionRuntime = Depends(get_session_runtime)):
+    controller = _controller(runtime)
+    record = controller.interviews.get(mock_interview_id)
+    if runtime.feedback is None or runtime.owner_resolver is None:
+        raise FeedbackValidationError("Feedback Runtime is unavailable.")
+    wording = body.feedback or ("User marked mock interview feedback helpful."
+                                if body.helpful else "User marked mock interview feedback unhelpful.")
+    event, candidate = runtime.feedback.record(
+        owner_id=runtime.owner_resolver.resolve().owner_id,
+        source_type=FeedbackSourceType.INTERVIEW_FEEDBACK,
+        source_action_id=f"mock-feedback:{body.source_action_id}",
+        original_content=wording, after_content=body.edited_structure,
+        application_id=record.application_id)
+    return {"recorded": True, "feedback_event_id": event.feedback_event_id,
+            "candidate_id": candidate.candidate_id if candidate else None}
 
 
 def _controller(runtime: SessionRuntime):

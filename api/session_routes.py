@@ -36,6 +36,7 @@ from api.session_schemas import (
     VersionedMutationRequest,
 )
 from agent_runtime.mcp.types import McpToolProvenance
+from agent_runtime.skills.evolution_types import ActivationMode
 from api.services.run_service import RunNotFoundError
 
 
@@ -228,7 +229,10 @@ def create_session(
         title=request.title,
         active_run_id=request.active_run_id,
         allowed_tools=runtime.capability_tools(request.capability_profile),
-        allowed_skills=CAPABILITY_SKILL_PROFILES[request.capability_profile],
+        allowed_skills=runtime.capability_skills(request.capability_profile),
+        canary_skill_version_ids=(runtime.test_skill_versions(ActivationMode.CANARY)
+                                  if request.test_canary else frozenset()),
+        shadow_skill_version_ids=runtime.test_skill_versions(ActivationMode.SHADOW),
     )
     if application is not None:
         runtime.workspace.attach_session(

@@ -19,6 +19,7 @@ from api.routes.runs import router as runs_router
 from api.session_dependencies import SessionRuntime, create_session_runtime
 from api.session_routes import router as sessions_router
 from api.workspace_routes import router as workspace_router
+from api.feedback_routes import router as feedback_router
 from api.services.run_service import BackendRoutingRunService, RunService
 
 
@@ -70,6 +71,9 @@ def create_app(
     application.include_router(multi_agent_router)
     application.include_router(mock_interview_router)
     application.include_router(workspace_router)
+    application.include_router(feedback_router)
+    from api.skill_evolution_routes import router as skill_evolution_router
+    application.include_router(skill_evolution_router)
     install_error_handlers(application)
 
     @application.get("/health", tags=["health"])

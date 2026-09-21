@@ -33,6 +33,8 @@ from api.context_schemas import (
     VersionedContextMutation,
 )
 from api.session_dependencies import SessionRuntime, get_session_runtime
+from agent_runtime.feedback.types import FeedbackSourceType
+from api.feedback_instrumentation import record_action
 
 
 router = APIRouter(tags=["context-management"])
@@ -197,16 +199,24 @@ def confirm_memory(memory_id: str, request: VersionedContextMutation,
         memory_id, owner_id=_owner(runtime).owner_id,
         expected_version=request.expected_version, confirmed_by_user=True,
     )
+    if item.memory_type.value == "preference":
+        record_action(runtime, source_type=FeedbackSourceType.EXPLICIT_INSTRUCTION,
+            source_action_id=f"memory-confirm:{memory_id}:{request.expected_version}",
+            content=item.display_text)
     return _public_memory(item)
 
 
 @router.post("/memories/{memory_id}/reject", response_model=PublicMemory)
 def reject_memory(memory_id: str, request: VersionedContextMutation,
                   runtime: SessionRuntime = Depends(get_session_runtime)) -> PublicMemory:
-    return _public_memory(_memory_repository(runtime).reject(
+    item = _memory_repository(runtime).reject(
         memory_id, owner_id=_owner(runtime).owner_id,
         expected_version=request.expected_version,
-    ))
+    )
+    record_action(runtime, source_type=FeedbackSourceType.MANUAL_FEEDBACK,
+        source_action_id=f"memory-reject:{memory_id}:{request.expected_version}",
+        content="User rejected a memory candidate.")
+    return _public_memory(item)
 
 
 @router.post("/memories/{memory_id}/supersede", response_model=MemorySupersedeResponse)
@@ -222,6 +232,10 @@ def supersede_memory(memory_id: str, request: SupersedeMemoryRequest,
         replacement_expected_version=request.replacement_expected_version,
     )
     replacement = repository.require(request.replacement_memory_id, owner_id=owner_id)
+    if replacement.memory_type.value == "preference":
+        record_action(runtime, source_type=FeedbackSourceType.EXPLICIT_INSTRUCTION,
+            source_action_id=f"memory-supersede:{memory_id}:{request.expected_version}",
+            content=replacement.display_text)
     return MemorySupersedeResponse(
         superseded=_public_memory(old), replacement=_public_memory(replacement)
     )

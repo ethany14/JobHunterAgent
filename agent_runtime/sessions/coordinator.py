@@ -121,6 +121,8 @@ class SessionCoordinator:
         max_tool_calls: int = 10,
         session_expires_at: datetime | None = None,
         allowed_skills: frozenset[str] | None = None,
+        canary_skill_version_ids: frozenset[str] = frozenset(),
+        shadow_skill_version_ids: frozenset[str] = frozenset(),
     ) -> SessionState:
         identifier = session_id or str(uuid4())
         system = AgentMessage(
@@ -140,6 +142,8 @@ class SessionCoordinator:
             allowed_skills=(
                 self._default_allowed_skills if allowed_skills is None else allowed_skills
             ),
+            canary_skill_version_ids=canary_skill_version_ids,
+            shadow_skill_version_ids=shadow_skill_version_ids,
         )
         return self._sessions.create(
             state,

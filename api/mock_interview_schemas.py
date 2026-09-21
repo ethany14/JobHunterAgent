@@ -20,3 +20,10 @@ class MockMutation(BaseModel):
 
 class MockAnswerRequest(MockMutation):
     answer: str = Field(min_length=1, max_length=20_000)
+
+
+class MockFeedbackRequest(BaseModel):
+    source_action_id: str = Field(min_length=1, max_length=128)
+    helpful: bool
+    feedback: str | None = Field(default=None, max_length=2000)
+    edited_structure: str | None = Field(default=None, max_length=5000)

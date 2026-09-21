@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 class PackMutation(BaseModel):
     expected_version: int = Field(ge=0)
     idempotency_key: str = Field(min_length=1, max_length=128)
+    feedback: str | None = Field(default=None, max_length=2000)
 
 
 class GenerateRequest(PackMutation):

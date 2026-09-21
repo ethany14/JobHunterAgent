@@ -24,6 +24,7 @@ class CreateSessionRequest(SessionApiModel):
     title: str | None = Field(default=None, max_length=256)
     active_run_id: str | None = Field(default=None, min_length=1, max_length=128)
     application_id: str | None = Field(default=None, min_length=1, max_length=128)
+    test_canary: bool = False
 
 
 class SubmitMessageRequest(SessionApiModel):

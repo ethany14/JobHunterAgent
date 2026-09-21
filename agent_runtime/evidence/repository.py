@@ -159,7 +159,8 @@ class CareerEvidenceRepository:
 
     def create_candidate(self, *, category: EvidenceCategory | str, claim_text: str,
                          source_type: EvidenceSourceType | str, created_by: str = "local-user",
-                         original_resume_text: str | None = None, **details) -> CareerEvidence:
+                         original_resume_text: str | None = None,
+                         evidence_id: str | None = None, **details) -> CareerEvidence:
         fields = self._validated_fields({
             "category": category, "claim_text": claim_text,
             "source_type": source_type, **details,
@@ -167,7 +168,7 @@ class CareerEvidenceRepository:
         now = datetime.now(UTC)
         with self._sessions.begin() as session:
             row = CareerEvidenceRow(
-                evidence_id=str(uuid4()), status=EvidenceStatus.CANDIDATE.value,
+                evidence_id=evidence_id or str(uuid4()), status=EvidenceStatus.CANDIDATE.value,
                 current_version=1, version=1, event_sequence=0,
                 created_at=now, updated_at=now,
             )

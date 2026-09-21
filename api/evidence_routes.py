@@ -7,6 +7,8 @@ from api.evidence_schemas import (
     ProposeEvidenceRevision, RejectEvidence,
 )
 from api.session_dependencies import SessionRuntime, get_session_runtime
+from agent_runtime.feedback.types import FeedbackSourceType
+from api.feedback_instrumentation import record_action
 
 router = APIRouter(prefix="/api", tags=["career-evidence"])
 
@@ -73,13 +75,21 @@ def evidence_events(evidence_id: str,
 @router.post("/evidence/{evidence_id}/confirm")
 def confirm_evidence(evidence_id: str, body: EvidenceMutation,
                      runtime: SessionRuntime = Depends(get_session_runtime)):
-    return _public(_repo(runtime).confirm(evidence_id, body.expected_version))
+    item = _repo(runtime).confirm(evidence_id, body.expected_version)
+    record_action(runtime, source_type=FeedbackSourceType.EVIDENCE_CONFIRMED,
+        source_action_id=f"evidence-confirm:{evidence_id}:{body.expected_version}",
+        content=item.current.claim_text)
+    return _public(item)
 
 
 @router.post("/evidence/{evidence_id}/reject")
 def reject_evidence(evidence_id: str, body: RejectEvidence,
                     runtime: SessionRuntime = Depends(get_session_runtime)):
-    return _public(_repo(runtime).reject(evidence_id, body.expected_version, body.reason))
+    item = _repo(runtime).reject(evidence_id, body.expected_version, body.reason)
+    record_action(runtime, source_type=FeedbackSourceType.EVIDENCE_REJECTED,
+        source_action_id=f"evidence-reject:{evidence_id}:{body.expected_version}",
+        content=body.reason or "User rejected the evidence candidate.")
+    return _public(item)
 
 
 @router.post("/evidence/{evidence_id}/revisions")

@@ -37,6 +37,7 @@ import { createInterviewController } from "./interview-controller.js";
 import { createMockInterviewController } from "./mock-interview-controller.js";
 import { createPackController } from "./pack-controller.js";
 import { createTaskActivity } from "./task-activity.js";
+import { createLearningController } from "./learning-controller.js";
 
 const MAX_TEXT_LENGTH = 50_000;
 const POLL_INTERVAL_MS = 1_500;
@@ -84,10 +85,12 @@ const elements = {
   jobsTab: document.querySelector("#jobs-tab"),
   assistantTab: document.querySelector("#assistant-tab"),
   contextTab: document.querySelector("#context-tab"),
+  learningTab: document.querySelector("#learning-tab"),
   analysisPanel: document.querySelector("#analysis-panel"),
   jobsPanel: document.querySelector("#jobs-panel"),
   assistantPanel: document.querySelector("#assistant-panel"),
   contextPanel: document.querySelector("#context-panel"),
+  learningPanel: document.querySelector("#learning-panel"),
   sessionMessage: document.querySelector("#session-message"),
   sessionStatus: document.querySelector("#session-status"),
   sessionRun: document.querySelector("#session-run"),
@@ -136,6 +139,8 @@ const elements = {
   interviewRecover: document.querySelector("#interview-resume"),
   interviewCancel: document.querySelector("#interview-cancel"),
   interviewStatusList: document.querySelector("#interview-status-list"),
+  interviewStyleFeedback: document.querySelector("#interview-style-feedback"),
+  interviewStyleSubmit: document.querySelector("#interview-style-submit"),
   saveJob: document.querySelector("#save-job-button"),
   openWorkspace: document.querySelector("#open-workspace-button"),
   savedApplicationId: document.querySelector("#saved-application-id"),
@@ -687,19 +692,23 @@ function switchPanel(name) {
   const assistant = name === "assistant";
   const context = name === "context";
   const jobs = name === "jobs";
-  const analysis = !assistant && !context && !jobs;
+  const learning = name === "learning";
+  const analysis = !assistant && !context && !jobs && !learning;
   elements.analysisPanel.hidden = !analysis;
   elements.assistantPanel.hidden = !assistant;
   elements.contextPanel.hidden = !context;
   elements.jobsPanel.hidden = !jobs;
+  elements.learningPanel.hidden = !learning;
   elements.analysisTab.classList.toggle("active", analysis);
   elements.assistantTab.classList.toggle("active", assistant);
   elements.contextTab.classList.toggle("active", context);
   elements.jobsTab.classList.toggle("active", jobs);
+  elements.learningTab.classList.toggle("active", learning);
   elements.analysisTab.setAttribute("aria-selected", String(analysis));
   elements.assistantTab.setAttribute("aria-selected", String(assistant));
   elements.contextTab.setAttribute("aria-selected", String(context));
   elements.jobsTab.setAttribute("aria-selected", String(jobs));
+  elements.learningTab.setAttribute("aria-selected", String(learning));
 }
 
 function sessionStatusLabel(status) {
@@ -1487,6 +1496,8 @@ interviewController = createInterviewController({
     candidate: elements.interviewCandidate, saveLater: elements.interviewSaveLater,
     recover: elements.interviewRecover, cancel: elements.interviewCancel,
     statusList: elements.interviewStatusList,
+    styleFeedback: elements.interviewStyleFeedback,
+    styleSubmit: elements.interviewStyleSubmit,
   },
   onMessage: setWorkspaceMessage,
   onChange: (status) => {
@@ -1563,6 +1574,11 @@ const evidenceController = createEvidenceController({
 });
 
 elements.healthButton.addEventListener("click", checkHealth);
+const learningController = createLearningController(elements.learningPanel);
+elements.learningTab.addEventListener("click", () => {
+  switchPanel("learning");
+  learningController.refresh();
+});
 elements.analysisTab.addEventListener("click", () => switchPanel("analysis"));
 elements.jobsTab.addEventListener("click", () => {
   switchPanel("jobs");

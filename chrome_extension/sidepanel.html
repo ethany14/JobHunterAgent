@@ -20,6 +20,7 @@
       <button id="jobs-tab" class="panel-tab" type="button" aria-selected="false">Jobs</button>
       <button id="assistant-tab" class="panel-tab" type="button" aria-selected="false">Assistant</button>
       <button id="context-tab" class="panel-tab" type="button" aria-selected="false">Context</button>
+      <button id="learning-tab" class="panel-tab" type="button" aria-selected="false">Learning</button>
     </nav>
 
     <main>
@@ -150,6 +151,9 @@
             <div class="workspace-actions"><button id="submit-interview-answer" class="primary-button" type="button">Submit answer</button><button id="interview-no-experience" class="secondary-button" type="button">I don't have this experience</button><button id="interview-skip" class="text-button" type="button">Skip</button></div>
             <div id="interview-candidate" class="context-list"></div>
             <div class="workspace-actions"><button id="interview-save-later" class="text-button" type="button">Save and continue later</button><button id="interview-resume" class="secondary-button" type="button" hidden>Recover interview</button><button id="interview-cancel" class="text-button danger-text" type="button">Cancel interview</button></div>
+            <label for="interview-style-feedback">Feedback about question style</label>
+            <textarea id="interview-style-feedback" rows="2" maxlength="2000" placeholder="Ask shorter follow-up questions."></textarea>
+            <button id="interview-style-submit" class="secondary-button" type="button">Save question-style feedback</button>
             <div id="interview-status-list" class="context-list"></div>
           </section>
           <section class="interview-section" id="pack-section">
@@ -272,6 +276,24 @@
           <button id="create-evidence-button" class="secondary-button full-width" type="button">Save candidate statement</button>
           <div class="workspace-filters"><input id="evidence-search" maxlength="256" placeholder="Search evidence"><select id="evidence-filter"><option value="">All categories</option><option value="experience">Experience</option><option value="project">Project</option><option value="skill">Skill</option><option value="education">Education</option><option value="achievement">Achievement</option><option value="leadership">Leadership</option><option value="responsibility">Responsibility</option></select></div>
           <div id="evidence-list" class="context-list"></div>
+        </section>
+      </div>
+      <div id="learning-panel" class="app-panel" hidden>
+        <section class="card">
+          <h2>Learning candidates</h2>
+          <p class="hint">Feedback becomes a candidate for your review. Skill approval for evaluation does not publish it.</p>
+          <label for="learning-feedback">Tell the agent what to remember or improve</label>
+          <textarea id="learning-feedback" rows="3" maxlength="20000" placeholder="Keep my resume summary to no more than two sentences."></textarea>
+          <button id="learning-submit" class="primary-button" type="button">Save feedback</button>
+          <button id="learning-refresh" class="secondary-button" type="button">Refresh</button>
+          <p id="learning-message" role="status"></p>
+          <div class="workspace-filters" id="learning-tabs">
+            <button type="button" data-kind="preference_memory">Preferences</button>
+            <button type="button" data-kind="career_evidence">Evidence</button>
+            <button type="button" data-kind="skill">Skill Candidates</button>
+            <button type="button" data-kind="product_policy">Policy Issues</button>
+          </div>
+          <div id="learning-list" class="context-list"></div>
         </section>
       </div>
     </main>

@@ -44,10 +44,11 @@ function safeErrorMessage(status, detail) {
 
 async function request(path, options = {}) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs ?? REQUEST_TIMEOUT_MS);
   try {
+    const { timeoutMs: _timeoutMs, ...fetchOptions } = options;
     const response = await fetch(`${API_BASE_URL}${path}`, {
-      ...options,
+      ...fetchOptions,
       headers: {
         Accept: "application/json",
         ...(options.body ? { "Content-Type": "application/json" } : {}),
@@ -75,6 +76,73 @@ async function request(path, options = {}) {
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+export function materializeSkillCandidate(candidateId, expectedVersion, skillName, semanticVersion = "1.0.0") {
+  return request(`/api/skill-candidates/${encodeURIComponent(candidateId)}/materialize`, {
+    method: "POST", body: JSON.stringify({ expected_version: expectedVersion,
+      idempotency_key: crypto.randomUUID(), skill_name: skillName, semantic_version: semanticVersion }),
+  });
+}
+
+export function getStagedSkillCandidate(candidateId) {
+  return request(`/api/skill-candidates/${encodeURIComponent(candidateId)}/staged`);
+}
+
+export function restageSkillCandidate(candidateId, expectedVersion) {
+  return request(`/api/skill-candidates/${encodeURIComponent(candidateId)}/restage`, {
+    method: "POST", body: JSON.stringify({ expected_version: expectedVersion,
+      idempotency_key: crypto.randomUUID() }),
+  });
+}
+
+export function evaluateSkillCandidate(candidateId, expectedVersion, repetitions = 3) {
+  return request(`/api/skill-candidates/${encodeURIComponent(candidateId)}/evaluations`, {
+    method: "POST", timeoutMs: 600_000,
+    body: JSON.stringify({ expected_version: expectedVersion,
+      idempotency_key: crypto.randomUUID(), repetitions }),
+  });
+}
+
+export function getSkillEvaluation(evaluationId, includeResults = false) {
+  const suffix = includeResults ? "/results" : "";
+  return request(`/api/skill-evaluations/${encodeURIComponent(evaluationId)}${suffix}`);
+}
+
+export function publishSkillCandidate(candidateId, expectedVersion, acknowledgeSoftRegressions = false) {
+  return request(`/api/skill-candidates/${encodeURIComponent(candidateId)}/publish`, {
+    method: "POST", body: JSON.stringify({ expected_version: expectedVersion,
+      idempotency_key: crypto.randomUUID(),
+      acknowledge_soft_regressions: acknowledgeSoftRegressions }),
+  });
+}
+
+export function rejectStagedSkillCandidate(candidateId, expectedVersion) {
+  return request(`/api/skill-candidates/${encodeURIComponent(candidateId)}/reject`, {
+    method: "POST", body: JSON.stringify({ expected_version: expectedVersion,
+      idempotency_key: crypto.randomUUID() }),
+  });
+}
+
+export function listGovernedSkills() { return request("/api/skills"); }
+export function listGovernedSkillVersions(name) {
+  return request(`/api/skills/${encodeURIComponent(name)}/versions`);
+}
+export function getGovernedSkillMetrics(name) {
+  return request(`/api/skills/${encodeURIComponent(name)}/metrics`);
+}
+export function activateGovernedSkill(name, versionId, expectedVersion, mode) {
+  return request(`/api/skills/${encodeURIComponent(name)}/activate`, {
+    method: "POST", body: JSON.stringify({ version_id: versionId, mode,
+      expected_version: expectedVersion, idempotency_key: crypto.randomUUID() }),
+  });
+}
+export function rollbackGovernedSkill(name, failedVersionId, targetVersionId, expectedVersion, reason) {
+  return request(`/api/skills/${encodeURIComponent(name)}/rollback`, {
+    method: "POST", body: JSON.stringify({ failed_version_id: failedVersionId,
+      target_version_id: targetVersionId, expected_version: expectedVersion,
+      reason, idempotency_key: crypto.randomUUID() }),
+  });
 }
 
 export function health() {
@@ -464,5 +532,45 @@ export function cancelAgentTask(taskId, expectedVersion, subtree = false) {
 export function retryAgentTask(taskId, expectedVersion) {
   return request(`/api/agent-tasks/${encodeURIComponent(taskId)}/retry`, {
     method: "POST", body: JSON.stringify({ expected_version: expectedVersion }),
+  });
+}
+
+export function createFeedback(sourceType, content, sourceActionId = crypto.randomUUID(), applicationId = null) {
+  return request("/api/feedback", { method: "POST", body: JSON.stringify({
+    source_type: sourceType, content, source_action_id: sourceActionId,
+    application_id: applicationId,
+  }) });
+}
+
+export function listLearningCandidates(candidateType = null) {
+  const query = candidateType ? `?candidate_type=${encodeURIComponent(candidateType)}` : "";
+  return request(`/api/learning-candidates${query}`);
+}
+
+export function getLearningCandidateEvents(candidateId) {
+  return request(`/api/learning-candidates/${encodeURIComponent(candidateId)}/events`);
+}
+
+export function getLearningCandidateConflicts(candidateId) {
+  return request(`/api/learning-candidates/${encodeURIComponent(candidateId)}/conflicts`);
+}
+
+export function mutateLearningCandidate(candidateId, action, expectedVersion, content = null) {
+  return request(`/api/learning-candidates/${encodeURIComponent(candidateId)}/${action}`, {
+    method: "POST", body: JSON.stringify({ expected_version: expectedVersion,
+      idempotency_key: crypto.randomUUID(), content }),
+  });
+}
+
+export function submitMockInterviewFeedback(mockInterviewId, helpful, feedback = null, editedStructure = null) {
+  return request(`/api/mock-interviews/${encodeURIComponent(mockInterviewId)}/feedback`, {
+    method: "POST", body: JSON.stringify({ source_action_id: crypto.randomUUID(),
+      helpful, feedback, edited_structure: editedStructure }),
+  });
+}
+
+export function submitInterviewStyleFeedback(interviewSessionId, feedback) {
+  return request(`/api/interviews/${encodeURIComponent(interviewSessionId)}/feedback`, {
+    method: "POST", body: JSON.stringify({ source_action_id: crypto.randomUUID(), feedback }),
   });
 }

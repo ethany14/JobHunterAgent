@@ -112,7 +112,11 @@ export function createPackController({ elements, getApplication, onMessage }) {
         card.append(edit);
       }
       if (["awaiting_review", "needs_revision", "rejected", "failed"].includes(item.status) && !item.requires_manual_answer) {
-        actions.append(button("Regenerate", () => mutate(item, "regenerate")));
+        actions.append(button("Regenerate", () => {
+          const reason = window.prompt("Optional reason for regeneration", "");
+          if (reason === null) return;
+          mutate(item, "regenerate", { feedback: reason.trim() || null });
+        }));
       }
       actions.append(button("Evidence", async () => {
         try {

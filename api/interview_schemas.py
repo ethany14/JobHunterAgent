@@ -2,6 +2,11 @@
 from pydantic import BaseModel, Field
 
 
+class InterviewStyleFeedbackRequest(BaseModel):
+    source_action_id: str = Field(min_length=1, max_length=128)
+    feedback: str = Field(min_length=1, max_length=2000)
+
+
 class StartInterviewRequest(BaseModel):
     max_questions: int = Field(default=10, ge=1, le=20)
     max_followups_per_requirement: int = Field(default=2, ge=0, le=3)

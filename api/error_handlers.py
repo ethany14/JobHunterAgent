@@ -71,6 +71,10 @@ from agent_runtime.multi_agent.errors import (
 from agent_runtime.mock_interview.errors import (
     MockInterviewNotFound, MockInterviewConflict, MockInterviewValidation,
 )
+from agent_runtime.feedback.errors import (
+    FeedbackNotFoundError, LearningCandidateNotFoundError,
+    FeedbackConflictError, FeedbackValidationError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +87,18 @@ def _response(status_code: int, code: str, message: str) -> JSONResponse:
 
 
 def install_error_handlers(app: FastAPI) -> None:
+    @app.exception_handler(FeedbackNotFoundError)
+    @app.exception_handler(LearningCandidateNotFoundError)
+    async def feedback_missing(_: Request, __: Exception) -> JSONResponse:
+        return _response(404, "feedback_not_found", "The feedback record was not found.")
+
+    @app.exception_handler(FeedbackConflictError)
+    async def feedback_conflict(_: Request, __: FeedbackConflictError) -> JSONResponse:
+        return _response(409, "feedback_conflict", "Feedback state changed; refresh and try again.")
+
+    @app.exception_handler(FeedbackValidationError)
+    async def feedback_invalid(_: Request, __: FeedbackValidationError) -> JSONResponse:
+        return _response(422, "invalid_feedback", "Feedback input or action is invalid.")
     @app.exception_handler(MockInterviewNotFound)
     async def mock_missing(_: Request, __: MockInterviewNotFound) -> JSONResponse:
         return _response(404, "mock_interview_not_found", "The mock interview was not found.")

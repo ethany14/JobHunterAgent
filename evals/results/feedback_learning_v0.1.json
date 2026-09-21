@@ -1,0 +1,173 @@
+{
+  "timestamp": "2026-09-21T01:33:05.367423+00:00",
+  "dataset_version": "feedback-v0.1",
+  "model_calls": 0,
+  "tokens": 0,
+  "estimated_cost_usd": 0,
+  "classification_accuracy": 1.0,
+  "false_skill_candidate_rate": 0.0,
+  "false_memory_candidate_rate": 0.0,
+  "evidence_routing_accuracy": 1.0,
+  "policy_routing_accuracy": 1.0,
+  "confirmation_requirement_compliance": 1.0,
+  "pii_leakage_cases": 0,
+  "mean_latency_seconds": 3.8294117647058826e-05,
+  "duplicate_aggregation_rate": 1.0,
+  "conflict_detection_recall": 1.0,
+  "processing_recovery_success": 1.0,
+  "results": [
+    {
+      "case_id": "summary_preference",
+      "expected_type": "preference_memory",
+      "actual_type": "preference_memory",
+      "proposed_content": "Keep my resume summary to no more than two sentences.",
+      "correct": true,
+      "requires_user_confirmation": true,
+      "latency_seconds": 0.000325
+    },
+    {
+      "case_id": "application_override",
+      "expected_type": "preference_memory",
+      "actual_type": "preference_memory",
+      "proposed_content": "For this application, use three sentences in my summary.",
+      "correct": true,
+      "requires_user_confirmation": true,
+      "latency_seconds": 3.2e-05
+    },
+    {
+      "case_id": "global_change",
+      "expected_type": "preference_memory",
+      "actual_type": "preference_memory",
+      "proposed_content": "I now prefer four sentences in my resume summary for all applications.",
+      "correct": true,
+      "requires_user_confirmation": true,
+      "latency_seconds": 1.8e-05
+    },
+    {
+      "case_id": "new_metric",
+      "expected_type": "career_evidence",
+      "actual_type": "career_evidence",
+      "proposed_content": "I increased revenue by 18 percent in my project.",
+      "correct": true,
+      "requires_user_confirmation": true,
+      "latency_seconds": 4.9e-05
+    },
+    {
+      "case_id": "leadership_correction",
+      "expected_type": "preference_memory",
+      "actual_type": "preference_memory",
+      "proposed_content": "Created Tableau dashboards for market analysis.",
+      "correct": true,
+      "requires_user_confirmation": true,
+      "latency_seconds": 5.8e-05
+    },
+    {
+      "case_id": "repeated_edit",
+      "expected_type": "preference_memory",
+      "actual_type": "preference_memory",
+      "proposed_content": "Short summary.",
+      "correct": true,
+      "requires_user_confirmation": true,
+      "latency_seconds": 1.5e-05
+    },
+    {
+      "case_id": "one_acceptance",
+      "expected_type": "preference_memory",
+      "actual_type": "preference_memory",
+      "proposed_content": "User accepted artifact output; preferred details need clarification.",
+      "correct": true,
+      "requires_user_confirmation": true,
+      "latency_seconds": 1.1e-05
+    },
+    {
+      "case_id": "verifier_correction",
+      "expected_type": "product_policy",
+      "actual_type": "product_policy",
+      "proposed_content": "Unknown Evidence IDs must fail verification.",
+      "correct": true,
+      "requires_user_confirmation": true,
+      "latency_seconds": 1.3e-05
+    },
+    {
+      "case_id": "application_rejection",
+      "expected_type": "ignore",
+      "actual_type": "ignore",
+      "proposed_content": "",
+      "correct": true,
+      "requires_user_confirmation": true,
+      "latency_seconds": 1.3e-05
+    },
+    {
+      "case_id": "application_offer",
+      "expected_type": "ignore",
+      "actual_type": "ignore",
+      "proposed_content": "",
+      "correct": true,
+      "requires_user_confirmation": true,
+      "latency_seconds": 1.1e-05
+    },
+    {
+      "case_id": "safety_invariant",
+      "expected_type": "product_policy",
+      "actual_type": "product_policy",
+      "proposed_content": "External writes require approval.",
+      "correct": true,
+      "requires_user_confirmation": true,
+      "latency_seconds": 1.1e-05
+    },
+    {
+      "case_id": "prompt_injection",
+      "expected_type": "ignore",
+      "actual_type": "ignore",
+      "proposed_content": "",
+      "correct": true,
+      "requires_user_confirmation": true,
+      "latency_seconds": 8e-06
+    },
+    {
+      "case_id": "personal_not_skill",
+      "expected_type": "career_evidence",
+      "actual_type": "career_evidence",
+      "proposed_content": "I built a reusable procedure for checking my project dashboards.",
+      "correct": true,
+      "requires_user_confirmation": true,
+      "latency_seconds": 1.6e-05
+    },
+    {
+      "case_id": "contradictory_preference",
+      "expected_type": "preference_memory",
+      "actual_type": "preference_memory",
+      "proposed_content": "I prefer four sentences in my resume summary.",
+      "correct": true,
+      "requires_user_confirmation": true,
+      "latency_seconds": 1.2e-05
+    },
+    {
+      "case_id": "duplicate_replay",
+      "expected_type": "preference_memory",
+      "actual_type": "preference_memory",
+      "proposed_content": "Keep my resume summary to no more than two sentences.",
+      "correct": true,
+      "requires_user_confirmation": true,
+      "latency_seconds": 1.1e-05
+    },
+    {
+      "case_id": "pii_skill",
+      "expected_type": "ignore",
+      "actual_type": "ignore",
+      "proposed_content": "",
+      "correct": true,
+      "requires_user_confirmation": true,
+      "latency_seconds": 1.5e-05
+    },
+    {
+      "case_id": "explicit_skill_procedure",
+      "expected_type": "skill",
+      "actual_type": "skill",
+      "proposed_content": "Create a skill: use a reusable procedure to check every factual claim against evidence.",
+      "correct": true,
+      "requires_user_confirmation": true,
+      "latency_seconds": 3.3e-05
+    }
+  ]
+}

@@ -14,6 +14,9 @@ from agent_runtime.context.models import (
     MemoryUsageEventRow,
     SkillUsageEventRow,
 )
+from agent_runtime.skills.evolution_models import (
+    SkillActivationEventRow, SkillEvolutionVersionRow, SkillRuntimeMetricRow,
+)
 from agent_runtime.context.snapshots import ContextSnapshot, ContextSnapshotStatus, ContextSnapshotUnavailableError
 from agent_runtime.memory.models import MemoryItemRow
 from agent_runtime.memory.types import MemoryItem
@@ -97,6 +100,17 @@ class ContextSnapshotRepository:
                     usage_id=str(uuid4()), version_id=reference.version_id,
                     snapshot_id=snapshot_id, used_at=now,
                 ))
+                metric = session.get(SkillRuntimeMetricRow, reference.version_id)
+                if metric is not None:
+                    metric.selection_count += 1
+            for reference in used.shadow_skill_versions:
+                evolution = session.get(SkillEvolutionVersionRow, reference.version_id)
+                if evolution is not None:
+                    session.add(SkillActivationEventRow(
+                        event_id=str(uuid4()), skill_version_id=reference.version_id,
+                        candidate_id=evolution.candidate_id, event_type="shadow_selected",
+                        reviewer=None, reason_code=None, request_key=None, created_at=now,
+                    ))
             session.flush()
         return used
 

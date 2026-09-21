@@ -18,7 +18,9 @@ class SkillValidator:
         warnings: list[str] = []
         if not parsed.name or len(parsed.name) > 64 or not _NAME.fullmatch(parsed.name):
             errors.append("name must be 1-64 lowercase letters, digits, and single hyphens")
-        if parsed.name != package_root.name:
+        package_name = (package_root.parent.parent.name
+                        if package_root.parent.name == "versions" else package_root.name)
+        if parsed.name != package_name:
             errors.append("name must equal the Skill directory name")
         if not parsed.description.strip() or len(parsed.description) > 1024:
             errors.append("description must be 1-1024 characters")

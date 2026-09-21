@@ -29,8 +29,11 @@ from agent_runtime.security import canonical_json
 from agent_runtime.sessions.repository import SessionRepository
 from agent_runtime.sessions.state import PersistedSessionMessage, SessionState
 from agent_runtime.skills.hashing import hash_skill_package
+from agent_runtime.skills.errors import SkillContentChangedError, SkillNotFoundError, SkillSecurityError
 from agent_runtime.skills.repository import SkillRepository
 from agent_runtime.skills.routing import SessionSkillProfile, SkillRouter
+from agent_runtime.skills.types import SkillStatus
+from agent_runtime.memory.scoring import lexical_tokens
 from agent_runtime.tools.messages import AgentMessage
 
 PERMISSION_EVIDENCE_POLICY = (
@@ -73,6 +76,7 @@ class SessionContextProjector:
         memory_token_budget: int = 1_500,
         source_resolver: Callable[[SessionState], list[tuple[str, str]]] | None = None,
         available_tool_names: Callable[[], frozenset[str]] | None = None,
+        available_test_skill_versions: Callable[[str], frozenset[str]] | None = None,
     ) -> None:
         self._sessions = sessions
         self._snapshots = snapshots
@@ -89,6 +93,27 @@ class SessionContextProjector:
         self._memory_token_budget = memory_token_budget
         self._source_resolver = source_resolver
         self._available_tool_names = available_tool_names
+        self._available_test_skill_versions = available_test_skill_versions
+
+    @staticmethod
+    def _test_skill_matches(name: str, description: str, task: str) -> bool:
+        """Use the same lexical overlap criterion as regular Skill routing."""
+        return bool(set(lexical_tokens(task)) & set(lexical_tokens(f"{name} {description}")))
+
+    def _test_skill(self, version_id: str, mode: str):
+        if (self._skills is None or self._available_test_skill_versions is None
+                or version_id not in self._available_test_skill_versions(mode)):
+            raise ContextSnapshotUnavailableError("Test Skill version is not permitted.")
+        version = self._skills.require(version_id)
+        if version.status != SkillStatus.APPROVED:
+            raise ContextSnapshotUnavailableError("Test Skill version is not approved.")
+        try:
+            actual_hash = hash_skill_package(Path(version.package_path))
+        except (OSError, ValueError, SkillSecurityError) as exc:
+            raise ContextSnapshotUnavailableError("Test Skill package is unavailable.") from exc
+        if actual_hash != version.content_hash:
+            raise SkillContentChangedError("Test Skill package changed after publication.")
+        return version
 
     def prepare(self, state: SessionState) -> PreparedModelContext:
         persisted = self._sessions.messages(state.session_id)
@@ -104,6 +129,12 @@ class SessionContextProjector:
         if self._available_tool_names is not None:
             effective_tools &= self._available_tool_names()
         skill_refs: list[SkillSnapshotRef] = []
+        canary_versions = []
+        for version_id in sorted(state.canary_skill_version_ids):
+            version = self._test_skill(version_id, "canary")
+            if self._test_skill_matches(version.name, version.description, active_task):
+                canary_versions.append(version)
+        canary_names = {version.name for version in canary_versions}
         if self._skill_router and state.allowed_skills:
             routes = self._skill_router.route(
                 text=active_task,
@@ -113,6 +144,8 @@ class SessionContextProjector:
                 runtime_allowed_tools=state.allowed_tools,
             )
             for route in routes:
+                if route.skill.name in canary_names:
+                    continue
                 effective_tools &= route.skill.effective_allowed_tools
                 version = self._skills.require(route.skill.version_id) if self._skills else None
                 if version is None:
@@ -124,6 +157,24 @@ class SessionContextProjector:
                     f"skill:{version.version_id}", ContextBlockKind.SKILL_PROCEDURE,
                     ContextTrustLevel.TRUSTED_PROCEDURE,
                     f"{SKILL_BOUNDARY}\n\n{route.skill.instructions}",
+                ))
+        for version in canary_versions:
+            if version.allowed_tools is not None:
+                effective_tools &= version.allowed_tools
+            skill_refs.append(SkillSnapshotRef(
+                version_id=version.version_id, content_hash=version.content_hash,
+            ))
+            blocks.append(self._block(
+                f"skill:{version.version_id}", ContextBlockKind.SKILL_PROCEDURE,
+                ContextTrustLevel.TRUSTED_PROCEDURE,
+                f"{SKILL_BOUNDARY}\n\n{version.instruction_snapshot}",
+            ))
+        shadow_refs: list[SkillSnapshotRef] = []
+        for version_id in sorted(state.shadow_skill_version_ids):
+            version = self._test_skill(version_id, "shadow")
+            if self._test_skill_matches(version.name, version.description, active_task):
+                shadow_refs.append(SkillSnapshotRef(
+                    version_id=version.version_id, content_hash=version.content_hash,
                 ))
         blocks.append(self._block("active-task", ContextBlockKind.ACTIVE_TASK,
                                   ContextTrustLevel.UNTRUSTED_DATA, active_task))
@@ -246,6 +297,7 @@ class SessionContextProjector:
             system_prompt_version=self._system_prompt_version,
             system_prompt_hash=self._hash(self._system_policy),
             skill_versions=skill_refs,
+            shadow_skill_versions=shadow_refs,
             memory_versions=memory_refs,
             evidence_versions=included_evidence_refs,
             source_artifact_ids=[source_id for source_id, _ in sources],
@@ -276,11 +328,15 @@ class SessionContextProjector:
             raise ContextSnapshotUnavailableError(
                 "A tool referenced by the prepared context is unavailable."
             )
-        for reference in snapshot.skill_versions:
+        for reference in [*snapshot.skill_versions, *snapshot.shadow_skill_versions]:
             if self._skills is None:
                 raise ContextSnapshotUnavailableError("Referenced Skill registry is unavailable.")
-            version = self._skills.require(reference.version_id)
-            if version.content_hash != reference.content_hash or hash_skill_package(Path(version.package_path)) != reference.content_hash:
+            try:
+                version = self._skills.require(reference.version_id)
+                current_hash = hash_skill_package(Path(version.package_path))
+            except (OSError, ValueError, SkillSecurityError, SkillNotFoundError) as exc:
+                raise ContextSnapshotUnavailableError("Referenced Skill is unavailable.") from exc
+            if version.content_hash != reference.content_hash or current_hash != reference.content_hash:
                 raise ContextSnapshotUnavailableError("Referenced Skill content changed.")
         for reference in snapshot.memory_versions:
             if self._memories is None:

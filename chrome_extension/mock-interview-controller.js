@@ -4,6 +4,7 @@ import {
   getActiveMockInterview, getMockInterview, getMockInterviewCandidates,
   getMockInterviewReport, mutateCareerEvidence,
   mutateMockInterview, startMockInterview,
+  submitMockInterviewFeedback,
 } from "./api-client.js";
 
 // All model, source and error strings are rendered with textContent.
@@ -52,6 +53,37 @@ export function createMockInterviewController({ elements, onMessage }) {
       }
       if (feedback.suggested_structure) line(elements.feedback,
         `Suggested structure: ${feedback.suggested_structure}`);
+      for (const [helpful, label] of [[true, "Helpful"], [false, "Not helpful"]]) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "secondary-button";
+        button.textContent = label;
+        button.addEventListener("click", async () => {
+          try {
+            const comment = window.prompt("Optional feedback about this coaching", "");
+            if (comment === null) return;
+            await submitMockInterviewFeedback(state.mock_interview_id, helpful, comment || null);
+            onMessage("Coaching feedback saved for review.", "success");
+          } catch { onMessage("Could not save coaching feedback.", "error"); }
+        });
+        elements.feedback.append(button);
+      }
+      if (feedback.suggested_structure) {
+        const edit = document.createElement("button");
+        edit.type = "button";
+        edit.className = "secondary-button";
+        edit.textContent = "Edit suggested structure";
+        edit.addEventListener("click", async () => {
+          const revision = window.prompt("Your preferred answer structure", feedback.suggested_structure);
+          if (revision === null || !revision.trim()) return;
+          try {
+            await submitMockInterviewFeedback(state.mock_interview_id, false,
+              "User edited the suggested coaching structure.", revision.trim());
+            onMessage("Edited coaching structure saved for review.", "success");
+          } catch { onMessage("Could not save edited coaching structure.", "error"); }
+        });
+        elements.feedback.append(edit);
+      }
     }
     elements.report.replaceChildren();
     if (state?.status === "completed") {
