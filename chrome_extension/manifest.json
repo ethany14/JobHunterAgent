@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Job Agent",
-  "description": "Extract a job description and review an evidence-grounded tailored resume.",
-  "version": "0.1.0",
+  "name": "Northstar Job Lens",
+  "description": "Extract the current job and get a focused resume match analysis.",
+  "version": "0.2.2",
   "minimum_chrome_version": "116",
   "permissions": [
     "activeTab",
@@ -14,10 +14,11 @@
     "http://localhost:8000/*"
   ],
   "background": {
-    "service_worker": "service-worker.js"
+    "service_worker": "service-worker.js",
+    "type": "module"
   },
   "action": {
-    "default_title": "Open Job Agent"
+    "default_title": "Analyze this job"
   },
   "side_panel": {
     "default_path": "sidepanel.html"

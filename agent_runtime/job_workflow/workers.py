@@ -399,10 +399,12 @@ class ArtifactVerifierWorker:
         if prior and prior["source_content_hash"] == content_hash and prior["verification"]["passed"]:
             verdict = ArtifactVerification.model_validate(prior["verification"])
         else:
+            job_data = _one(context, "job_analysis")
             verdict = self._verifier.verify(content, kind, snapshot.items,
                 max_length=task.input_spec.get("max_length"),
                 expected_question=task.input_spec.get("question"),
-                preferences=snapshot.preference_versions)
+                preferences=snapshot.preference_versions,
+                expected_role=job_data.get("title") if isinstance(job_data, dict) else None)
         if kind == "tailored_resume" and verdict.passed and not (
                 prior and prior["source_content_hash"] == content_hash and prior["verification"]["passed"]):
             llm_verdict = self._model.verify_resume(_writer_state(task, context, current=content))

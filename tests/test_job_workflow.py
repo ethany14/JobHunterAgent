@@ -17,7 +17,7 @@ from agent_runtime.job_workflow.workers import (
 from agent_runtime.application_pack.repository import PackRepository
 from agent_runtime.application_pack.workflow import ApplicationPackWorkflow
 from agent_runtime.application_pack.types import (
-    ApplicationAnswer, CoverLetter, GroundedBlock,
+    ApplicationAnswer, CoverLetter, CoverLetterParagraph, GroundedBlock,
 )
 from agent_runtime.evidence.repository import CareerEvidenceRepository
 from agent_runtime.interviewer.repository import InterviewRepository
@@ -239,13 +239,13 @@ def test_existing_pack_mode_defaults_to_standard(tmp_path):
 
 def test_multi_agent_panel_uses_safe_text_and_server_owned_plan():
     from pathlib import Path
-    root = Path(__file__).resolve().parents[1] / "chrome_extension"
-    page = (root / "sidepanel.html").read_text(encoding="utf-8")
-    panel = (root / "sidepanel.js").read_text(encoding="utf-8")
-    controller = (root / "multi-agent-controller.js").read_text(encoding="utf-8")
-    client = (root / "api-client.js").read_text(encoding="utf-8")
-    assert 'value="single_custom"' in page
-    assert 'value="multi_agent_v1"' in page
+    root = Path(__file__).resolve().parents[1]
+    page = (root / "web_app/index.html").read_text(encoding="utf-8")
+    panel = (root / "web_app/app.js").read_text(encoding="utf-8")
+    controller = (root / "chrome_extension/multi-agent-controller.js").read_text(encoding="utf-8")
+    client = (root / "web_app/api.js").read_text(encoding="utf-8")
+    assert 'value="single_custom"' not in page
+    assert 'value="multi_agent_v1"' not in page
     assert "renderMultiAgentProgress" in controller
     assert "textContent" in controller and "innerHTML" not in controller
     assert "innerHTML" not in panel
@@ -331,16 +331,23 @@ class FakePackModel:
             raise RuntimeError("Synthetic optional cover-letter failure")
         import json
         evidence = json.loads(content)["evidence"][0]
-        return CoverLetter(blocks=[GroundedBlock(block_id="fact-1",
-            text=evidence["claim_text"], block_type="factual",
-            evidence_ids=[evidence["evidence_id"]],
-            evidence_version_ids=[evidence["evidence_version_id"]])])
+        parsed = json.loads(content)
+        return CoverLetter(paragraphs=[
+            CoverLetterParagraph(paragraph_type="opening",
+                text=f"I am applying for the {parsed['title']} role."),
+            CoverLetterParagraph(paragraph_type="evidence",
+                text=f"One relevant example is: {evidence['claim_text']}",
+                evidence_ids=[evidence["evidence_id"]],
+                evidence_version_ids=[evidence["evidence_version_id"]]),
+            CoverLetterParagraph(paragraph_type="motivation",
+                text="I would welcome the opportunity to contribute to this work."),
+        ])
 
     def application_answer(self, content):
         import json
         parsed = json.loads(content)
         evidence = parsed["evidence"][0]
-        text = evidence["claim_text"]
+        text = f"My relevant experience includes the following: {evidence['claim_text']}"
         block = GroundedBlock(block_id="fact-1", text=text, block_type="factual",
             evidence_ids=[evidence["evidence_id"]],
             evidence_version_ids=[evidence["evidence_version_id"]])

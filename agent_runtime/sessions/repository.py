@@ -122,10 +122,37 @@ class SessionRepository:
         with self._session_factory() as session:
             rows = session.scalars(
                 select(AgentSessionRow)
+                .where(AgentSessionRow.archived_at.is_(None))
                 .order_by(AgentSessionRow.updated_at.desc(), AgentSessionRow.session_id)
                 .limit(limit)
             ).all()
             return [SessionState.model_validate_json(row.state_json) for row in rows]
+
+    def is_archived(self, session_id: str) -> bool:
+        with self._session_factory() as session:
+            row = session.get(AgentSessionRow, session_id)
+            return row is not None and row.archived_at is not None
+
+    def archive(self, session_id: str, *, expected_version: int) -> None:
+        """Hide a local conversation while retaining its audit records."""
+        now = datetime.now(UTC)
+        with self._session_factory.begin() as session:
+            changed = session.execute(
+                update(AgentSessionRow)
+                .where(
+                    AgentSessionRow.session_id == session_id,
+                    AgentSessionRow.version == expected_version,
+                    AgentSessionRow.archived_at.is_(None),
+                )
+                .values(archived_at=now)
+            )
+            if changed.rowcount != 1:
+                row = session.get(AgentSessionRow, session_id)
+                if row is None or row.archived_at is not None:
+                    raise SessionNotFoundError(f"Session '{session_id}' was not found.")
+                raise StaleSessionError(
+                    f"Session '{session_id}' has a stale state version."
+                )
 
     def save_transition(
         self,

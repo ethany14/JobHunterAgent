@@ -1,10 +1,11 @@
 """Synchronous local Pack APIs; model calls stay off the async event loop."""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Response
 
 from api.pack_schemas import EditItemRequest, GenerateRequest, PackMutation, QuestionRequest
 from api.session_dependencies import SessionRuntime, get_session_runtime
 from agent_runtime.feedback.types import FeedbackSourceType
 from api.feedback_instrumentation import record_action
+from job_agent.pdf_rendering import render_tailored_resume_pdf
 
 
 router = APIRouter(prefix="/api", tags=["application-pack"])
@@ -46,6 +47,26 @@ def list_packs(application_id: str, runtime: SessionRuntime = Depends(get_sessio
 @router.get("/packs/{pack_id}")
 def get_pack(pack_id: str, runtime: SessionRuntime = Depends(get_session_runtime)):
     return _detail(pack_id, runtime)
+
+
+@router.get("/packs/{pack_id}/items/{item_id}/resume.pdf")
+def pack_resume_pdf(
+    pack_id: str,
+    item_id: str,
+    runtime: SessionRuntime = Depends(get_session_runtime),
+) -> Response:
+    _, repository = _runtime(runtime)
+    item = repository.item(pack_id, item_id)
+    if item.artifact_type != "tailored_resume":
+        raise HTTPException(status_code=422, detail="Only tailored resumes can be exported as resume PDFs.")
+    content = repository.artifact(pack_id, item_id)
+    if content is None:
+        raise HTTPException(status_code=409, detail="The tailored resume is not ready for export.")
+    return Response(
+        content=render_tailored_resume_pdf(content),
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="tailored-resume.pdf"'},
+    )
 
 
 def _generate(pack_id: str, artifact_type: str, body, runtime: SessionRuntime,

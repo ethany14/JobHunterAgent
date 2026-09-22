@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -121,3 +121,25 @@ class EvidenceApplicationLink(BaseModel):
     link_type: EvidenceLinkType
     created_at: datetime
     created_by: str
+
+
+class EvidenceCandidate(BaseModel):
+    """A reviewable fact extracted from a source message before Vault persistence."""
+
+    model_config = ConfigDict(extra="forbid")
+    candidate_id: str
+    fact_type: Literal[
+        "achievement", "responsibility", "skill", "project", "education",
+        "employment", "metric", "preference", "other",
+    ]
+    normalized_fact: str = Field(min_length=1, max_length=2_000)
+    source_quote: str = Field(min_length=1, max_length=2_000)
+    source_message_id: str | None = None
+    source_context: str | None = None
+    confidence: float = Field(ge=0, le=1)
+    requires_confirmation: bool = True
+    related_entity: str | None = None
+    session_id: str | None = None
+    extracted_at: datetime
+    extraction_version: str = "evidence-candidate-v1"
+    conflict_evidence_ids: list[str] = Field(default_factory=list)

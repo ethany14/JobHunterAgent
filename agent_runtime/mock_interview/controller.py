@@ -74,28 +74,6 @@ class MockInterviewController:
             return active
         application = self.workspace.get_application(application_id)
         snapshot = self.workspace.current_snapshot(application_id)
-        available_packs = self.packs.list_for_application(application_id)
-        if self.pack_workflow is not None:
-            available_packs = [self.pack_workflow.refresh_staleness(item.pack_id)
-                               for item in available_packs]
-        approved = next((item for item in available_packs
-                         if item.status == PackStatus.APPROVED
-                         and item.snapshot_id == snapshot.snapshot_id), None)
-        if approved is None:
-            raise MockInterviewValidation("An approved Pack for the current Job is required.")
-        selected_evidence = []
-        for pinned in self.packs.snapshot(approved.pack_id).items:
-            item = self.evidence.get(pinned.evidence_id)
-            if (item.status != EvidenceStatus.CONFIRMED
-                    or item.current.evidence_version_id != pinned.evidence_version_id
-                    or item.current.content_hash != pinned.content_hash):
-                raise MockInterviewValidation("Pinned Career Evidence is unavailable or changed.")
-            selected_evidence.append({"evidence_id": item.evidence_id,
-                "evidence_version_id": item.current.evidence_version_id,
-                "version": item.current.version_number,
-                "content_hash": item.current.content_hash,
-                "claim_text": item.current.claim_text,
-                "category": item.current.category.value})
         artifacts = self.workspace.list_artifacts(application_id)
         job_artifact = max((item for item in artifacts
             if item.artifact_type == ArtifactType.JOB_ANALYSIS),
@@ -103,17 +81,42 @@ class MockInterviewController:
         if job_artifact is None:
             raise MockInterviewValidation("Analyze this Job before starting a mock interview.")
         analysis = JobAnalysis.model_validate(job_artifact.content)
+        available_packs = self.packs.list_for_application(application_id)
+        if self.pack_workflow is not None:
+            available_packs = [self.pack_workflow.refresh_staleness(item.pack_id)
+                               for item in available_packs]
+        approved = next((item for item in available_packs
+                         if item.status == PackStatus.APPROVED
+                         and item.snapshot_id == snapshot.snapshot_id), None)
+        selected_evidence = []
+        if approved is not None:
+            for pinned in self.packs.snapshot(approved.pack_id).items:
+                item = self.evidence.get(pinned.evidence_id)
+                if (item.status != EvidenceStatus.CONFIRMED
+                        or item.current.evidence_version_id != pinned.evidence_version_id
+                        or item.current.content_hash != pinned.content_hash):
+                    raise MockInterviewValidation("Pinned Career Evidence is unavailable or changed.")
+                selected_evidence.append(self._evidence_context(item))
+        else:
+            list_links = getattr(self.evidence, "list_for_application", None)
+            for link in list_links(application_id) if list_links else []:
+                item = self.evidence.get(link.evidence_id)
+                if (item.status == EvidenceStatus.CONFIRMED
+                        and item.current.evidence_version_id == link.evidence_version_id):
+                    selected_evidence.append(self._evidence_context(item))
         requirement_texts = {item.requirement_id: item.source_text or item.original_text
                              for item in analysis.requirements}
-        approved_ids = {item.artifact_id for item in self.packs.items(approved.pack_id)
-                        if item.artifact_id}
+        approved_ids = ({item.artifact_id for item in self.packs.items(approved.pack_id)
+                         if item.artifact_id} if approved is not None else set())
         pack_excerpt = "\n".join(canonical_json(item.content)
             for item in artifacts if item.artifact_id in approved_ids)[:8000]
         interview_id = str(uuid4())
         session_id = str(uuid4())
         plan = build_plan(interview_id=interview_id,
             snapshot_id=snapshot.snapshot_id, snapshot_hash=snapshot.content_hash,
-            pack_id=approved.pack_id, pack_version=approved.version,
+            pack_id=approved.pack_id if approved else None,
+            pack_version=approved.version if approved else None,
+            source_mode="approved_pack" if approved else "job_analysis",
             evidence=selected_evidence,
             requirement_ids=list(requirement_texts), requirement_texts=requirement_texts,
             job_description_excerpt=snapshot.cleaned_job_description[:12_000],
@@ -135,6 +138,15 @@ class MockInterviewController:
         self.interviews.create(state, plan, idempotency_key=idempotency_key)
         return self.resume(interview_id, expected_version=state.version,
             idempotency_key=f"initial:{idempotency_key}")
+
+    @staticmethod
+    def _evidence_context(item) -> dict:
+        return {"evidence_id": item.evidence_id,
+            "evidence_version_id": item.current.evidence_version_id,
+            "version": item.current.version_number,
+            "content_hash": item.current.content_hash,
+            "claim_text": item.current.claim_text,
+            "category": item.current.category.value}
 
     def _context(self, interview: MockInterviewSession, item, *, answer: str | None,
                  previous: dict | None = None) -> dict:
@@ -178,9 +190,10 @@ class MockInterviewController:
             system_prompt_version=PROMPT_VERSION,
             system_prompt_hash=hashlib.sha256(system.encode()).hexdigest(),
             evidence_versions=evidence_refs,
-            source_artifact_ids=[interview.application_id, plan.job_snapshot_id,
-                                 plan.pack_id, plan.plan_id,
-                                 context["plan_item"]["plan_item_id"]],
+            source_artifact_ids=[value for value in (
+                interview.application_id, plan.job_snapshot_id, plan.pack_id,
+                plan.plan_id, context["plan_item"]["plan_item_id"]
+            ) if value],
             effective_tools=frozenset(), block_manifests=blocks,
             estimated_input_tokens=estimate_tokens(system) + estimate_tokens(content),
             context_hash=hashlib.sha256((system + "\n" + content).encode()).hexdigest(),

@@ -11,11 +11,13 @@ from pydantic import BaseModel
 from custom_agent.state import AgentState, Step
 from custom_agent.steps import StepOutcome
 from job_agent.domain import (
-    make_evidence_id,
     normalize_job_analysis,
+    normalize_resume_analysis,
     normalize_skill_match,
+    normalize_tailored_resume_claim_ids,
     normalize_text,
 )
+from job_agent.quality import clean_tailored_resume, quality_result, validate_resume_structure
 from job_agent.model import DEFAULT_ENV_PATH, create_model, invoke_structured
 from job_agent.prompts import (
     JOB_PROMPT,
@@ -93,24 +95,7 @@ class JobAgentStepHandler:
         analysis = ResumeAnalysis.model_validate(
             self._analyze(ResumeAnalysis, RESUME_PROMPT, state.resume_text.strip())
         )
-        evidence_by_text: dict[str, ResumeEvidence] = {}
-        for item in analysis.evidence:
-            exact_text = item.exact_text
-            normalized = normalize_text(exact_text)
-            if normalized and normalized not in evidence_by_text:
-                evidence_by_text[normalized] = ResumeEvidence(
-                    evidence_id=make_evidence_id(exact_text),
-                    source_section=item.source_section,
-                    exact_text=exact_text,
-                )
-        return {
-            "resume_analysis": ResumeAnalysis.model_validate(
-                {
-                    **analysis.model_dump(mode="python"),
-                    "evidence": list(evidence_by_text.values()),
-                }
-            )
-        }
+        return {"resume_analysis": normalize_resume_analysis(analysis)}
 
     @staticmethod
     def _validate_evidence(state: AgentState) -> dict:
@@ -163,13 +148,16 @@ class JobAgentStepHandler:
             f"SOURCE OF TRUTH - ORIGINAL RESUME:\n{state.resume_text}\n\n"
             f"GROUNDED RESUME EVIDENCE:\n{state.resume_analysis.model_dump_json()}\n\n"
             f"TARGET REQUIREMENTS - JOB ANALYSIS:\n{state.job_analysis.model_dump_json()}\n\n"
-            f"SKILL MATCH:\n{state.skill_match.model_dump_json()}"
+            f"SKILL MATCH:\n{state.skill_match.model_dump_json()}\n\n"
+            "STRUCTURAL GUIDANCE:\n"
+            "Use at most two summary sentences and at most five selected bullets per source entry. "
+            "Return target requirement IDs only from the supplied Job Analysis."
         )
-        return {
-            "tailored_resume": TailoredResume.model_validate(
-                self._analyze(TailoredResume, WRITE_RESUME_PROMPT, content)
-            )
-        }
+        draft = normalize_tailored_resume_claim_ids(TailoredResume.model_validate(
+            self._analyze(TailoredResume, WRITE_RESUME_PROMPT, content)
+        ))
+        cleaned, _ = clean_tailored_resume(draft)
+        return {"tailored_resume": cleaned}
 
     def _verify_resume(self, state: AgentState) -> dict:
         if state.tailored_resume is None or state.resume_analysis is None:
@@ -187,11 +175,7 @@ class JobAgentStepHandler:
         known_ids = {item.evidence_id for item in state.resume_analysis.evidence}
         unsupported = list(verification.unsupported_claims)
         feedback = list(verification.revision_feedback)
-        claims = (
-            state.tailored_resume.professional_summary
-            + state.tailored_resume.experience_bullets
-            + state.tailored_resume.highlighted_skills
-        )
+        claims = state.tailored_resume.claims()
         for claim in claims:
             if not claim.evidence_ids:
                 unsupported.append(
@@ -215,12 +199,21 @@ class JobAgentStepHandler:
                 feedback.append(
                     f"Remove or rewrite '{claim.text}' using valid evidence IDs."
                 )
-        if unsupported != verification.unsupported_claims:
+        quality_issues = validate_resume_structure(
+            state.tailored_resume, state.resume_analysis.source_entries,
+            known_evidence_ids=known_ids,
+        )
+        quality = quality_result(quality_issues)
+        feedback.extend(quality.revision_feedback)
+        if unsupported != verification.unsupported_claims or quality_issues:
             verification = VerificationResult(
-                passed=False,
-                unsupported_claims=unsupported,
-                revision_feedback=feedback,
+                passed=False, unsupported_claims=unsupported,
+                revision_feedback=list(dict.fromkeys(feedback)), quality=quality,
             )
+        else:
+            verification = VerificationResult.model_validate({
+                **verification.model_dump(mode="python"), "quality": quality,
+            })
         return {
             "verification": verification,
             "revision_feedback": verification.revision_feedback,
@@ -245,10 +238,12 @@ class JobAgentStepHandler:
             "TARGET REQUIREMENTS - JOB ANALYSIS (NOT EVIDENCE):\n"
             f"{state.job_analysis.model_dump_json()}"
         )
+        revised = normalize_tailored_resume_claim_ids(TailoredResume.model_validate(
+            self._analyze(TailoredResume, REVISE_RESUME_PROMPT, content)
+        ))
+        revised, _ = clean_tailored_resume(revised)
         return {
-            "tailored_resume": TailoredResume.model_validate(
-                self._analyze(TailoredResume, REVISE_RESUME_PROMPT, content)
-            ),
+            "tailored_resume": revised,
             "approved": None,
             "human_feedback": None,
         }

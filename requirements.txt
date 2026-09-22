@@ -12,3 +12,5 @@ pytest
 httpx
 PyYAML>=6,<7
 mcp>=2.0,<3
+pypdf>=5,<7
+reportlab>=4,<6

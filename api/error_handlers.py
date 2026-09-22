@@ -75,6 +75,9 @@ from agent_runtime.feedback.errors import (
     FeedbackNotFoundError, LearningCandidateNotFoundError,
     FeedbackConflictError, FeedbackValidationError,
 )
+from agent_runtime.assistant.actions import (
+    AssistantActionConflictError, AssistantActionValidationError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +89,46 @@ def _response(status_code: int, code: str, message: str) -> JSONResponse:
     )
 
 
+_SAFE_MOCK_INTERVIEW_VALIDATION_MESSAGES = frozenset({
+    "Interview limits are out of range.",
+    "An approved Pack for the current Job is required.",
+    "Pinned Career Evidence is unavailable or changed.",
+    "Analyze this Job before starting a mock interview.",
+    "Answer must contain 1 to 20,000 characters.",
+    "Question count must be between 3 and 12.",
+    "Current Job analysis has no requirements.",
+})
+
+_SAFE_EVIDENCE_INTERVIEW_VALIDATION_MESSAGES = frozenset({
+    "Analyze the current Job snapshot before interviewing.",
+    "Interview limits are out of range.",
+    "Answer must contain 1 to 20,000 characters.",
+    "The answer needs a concrete supporting quote.",
+    "A supporting quote was not present in the answer.",
+    "The proposed claim must use the user's own wording.",
+    "The proposed claim must equal an exact supporting quote.",
+    "The answer contains an instruction rather than verifiable experience.",
+    "Interview context exceeds its token budget.",
+})
+
+
+def _safe_validation_message(error: Exception, allowed: frozenset[str],
+                             fallback: str) -> str:
+    message = str(error)
+    return message if message in allowed else fallback
+
+
 def install_error_handlers(app: FastAPI) -> None:
+    @app.exception_handler(AssistantActionConflictError)
+    async def assistant_action_conflict(_: Request, __: AssistantActionConflictError) -> JSONResponse:
+        return _response(409, "assistant_action_conflict",
+                         "Assistant state changed; refresh before retrying the action.")
+
+    @app.exception_handler(AssistantActionValidationError)
+    async def assistant_action_invalid(_: Request, __: AssistantActionValidationError) -> JSONResponse:
+        return _response(422, "invalid_assistant_action",
+                         "This action is unavailable or incomplete in the current Workspace.")
+
     @app.exception_handler(FeedbackNotFoundError)
     @app.exception_handler(LearningCandidateNotFoundError)
     async def feedback_missing(_: Request, __: Exception) -> JSONResponse:
@@ -108,8 +150,10 @@ def install_error_handlers(app: FastAPI) -> None:
         return _response(409, "mock_interview_conflict", "Interview state changed; refresh and try again.")
 
     @app.exception_handler(MockInterviewValidation)
-    async def mock_invalid(_: Request, __: MockInterviewValidation) -> JSONResponse:
-        return _response(422, "invalid_mock_interview", "Interview input or source is invalid.")
+    async def mock_invalid(_: Request, error: MockInterviewValidation) -> JSONResponse:
+        return _response(422, "invalid_mock_interview", _safe_validation_message(
+            error, _SAFE_MOCK_INTERVIEW_VALIDATION_MESSAGES,
+            "Interview input or source is invalid."))
 
     @app.exception_handler(TaskNotFoundError)
     async def task_missing(_: Request, __: TaskNotFoundError) -> JSONResponse:
@@ -151,8 +195,10 @@ def install_error_handlers(app: FastAPI) -> None:
         return _response(409, "stale_interview", "Interview version changed; refresh and try again.")
 
     @app.exception_handler(InterviewValidationError)
-    async def interview_invalid(_: Request, __: InterviewValidationError) -> JSONResponse:
-        return _response(422, "invalid_interview_input", "Interview input or source is invalid.")
+    async def interview_invalid(_: Request, error: InterviewValidationError) -> JSONResponse:
+        return _response(422, "invalid_interview_input", _safe_validation_message(
+            error, _SAFE_EVIDENCE_INTERVIEW_VALIDATION_MESSAGES,
+            "Interview input or source is invalid."))
     @app.exception_handler(EvidenceNotFoundError)
     async def evidence_missing(_: Request, __: EvidenceNotFoundError) -> JSONResponse:
         return _response(404, "evidence_not_found", "The evidence record was not found.")

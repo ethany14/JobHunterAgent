@@ -57,6 +57,7 @@ class AgentSessionRow(Base):
     allowed_skills_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     current_context_snapshot_id: Mapped[str | None] = mapped_column(String(36), index=True)
     last_context_snapshot_id: Mapped[str | None] = mapped_column(String(36), index=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
 
 class AgentSessionMessageRow(Base):

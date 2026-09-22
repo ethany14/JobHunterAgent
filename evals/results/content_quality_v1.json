@@ -1,0 +1,111 @@
+{
+  "dataset_version": "content-quality-v1",
+  "cases": [
+    {
+      "case_id": "duplicate_project",
+      "passed": true,
+      "observed": {
+        "duplicates": 1
+      }
+    },
+    {
+      "case_id": "shared_technology_distinct_projects",
+      "passed": true,
+      "observed": {
+        "duplicates": 0
+      }
+    },
+    {
+      "case_id": "summary_repeats_experience",
+      "passed": true,
+      "observed": {
+        "issue_found": true
+      }
+    },
+    {
+      "case_id": "preference_and_fact",
+      "passed": true,
+      "observed": {
+        "evidence": 1,
+        "memory": 1
+      }
+    },
+    {
+      "case_id": "conflicting_correction",
+      "passed": true,
+      "observed": {
+        "conflict": true
+      }
+    },
+    {
+      "case_id": "limited_company_context_cover",
+      "passed": true,
+      "observed": {
+        "repetitions": 0
+      }
+    },
+    {
+      "case_id": "skill_aliases",
+      "passed": true,
+      "observed": {
+        "duplicates": 1
+      }
+    },
+    {
+      "case_id": "missing_dates",
+      "passed": true,
+      "observed": {
+        "clean_optional_fields": true
+      }
+    },
+    {
+      "case_id": "resume_prompt_injection",
+      "passed": true,
+      "observed": {
+        "evidence": 1,
+        "memory": 0
+      }
+    },
+    {
+      "case_id": "unsupported_certification",
+      "passed": true,
+      "observed": {
+        "invalid_ids": 1
+      }
+    },
+    {
+      "case_id": "similar_responsibilities_employers",
+      "passed": true,
+      "observed": {
+        "accuracy": 1.0
+      }
+    },
+    {
+      "case_id": "persisted_v1_artifact",
+      "passed": true,
+      "observed": {
+        "compatible": true
+      }
+    }
+  ],
+  "metrics": {
+    "duplicate_claim_precision": 1.0,
+    "duplicate_claim_recall": 1.0,
+    "duplicate_claim_false_positive_rate": 0.0,
+    "unsupported_claim_detection_recall": null,
+    "invalid_evidence_id_detection_rate": 1.0,
+    "source_entry_attribution_accuracy": 1.0,
+    "memory_evidence_classification_accuracy": 1.0,
+    "cover_letter_repetition_rate": 0.0,
+    "v1_compatibility_success": 1.0,
+    "revision_success_rate": 1.0,
+    "model_calls": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_cost_usd": 0.0,
+    "latency_seconds": 0.002002
+  },
+  "notes": [
+    "Unsupported-claim recall requires the existing adversarial model verifier suite."
+  ]
+}

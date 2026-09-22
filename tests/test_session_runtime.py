@@ -361,7 +361,7 @@ def test_resumability_migration_preserves_existing_session_snapshot(tmp_path):
         columns = {item["name"] for item in inspect(database.engine).get_columns(
             "agent_sessions")}
         assert {"pending_assistant_message_id", "max_loop_iterations",
-            "max_tool_calls"} <= columns
+            "max_tool_calls", "archived_at"} <= columns
         with database.engine.connect() as connection:
             row = connection.exec_driver_sql(
                 "SELECT title,max_loop_iterations,max_tool_calls "

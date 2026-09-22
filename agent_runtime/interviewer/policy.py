@@ -56,8 +56,7 @@ class InterviewPriorityPolicy:
 
 def validate_candidate(answer: str, assessment: InterviewAnswerAssessment) -> tuple[str, str]:
     """V0.1 accepts only a literal supported answer span as a proposed claim."""
-    if _INSTRUCTION_IN_ANSWER.search(answer):
-        raise InterviewValidationError("The answer contains an instruction rather than verifiable experience.")
+    from agent_runtime.evidence.extraction import career_fact_candidates, extract_evidence_candidates
     claim = (assessment.proposed_claim or "").strip()
     if not claim or not assessment.exact_supporting_quotes:
         raise InterviewValidationError("The answer needs a concrete supporting quote.")
@@ -69,4 +68,12 @@ def validate_candidate(answer: str, assessment: InterviewAnswerAssessment) -> tu
         raise InterviewValidationError("The proposed claim must use the user's own wording.")
     if not any(normalize_text(claim) == normalize_text(q) for q in assessment.exact_supporting_quotes):
         raise InterviewValidationError("The proposed claim must equal an exact supporting quote.")
+    extracted = career_fact_candidates(extract_evidence_candidates(claim))
+    if extracted:
+        selected = min(extracted, key=lambda item: (-item.confidence, len(item.source_quote)))
+        if not _INSTRUCTION_IN_ANSWER.search(selected.source_quote):
+            # Preserve literal user wording while excluding unrelated conversational text.
+            return selected.source_quote, selected.source_quote
+    if _INSTRUCTION_IN_ANSWER.search(answer):
+        raise InterviewValidationError("The answer contains an instruction rather than verifiable experience.")
     return claim, claim

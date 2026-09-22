@@ -46,7 +46,7 @@ def test_evidence_chrome_uses_safe_dom_and_declared_paths():
     from pathlib import Path
     root = Path(__file__).resolve().parents[1]
     controller = (root / "chrome_extension/evidence-controller.js").read_text(encoding="utf-8")
-    client = (root / "chrome_extension/api-client.js").read_text(encoding="utf-8")
+    client = (root / "web_app/api.js").read_text(encoding="utf-8")
     assert "textContent" in controller
     assert "innerHTML" not in controller
     assert "/api/evidence" in client

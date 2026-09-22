@@ -14,7 +14,8 @@ from agent_runtime.application_pack.errors import PackConflictError, PackValidat
 from agent_runtime.application_pack.policy import EvidenceSelectionPolicy, classify_question
 from agent_runtime.application_pack.repository import PackRepository
 from agent_runtime.application_pack.types import (
-    ApplicationAnswer, CoverLetter, GroundedBlock, ItemStatus, ArtifactVerification,
+    ApplicationAnswer, CoverLetter, CoverLetterParagraph, GroundedBlock, ItemStatus,
+    ArtifactVerification,
 )
 from agent_runtime.application_pack.verifier import ArtifactVerifier
 from agent_runtime.application_pack.workflow import ApplicationPackWorkflow
@@ -51,11 +52,27 @@ class FakePackModel:
             evidence_version_ids=[evidence["evidence_version_id"]])
 
     def cover_letter(self, context):
-        return CoverLetter(blocks=[self._block(context)])
+        import json
+        parsed = json.loads(context)
+        evidence = parsed["evidence"][0]
+        return CoverLetter(paragraphs=[
+            CoverLetterParagraph(paragraph_type="opening",
+                text=f"I am applying for the {parsed['title']} role."),
+            CoverLetterParagraph(paragraph_type="evidence",
+                text=f"One relevant example is: {evidence['claim_text']}",
+                evidence_ids=[evidence["evidence_id"]],
+                evidence_version_ids=[evidence["evidence_version_id"]],
+                target_requirement_ids=["REQ-1"]),
+            CoverLetterParagraph(paragraph_type="motivation",
+                text="I would welcome the opportunity to contribute to the role's priorities."),
+        ])
 
     def application_answer(self, context):
         parsed = __import__("json").loads(context)
         block = self._block(context)
+        block = block.model_copy(update={
+            "text": f"My relevant experience includes the following: {block.text}",
+        })
         return ApplicationAnswer(question=parsed["question"], answer_blocks=[block],
             character_count=len(block.text), word_count=len(block.text.split()))
 
@@ -124,7 +141,9 @@ def test_pack_resume_cover_question_and_approval(setup):
     resume = workflow.generate(pack.pack_id, artifact_type="tailored_resume",
         expected_version=pack.version, idempotency_key="resume")
     assert resume.status == ItemStatus.AWAITING_REVIEW
-    assert packs.artifact(pack.pack_id, resume.pack_item_id)["professional_summary"][0]["text"] == "Built Python APIs."
+    assert TailoredResume.model_validate(
+        packs.artifact(pack.pack_id, resume.pack_item_id)
+    ).professional_summary[0].text == "Built Python APIs."
     cover = workflow.generate(pack.pack_id, artifact_type="cover_letter",
         expected_version=packs.get(pack.pack_id).version, idempotency_key="cover")
     assert cover.status == ItemStatus.AWAITING_REVIEW
@@ -222,7 +241,7 @@ def test_edit_is_immutable_and_requires_reverification(setup):
         expected_version=pack.version, idempotency_key="letter")
     original = packs.artifact(pack.pack_id, item.pack_item_id)
     edited = CoverLetter.model_validate(original).model_dump(mode="json")
-    edited["blocks"][0]["text"] = "Led a team of 50 engineers."
+    edited["paragraphs"][0]["text"] = "Led a team of 50 engineers."
     result = workflow.edit(pack.pack_id, item.pack_item_id,
         expected_version=item.version, content=edited, idempotency_key="edit")
     assert result.status == ItemStatus.NEEDS_REVISION
@@ -236,7 +255,8 @@ def test_edit_is_immutable_and_requires_reverification(setup):
     saved_event = [event for event in packs.events(pack.pack_id)
                    if event.event_type == "ARTIFACT_VERSION_SAVED"][-1]
     assert saved_event.payload["origin"] == "user_edit"
-    assert {entry["decision"] for entry in saved_event.payload["block_reviews"]} == {"edited"}
+    assert {entry["decision"] for entry in saved_event.payload["block_reviews"]} == {
+        "edited", "accepted"}
     with pytest.raises(PackConflictError):
         packs.review(pack.pack_id, item.pack_item_id, expected_version=result.version,
                      approve=True, idempotency_key="approve-invalid")
@@ -337,6 +357,19 @@ def test_pack_api_and_safe_chrome_rendering(setup):
         assert generated.status_code == 200, generated.text
         item = generated.json()["items"][0]
         assert item["status"] == "awaiting_review"
+        resume = client.post(f"/api/packs/{pack['pack_id']}/resume", json={
+            "expected_version": generated.json()["pack"]["version"],
+            "idempotency_key": "api-resume",
+        })
+        assert resume.status_code == 200, resume.text
+        resume_item = next(value for value in resume.json()["items"]
+                           if value["artifact_type"] == "tailored_resume")
+        pdf = client.get(
+            f"/api/packs/{pack['pack_id']}/items/{resume_item['pack_item_id']}/resume.pdf"
+        )
+        assert pdf.status_code == 200
+        assert pdf.headers["content-type"] == "application/pdf"
+        assert pdf.content.startswith(b"%PDF")
         bad_edit = client.post(f"/api/packs/{pack['pack_id']}/items/{item['pack_item_id']}/edit",
             json={"expected_version": item["version"], "idempotency_key": "invalid-edit",
                   "content": {}})
@@ -347,12 +380,14 @@ def test_pack_api_and_safe_chrome_rendering(setup):
         assert client.post(f"/api/packs/{pack['pack_id']}/questions", json={
             "expected_version": generated.json()["pack"]["version"],
             "idempotency_key": "no-question"}).status_code == 422
-    root = Path(__file__).resolve().parents[1] / "chrome_extension"
-    page = (root / "sidepanel.html").read_text(encoding="utf-8")
-    controller = (root / "pack-controller.js").read_text(encoding="utf-8")
-    assert page.index('id="workspace-detail"') < page.index('id="pack-section"')
+    root = Path(__file__).resolve().parents[1] / "web_app"
+    page = (root / "index.html").read_text(encoding="utf-8")
+    controller = (root / "app.js").read_text(encoding="utf-8")
+    assert 'data-view-panel="materials"' in page
+    assert 'id="generate-pack"' in page
     assert "textContent" in controller and "innerHTML" not in controller
-    assert "getPackItemEvidence" in controller and "getPackItemVersions" in controller
+    client = (root / "api.js").read_text(encoding="utf-8")
+    assert "getPack" in client and "generatePackResume" in client
 
 
 def test_resume_revision_loop_and_idempotent_generation(setup):
@@ -612,7 +647,9 @@ def test_integrated_pack_review_survives_database_restart(setup):
         item.evidence_version_id for item in snapshot.items}
     resume = workflow.generate(pack.pack_id, artifact_type="tailored_resume",
         expected_version=pack.version, idempotency_key="resume")
-    assert packs.artifact(pack.pack_id, resume.pack_item_id)["professional_summary"][0]["text"] == "Designed SQL reports."
+    assert TailoredResume.model_validate(
+        packs.artifact(pack.pack_id, resume.pack_item_id)
+    ).professional_summary[0].text == "Designed SQL reports."
     cover = workflow.generate(pack.pack_id, artifact_type="cover_letter",
         expected_version=packs.get(pack.pack_id).version, idempotency_key="cover")
     answer = workflow.generate(pack.pack_id, artifact_type="application_answer",
@@ -625,7 +662,7 @@ def test_integrated_pack_review_survives_database_restart(setup):
 
     original = packs.artifact(pack.pack_id, resume.pack_item_id)
     bad = __import__("copy").deepcopy(original)
-    bad["professional_summary"][0]["text"] = "Increased revenue by 30%."
+    bad["sections"][0]["entries"][0]["bullets"][0]["text"] = "Increased revenue by 30%."
     rejected = workflow.edit(pack.pack_id, resume.pack_item_id,
         expected_version=resume.version, content=bad, idempotency_key="bad-edit")
     assert rejected.status == ItemStatus.NEEDS_REVISION

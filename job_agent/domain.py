@@ -11,10 +11,13 @@ from job_agent.schemas import (
     MissingRequirement,
     RequirementCategory,
     ResumeAnalysis,
+    ResumeEvidence,
+    ResumeSourceEntry,
     ScoreBreakdown,
     SkillAssessment,
     SkillEvidence,
     SkillMatch,
+    TailoredResume,
     VerificationMode,
 )
 
@@ -31,6 +34,176 @@ def normalize_evidence_text(text: str) -> str:
 def make_evidence_id(text: str) -> str:
     digest = hashlib.sha256(normalize_text(text).encode("utf-8")).hexdigest()[:8]
     return f"EXP-{digest}"
+
+
+def make_source_entry_id(
+    entry_type: str, heading: str | None, organization: str | None,
+    start_date: str | None, end_date: str | None, evidence_texts: list[str],
+) -> str:
+    return _stable_id(
+        "SRC", entry_type, heading or "", organization or "", start_date or "",
+        end_date or "", *evidence_texts,
+    )
+
+
+def normalize_resume_analysis(analysis: ResumeAnalysis) -> ResumeAnalysis:
+    """Replace model IDs with stable evidence/source identities and bind ownership."""
+    source_signature_by_evidence: dict[str, tuple[str, ...]] = {}
+    for entry in analysis.source_entries:
+        signature = (
+            entry.entry_type, entry.heading or "", entry.organization or "",
+            entry.location or "", entry.start_date or "", entry.end_date or "",
+        )
+        for evidence_id in entry.evidence_ids:
+            source_signature_by_evidence.setdefault(evidence_id, signature)
+    evidence_by_text: dict[tuple[str, tuple[str, ...]], ResumeEvidence] = {}
+    old_to_new: dict[str, str] = {}
+    for item in analysis.evidence:
+        normalized = normalize_text(item.exact_text)
+        if not normalized:
+            continue
+        signature = source_signature_by_evidence.get(item.evidence_id, ())
+        stable_id = (_stable_id("EXP", *signature, item.exact_text)
+                     if signature else make_evidence_id(item.exact_text))
+        old_to_new[item.evidence_id] = stable_id
+        evidence_by_text.setdefault((normalized, signature), ResumeEvidence(
+            evidence_id=stable_id, source_section=item.source_section,
+            exact_text=item.exact_text,
+        ))
+    evidence = list(evidence_by_text.values())
+    evidence_by_id = {item.evidence_id: item for item in evidence}
+
+    provisional = list(analysis.source_entries)
+    if not provisional:
+        grouped: dict[str, list[str]] = {}
+        for item in evidence:
+            grouped.setdefault(item.source_section, []).append(item.evidence_id)
+        provisional = [ResumeSourceEntry(
+            source_entry_id=f"temporary-{index}",
+            entry_type=("education" if "education" in normalize_text(section)
+                        else "project" if "project" in normalize_text(section)
+                        else "skills" if "skill" in normalize_text(section)
+                        else "summary" if "summary" in normalize_text(section)
+                        else "experience"),
+            heading=section, evidence_ids=ids,
+        ) for index, (section, ids) in enumerate(grouped.items(), start=1)]
+
+    source_entries: list[ResumeSourceEntry] = []
+    evidence_owner: dict[str, str] = {}
+    for entry in provisional:
+        ids = list(dict.fromkeys(old_to_new.get(item, item) for item in entry.evidence_ids))
+        ids = [item for item in ids if item in evidence_by_id and item not in evidence_owner]
+        texts = [evidence_by_id[item].exact_text for item in ids]
+        source_id = make_source_entry_id(
+            entry.entry_type, entry.heading, entry.organization,
+            entry.start_date, entry.end_date, texts,
+        )
+        source_entries.append(ResumeSourceEntry.model_validate({
+            **entry.model_dump(mode="python"),
+            "source_entry_id": source_id,
+            "evidence_ids": ids,
+        }))
+        evidence_owner.update({item: source_id for item in ids})
+
+    # Never leave extracted evidence unowned.
+    for item in evidence:
+        if item.evidence_id in evidence_owner:
+            continue
+        source_id = make_source_entry_id(
+            "other", item.source_section, None, None, None, [item.exact_text],
+        )
+        source_entries.append(ResumeSourceEntry(
+            source_entry_id=source_id, entry_type="other", heading=item.source_section,
+            evidence_ids=[item.evidence_id],
+        ))
+        evidence_owner[item.evidence_id] = source_id
+
+    grounded_evidence = [ResumeEvidence.model_validate({
+        **item.model_dump(mode="python"),
+        "source_entry_id": evidence_owner[item.evidence_id],
+    }) for item in evidence]
+    return ResumeAnalysis.model_validate({
+        **analysis.model_dump(mode="python"),
+        "evidence": grounded_evidence,
+        "source_entries": [item.model_dump(mode="python") for item in source_entries],
+    })
+
+
+def retain_verbatim_resume_evidence(
+    analysis: ResumeAnalysis,
+    original_resume: str,
+) -> ResumeAnalysis:
+    """Discard model evidence that is not a continuous quote from the resume.
+
+    The following validation node remains the hard safety boundary.  This
+    pre-normalization filter prevents one malformed model candidate from
+    terminating an otherwise usable run, while ensuring that rejected text is
+    never assigned a stable evidence ID or exposed to downstream writers.
+    """
+    original = normalize_text(original_resume)
+    retained = [
+        item
+        for item in analysis.evidence
+        if normalize_text(item.exact_text)
+        and normalize_text(item.exact_text) in original
+    ]
+    retained_ids = {item.evidence_id for item in retained}
+    source_entries = []
+    for entry in analysis.source_entries:
+        evidence_ids = [
+            evidence_id
+            for evidence_id in entry.evidence_ids
+            if evidence_id in retained_ids
+        ]
+        if not evidence_ids:
+            continue
+        source_entries.append(
+            ResumeSourceEntry.model_validate(
+                {
+                    **entry.model_dump(mode="python"),
+                    "evidence_ids": evidence_ids,
+                }
+            )
+        )
+    return ResumeAnalysis.model_validate(
+        {
+            **analysis.model_dump(mode="python"),
+            "evidence": [item.model_dump(mode="python") for item in retained],
+            "source_entries": [
+                item.model_dump(mode="python") for item in source_entries
+            ],
+        }
+    )
+
+
+def normalize_tailored_resume_claim_ids(resume: TailoredResume) -> TailoredResume:
+    """Assign stable, unique claim IDs independently from temporary model IDs."""
+    sections = []
+    for section_index, section in enumerate(resume.sections):
+        entries = []
+        for entry_index, entry in enumerate(section.entries):
+            bullets = []
+            for claim_index, claim in enumerate(entry.bullets):
+                claim_id = _stable_id(
+                    "CLM", section.section_type, entry.entry_id,
+                    str(section_index), str(entry_index), str(claim_index),
+                    claim.source_entry_id, claim.text, *sorted(claim.evidence_ids),
+                )
+                bullets.append(type(claim).model_validate({
+                    **claim.model_dump(mode="python"), "claim_id": claim_id,
+                }))
+            entries.append(type(entry).model_validate({
+                **entry.model_dump(mode="python"),
+                "bullets": [item.model_dump(mode="python") for item in bullets],
+            }))
+        sections.append(type(section).model_validate({
+            **section.model_dump(mode="python"),
+            "entries": [item.model_dump(mode="python") for item in entries],
+        }))
+    return TailoredResume.model_validate({
+        **resume.model_dump(mode="python"),
+        "sections": [item.model_dump(mode="python") for item in sections],
+    })
 
 
 def _stable_id(prefix: str, *parts: str) -> str:

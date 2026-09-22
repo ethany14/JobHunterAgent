@@ -159,10 +159,10 @@ def test_feedback_api_is_owner_scoped_and_validates_sources(service):
 def test_learning_panel_uses_safe_dom_rendering():
     root = Path(__file__).resolve().parents[1] / "chrome_extension"
     script = (root / "learning-controller.js").read_text(encoding="utf-8")
-    markup = (root / "sidepanel.html").read_text(encoding="utf-8")
+    markup = (root.parent / "web_app/index.html").read_text(encoding="utf-8")
     assert "innerHTML" not in script
     assert "textContent" in script
-    assert "learning-panel" in markup
+    assert 'data-view-panel="learning"' in markup
 
 
 def test_stale_attempt_and_atomic_aggregation_rollback(service, monkeypatch):

@@ -154,6 +154,32 @@ def test_list_sessions_returns_safe_recent_summaries(client_and_runtime):
     assert client.get("/sessions?limit=0").status_code == 422
 
 
+def test_archived_session_disappears_from_history_but_remains_persisted(client_and_runtime):
+    client, runtime = client_and_runtime
+    session = create_session(client)
+    session_id = session["session_id"]
+    response = client.delete(
+        f"/sessions/{session_id}", params={"expected_version": session["version"]}
+    )
+    assert response.status_code == 204
+    assert client.get(f"/sessions/{session_id}").status_code == 404
+    assert session_id not in {
+        item["session_id"] for item in client.get("/sessions").json()["sessions"]
+    }
+    assert runtime.sessions.require(session_id).session_id == session_id
+    assert runtime.sessions.is_archived(session_id)
+
+
+def test_archiving_session_enforces_optimistic_version(client_and_runtime):
+    client, _ = client_and_runtime
+    session = create_session(client)
+    response = client.delete(
+        f"/sessions/{session['session_id']}",
+        params={"expected_version": session["version"] + 1},
+    )
+    assert response.status_code == 409
+
+
 def test_create_session_can_be_associated_with_an_existing_run(client_and_runtime):
     client, runtime = client_and_runtime
     RunRepository(runtime.database.session_factory).create(

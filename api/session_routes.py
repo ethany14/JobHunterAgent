@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 
 from agent_runtime.sessions.outcome import SessionOutcome
+from agent_runtime.sessions.outcome import SessionOutcomeStatus
 from agent_runtime.errors import UnknownToolError
 from agent_runtime.sessions.state import SessionMessageVisibility, SessionState, SessionStatus
 from agent_runtime.tools.messages import AgentMessage
@@ -41,6 +42,9 @@ from api.services.run_service import RunNotFoundError
 
 
 def _require_public_session(runtime: SessionRuntime, session_id: str) -> SessionState:
+    if runtime.sessions.is_archived(session_id):
+        from agent_runtime.sessions.errors import SessionNotFoundError
+        raise SessionNotFoundError(f"Session '{session_id}' was not found.")
     state = runtime.sessions.require(session_id)
     if state.task_id is not None:
         raise HTTPException(status_code=403, detail={
@@ -48,6 +52,27 @@ def _require_public_session(runtime: SessionRuntime, session_id: str) -> Session
     return state
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
+
+
+def _schedule_conversation_learning(
+    background_tasks: BackgroundTasks,
+    runtime: SessionRuntime,
+    outcome: SessionOutcome,
+) -> None:
+    if (
+        runtime.conversation_learning is None
+        or outcome.status != SessionOutcomeStatus.RESPONSE_READY
+    ):
+        return
+    assistant = next((item.message for item in reversed(
+        runtime.sessions.messages(outcome.session_id))
+        if item.message.role == "assistant" and not item.message.tool_calls), None)
+    if assistant is not None:
+        background_tasks.add_task(
+            runtime.conversation_learning.observe_completed_turn,
+            session_id=outcome.session_id,
+            assistant_message_id=assistant.message_id,
+        )
 
 
 def _profile_for(runtime: SessionRuntime, state: SessionState) -> str:
@@ -274,6 +299,24 @@ def get_session(
     return _response(runtime, _require_public_session(runtime, session_id))
 
 
+@router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_session(
+    session_id: str,
+    expected_version: int = Query(ge=0),
+    runtime: SessionRuntime = Depends(get_session_runtime),
+) -> None:
+    session = _require_public_session(runtime, session_id)
+    if session.status == SessionStatus.RUNNING:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "session_running",
+                "message": "Cancel the running conversation before removing it.",
+            },
+        )
+    runtime.sessions.archive(session_id, expected_version=expected_version)
+
+
 @router.get("/{session_id}/messages", response_model=SessionMessagesResponse)
 def get_messages(
     session_id: str,
@@ -311,6 +354,7 @@ def get_messages(
 def submit_message(
     session_id: str,
     request: SubmitMessageRequest,
+    background_tasks: BackgroundTasks,
     runtime: SessionRuntime = Depends(get_session_runtime),
 ) -> SessionResponse:
     _require_public_session(runtime, session_id)
@@ -325,6 +369,7 @@ def submit_message(
         ),
         expected_version=request.expected_version,
     )
+    _schedule_conversation_learning(background_tasks, runtime, outcome)
     return _response(runtime, outcome.state, outcome)
 
 
@@ -336,12 +381,14 @@ def approve_tool_call(
     session_id: str,
     tool_call_id: str,
     request: VersionedMutationRequest,
+    background_tasks: BackgroundTasks,
     runtime: SessionRuntime = Depends(get_session_runtime),
 ) -> SessionResponse:
     _require_public_session(runtime, session_id)
     outcome = runtime.coordinator.approve_tool_call(
         session_id, tool_call_id, expected_version=request.expected_version
     )
+    _schedule_conversation_learning(background_tasks, runtime, outcome)
     return _response(runtime, outcome.state, outcome)
 
 
@@ -353,12 +400,14 @@ def reject_tool_call(
     session_id: str,
     tool_call_id: str,
     request: VersionedMutationRequest,
+    background_tasks: BackgroundTasks,
     runtime: SessionRuntime = Depends(get_session_runtime),
 ) -> SessionResponse:
     _require_public_session(runtime, session_id)
     outcome = runtime.coordinator.reject_tool_call(
         session_id, tool_call_id, expected_version=request.expected_version
     )
+    _schedule_conversation_learning(background_tasks, runtime, outcome)
     return _response(runtime, outcome.state, outcome)
 
 
@@ -381,6 +430,7 @@ def cancel_session(
 def recover_session(
     session_id: str,
     request: VersionedMutationRequest,
+    background_tasks: BackgroundTasks,
     runtime: SessionRuntime = Depends(get_session_runtime),
 ) -> SessionResponse:
     _require_public_session(runtime, session_id)
@@ -389,4 +439,5 @@ def recover_session(
         worker_id=f"api-recovery-{uuid4()}",
         expected_version=request.expected_version,
     )
+    _schedule_conversation_learning(background_tasks, runtime, outcome)
     return _response(runtime, outcome.state, outcome)

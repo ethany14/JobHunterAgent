@@ -597,6 +597,18 @@ class JobWorkspaceRepository:
                 ApplicationArtifactRow.artifact_type, ApplicationArtifactRow.version)).all()
             return [self._artifact(row) for row in rows]
 
+    def get_artifact(self, application_id: str, artifact_id: str) -> ApplicationArtifactRecord:
+        """Return one artifact only when it belongs to the requested application."""
+        self.get_application(application_id)
+        with self._session_factory() as session:
+            row = session.scalar(select(ApplicationArtifactRow).where(
+                ApplicationArtifactRow.application_id == application_id,
+                ApplicationArtifactRow.artifact_id == artifact_id,
+            ))
+            if row is None:
+                raise ArtifactNotFoundError("The application artifact was not found.")
+            return self._artifact(row)
+
     def list_events(self, application_id: str) -> list[ApplicationEventRecord]:
         self.get_application(application_id)
         with self._session_factory() as session:

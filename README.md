@@ -1,9 +1,64 @@
 # JobHunterAgent
 
+## Two frontends
+
+The product now has two deliberately separate surfaces:
+
+- **Web workspace** at `http://localhost:8000/app`: the complete local Career Copilot for saved jobs, conversation history, application materials, Copilot-launched interview practice, evidence, governed learning, and PDF resume management.
+- **Northstar Job Lens** Chrome extension: a focused current-page extractor that returns a resume match score and suggestions. Saving or analyzing a page creates or reopens its web Workspace, preserves the original job URL, and offers a direct link to that saved application. It uses the default resume held by the web service and never stores the resume in Chrome.
+
+Start both surfaces with:
+
+```powershell
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m uvicorn api.main:app --host 127.0.0.1 --port 8000
+```
+
+Open `/app` first and upload a selectable-text PDF under **Settings**. The server stores extracted text and document metadata in SQLite; the original PDF bytes are not retained. The local deployment still assumes one trusted user and is not an authentication boundary.
+
+Copilot conversation history appears in a persistent left sidebar and can be
+reopened or archived. Tailored resume artifacts can be downloaded as searchable,
+ATS-friendly Letter-size PDFs using the compact one-column style of the uploaded
+resume. Opening Job Lens from a regular LinkedIn job tab automatically extracts the
+visible title, company, location, description, and source URL; **Extract page** remains
+available when LinkedIn updates the selected job without a full navigation.
+
 JobHunterAgent analyzes a resume and job description,
 matches requirements to quoted resume evidence, writes a tailored resume, verifies
 every generated claim, and pauses for human approval. Unsupported claims enter a
 bounded revision loop before review.
+
+## Conversation-first Career Copilot
+
+The web workspace owns durable conversations, saved jobs, materials, resume uploads,
+Evidence, Memory, and Skills. Previous conversations can be selected or archived from
+the Copilot header. Interview practice starts through Copilot rather than a separate
+navigation page. The Chrome Side Panel intentionally contains only extraction, saving,
+fit analysis, and a link into the full web Workspace.
+
+Completed Copilot turns feed the governed conversation-learning observer. Explicit
+user preferences and user-stated facts become reviewable Memory candidates; the web UI
+does not ask users to manufacture Memory records by hand. Confirmed Memory and active
+Skills can be soft-deleted or retired without erasing audit history.
+
+Only the server-owned registered action set can leave ordinary conversation and
+invoke a workflow. Deterministic domain services validate the current state before
+execution. Multi-Agent progress is presented as one compact expandable activity
+row; the former feature panels remain behind the local Developer Mode setting
+`ENABLE_LEGACY_EXTENSION_UI=true` while parity testing continues.
+
+The presentation tables are managed by Alembic migration
+`0024_conversation_first_assistant`. The public endpoints are:
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/api/assistant-sessions/{session_id}/timeline` | Read safe ordered activity; accepts `after_sequence` |
+| `POST` | `/api/assistant-sessions/{session_id}/actions` | Classify or execute one registered, version-checked action |
+
+Timeline payloads never include system messages, raw tool output, secrets,
+filesystem paths, unrestricted domain JSON, or internal reasoning. This remains a
+trusted local single-user application; the endpoints do not establish tenant or
+account authorization.
 
 ```text
 Analyze → Match → Write → Verify → Revise when needed → Human Review
@@ -835,6 +890,13 @@ interview, stop the backend while awaiting an answer, restart it, reopen the
 same Application, and verify the answer and question sequence are preserved.
 Model-based coaching can still be inconsistent or overinterpret a response;
 review any candidate and suggested phrasing before relying on it.
+## Harness design comparison
+
+The current custom runtime has been compared with the progressive harness
+patterns in `learn-claude-code`. The capability mapping, deliberate differences,
+and context-retention rule are documented in
+[`docs/learn-claude-code-comparison.md`](docs/learn-claude-code-comparison.md).
+
 # Governed Feedback Learning v0.1
 
 Feedback learning here means recording explicit user actions as immutable source events and producing reviewable candidates. It does **not** train a model, change prompts or policies at runtime, publish Skills, or automatically confirm Memory or Career Evidence. The local server owns the profile ID; this is a single-user local deployment, not authentication.
@@ -860,3 +922,26 @@ Activation is a separate action. Only `active` versions enter normal Skill disco
 To check manually, apply `alembic upgrade head`, start the local API, and reload the extension. In **Learning → Skill Candidates**, approve a harmless reusable procedure such as `application-answer-structure`, materialize it, inspect the `SKILL.md`, run three paired repetitions, review hard gates and holdout results, and explicitly publish. Publication is inactive. Select `active` only after review, then create a new Session and inspect its ContextSnapshot version/hash. For a changed staged file, rerunning evaluation or publishing against the old hash is blocked. To revert, use the version's Rollback control with a reason. This local API uses a server-owned profile ID but has no authentication; do not bind it to an untrusted network.
 
 The optional synthetic live smoke command is `.venv\\Scripts\\python.exe -m evals.run_skill_evolution --runs-per-case 3` on Windows. It uses a temporary Alembic database and the configured model and never publishes. The first result is preserved in `evals/results/skill_evolution_v0.2_live.json`; the updated-gate run is `evals/results/skill_evolution_v0.2_gates2_live.json`. In that second 8-case, three-repeat run, baseline and candidate both had 100% simple term-check task success; the candidate used more mean tokens (182.3 versus 151.9 in non-holdout cases), triggering a soft regression acknowledgement. These small synthetic checks do not establish real-world improvement. Estimated cost is unavailable without provider pricing metadata.
+## Conversation learning
+
+The active custom runtime can learn from ordinary completed Assistant turns without
+turning a single message into an active instruction. After the user-facing response is
+durably saved, a background observer records a versioned conversation experience that
+references the exact user and assistant message IDs.
+
+- Explicit user preferences and user-stated facts may create governed Memory candidates.
+  They remain candidates until the user confirms them, and they do not become resume
+  evidence.
+- Corrections and clear success/failure signals may contribute to a reusable procedural
+  pattern. A pattern needs evidence from at least three turns across two sessions before
+  it can create a Skill learning candidate.
+- Skill candidates still use the existing evaluation, approval, activation, versioning,
+  and rollback lifecycle. Conversation learning never edits a live prompt or activates a
+  Skill directly.
+- Tool output, job descriptions, assistant assertions, and instruction-like content do
+  not prove user preferences or career facts. Observer failures are stored with a safe
+  error code and do not fail the completed user turn.
+
+The observer uses the configured model and therefore adds a separate model call after a
+completed API response. This first version has durable observations and idempotent turn
+keys, but no dedicated retry worker for failed observation calls.

@@ -38,7 +38,8 @@ def signal_strength(source: FeedbackSourceType, content: str | None = None) -> S
                   FeedbackSourceType.EVIDENCE_CONFIRMED, FeedbackSourceType.EVIDENCE_REJECTED}:
         return SignalStrength.HIGHEST
     if source in {FeedbackSourceType.ARTIFACT_EDITED, FeedbackSourceType.INTERVIEW_FEEDBACK,
-                  FeedbackSourceType.ARTIFACT_REJECTED, FeedbackSourceType.MANUAL_FEEDBACK}:
+                  FeedbackSourceType.ARTIFACT_REJECTED, FeedbackSourceType.MANUAL_FEEDBACK,
+                  FeedbackSourceType.CONVERSATION_PATTERN}:
         return SignalStrength.MEDIUM
     return SignalStrength.WEAK
 
@@ -107,6 +108,35 @@ def classify(event: FeedbackEvent) -> FeedbackClassification:
         return FeedbackClassification(candidate_type=CandidateType.IGNORE,
             rationale="Application outcome has no proven causal writing implication.",
             confidence=0, scope=scope, **base)
+    if event.source_type == FeedbackSourceType.CONVERSATION_PATTERN:
+        metadata = event.context_metadata_json
+        experience_count = int(metadata.get("experience_count", 0))
+        session_count = int(metadata.get("session_count", 0))
+        if experience_count < 3 or session_count < 2:
+            return FeedbackClassification(candidate_type=CandidateType.IGNORE,
+                rationale="Conversation pattern lacks repeated cross-session evidence.",
+                confidence=0, scope=CandidateScope.GLOBAL, **base)
+        safe = redact_skill_pii(text)
+        key = canonical_key(str(metadata.get("canonical_key") or safe[:70]))
+        return FeedbackClassification(candidate_type=CandidateType.SKILL,
+            proposed_key_or_name=key, proposed_content=safe,
+            scope=CandidateScope.GLOBAL,
+            rationale="Repeated cross-session trajectory pattern; evaluation and human approval required.",
+            confidence=min(0.9, 0.65 + 0.05 * experience_count),
+            privacy_risk="normal", generalizability="cross_application",
+            type_metadata={
+                "proposed_skill_name": key,
+                "task_scope": "conversation_assistance",
+                "proposed_instructions": safe,
+                "positive_examples": [], "negative_examples": [],
+                "applicability_conditions": [], "non_applicability_conditions": [],
+                "required_tools": [], "prohibited_tools": [],
+                "safety_constraints": ["Never override evidence or runtime policy"],
+                "evaluation_case_suggestions": [],
+                "experience_count": experience_count,
+                "session_count": session_count,
+                "experience_ids": list(metadata.get("experience_ids", [])),
+            }, **base)
     if event.source_type == FeedbackSourceType.ARTIFACT_ACCEPTED:
         artifact_type = canonical_key(str(event.context_metadata_json.get("artifact_type", "artifact")))
         key = f"accepted_artifact.{artifact_type}"
@@ -191,6 +221,14 @@ def ready_for_review(kind: CandidateType, events: list[FeedbackEvent],
     if kind == CandidateType.CAREER_EVIDENCE:
         return True
     if kind == CandidateType.SKILL:
+        if any(
+            event.source_type == FeedbackSourceType.CONVERSATION_PATTERN
+            and int(event.context_metadata_json.get("experience_count", 0))
+                >= thresholds.skill_min_events
+            and int(event.context_metadata_json.get("session_count", 0)) >= 2
+            for event in events
+        ):
+            return True
         explicit = any(e.source_type == FeedbackSourceType.EXPLICIT_INSTRUCTION
             and "skill" in (e.original_content or "").casefold() for e in events)
         applications = {e.application_id for e in events if e.application_id}

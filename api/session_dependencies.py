@@ -22,6 +22,9 @@ from agent_runtime.memory.retrieval import MemoryRetriever
 from agent_runtime.evidence.repository import CareerEvidenceRepository
 from agent_runtime.feedback.repository import FeedbackRepository
 from agent_runtime.feedback.service import FeedbackService
+from agent_runtime.learning.analyzer import StructuredConversationLearningAnalyzer
+from agent_runtime.learning.repository import ConversationLearningRepository
+from agent_runtime.learning.service import ConversationLearningService
 from agent_runtime.evidence.retrieval import CareerEvidenceRetriever
 from agent_runtime.interviewer.repository import InterviewRepository
 from agent_runtime.interviewer.controller import InterviewController
@@ -64,6 +67,7 @@ from agent_runtime.tools.run_reader import SqlAlchemyRunReader
 from api.db import Database, create_database, upgrade_database
 from job_agent.model import create_model
 from agent_runtime.workspace.repository import JobWorkspaceRepository
+from agent_runtime.resumes.repository import ResumeDocumentRepository
 
 
 JOB_ASSISTANT_READONLY_TOOLS = frozenset(
@@ -112,6 +116,8 @@ class SessionRuntime:
     agent_scheduler: AgentTaskScheduler | None = None
     feedback: FeedbackService | None = None
     skill_evolution: SkillEvolutionService | None = None
+    conversation_learning: ConversationLearningService | None = None
+    resumes: ResumeDocumentRepository | None = None
 
     def capability_skills(self, profile: str) -> frozenset[str]:
         base = CAPABILITY_SKILL_PROFILES[profile]
@@ -180,7 +186,8 @@ def create_session_runtime(
     mcp_manager = McpToolManager(**manager_options)
     try:
         mcp_manager.start()
-        adapter = LangChainToolModelAdapter(model or create_model())
+        configured_model = model or create_model()
+        adapter = LangChainToolModelAdapter(configured_model)
         loop = ToolCallingLoop(model=adapter, registry=registry, executor=executor)
     except Exception:
         mcp_manager.stop()
@@ -194,9 +201,21 @@ def create_session_runtime(
     memories = MemoryRepository(database.session_factory, policy=memory_policy)
     skills = SkillRepository(database.session_factory)
     workspace = JobWorkspaceRepository(database.session_factory)
+    resumes = ResumeDocumentRepository(database.session_factory)
     evidence = CareerEvidenceRepository(database.session_factory)
     feedback = FeedbackService(FeedbackRepository(database.session_factory),
         memories=memories, evidence=evidence)
+    conversation_learning = None
+    if hasattr(configured_model, "with_structured_output"):
+        conversation_learning = ConversationLearningService(
+            sessions=sessions,
+            repository=ConversationLearningRepository(database.session_factory),
+            analyzer=StructuredConversationLearningAnalyzer(configured_model),
+            memories=memories,
+            feedback=feedback,
+            owner_id=owner_resolver.resolve().owner_id,
+            application_for_session=workspace.application_id_for_session,
+        )
     skill_registry = SkillRegistry(skills)
     skill_router = SkillRouter(SkillDiscovery(skills), SkillLoader(skills))
     skill_evolution = SkillEvolutionService(database.session_factory, feedback.repository,
@@ -303,6 +322,8 @@ def create_session_runtime(
         agent_scheduler=agent_scheduler,
         feedback=feedback,
         skill_evolution=skill_evolution,
+        conversation_learning=conversation_learning,
+        resumes=resumes,
     )
 
 

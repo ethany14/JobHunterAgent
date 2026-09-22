@@ -16,11 +16,15 @@ export function packText(item) {
   const content = item.content;
   if (!content) return "";
   if (item.artifact_type === "tailored_resume") {
+    if (Array.isArray(content.sections)) {
+      return content.sections.flatMap((section) => (section.entries || []).flatMap((entry) =>
+        (entry.bullets || []).map((block) => block.text))).join("\n");
+    }
     return ["professional_summary", "experience_bullets", "highlighted_skills"]
       .flatMap((key) => (content[key] || []).map((block) => block.text)).join("\n");
   }
   if (item.artifact_type === "cover_letter") {
-    return [content.greeting, ...(content.blocks || []).map((block) => block.text), content.closing]
+    return [content.greeting, ...(content.paragraphs || content.blocks || []).map((block) => block.text), content.closing]
       .filter(Boolean).join("\n\n");
   }
   return (content.answer_blocks || []).map((block) => block.text).join(" ");
@@ -29,10 +33,19 @@ export function packText(item) {
 function blocksFor(item) {
   if (!item.content) return [];
   if (item.artifact_type === "tailored_resume") {
+    if (Array.isArray(item.content.sections)) {
+      return item.content.sections.flatMap((section, sectionIndex) =>
+        (section.entries || []).flatMap((entry, entryIndex) =>
+          (entry.bullets || []).map((block, index) => ({
+            key: section.section_type, index, block,
+            path: ["sections", sectionIndex, "entries", entryIndex, "bullets", index],
+          }))));
+    }
     return ["professional_summary", "experience_bullets", "highlighted_skills"]
       .flatMap((key) => (item.content[key] || []).map((block, index) => ({ key, index, block })));
   }
-  const key = item.artifact_type === "cover_letter" ? "blocks" : "answer_blocks";
+  const key = item.artifact_type === "cover_letter"
+    ? (Array.isArray(item.content.paragraphs) ? "paragraphs" : "blocks") : "answer_blocks";
   return (item.content[key] || []).map((block, index) => ({ key, index, block }));
 }
 
@@ -89,7 +102,7 @@ export function createPackController({ elements, getApplication, onMessage }) {
       if (["awaiting_review", "needs_revision", "rejected"].includes(item.status) && item.content) {
         const edit = node("details");
         edit.append(node("summary", "Edit cited blocks"));
-        const edits = blocksFor(item).map(({ key, index, block }) => {
+        const edits = blocksFor(item).map(({ key, index, block, path }) => {
           const label = node("label", `${key} ${index + 1}`);
           const field = node("textarea");
           field.rows = 3;
@@ -97,11 +110,17 @@ export function createPackController({ elements, getApplication, onMessage }) {
           field.value = block.text;
           label.append(field);
           edit.append(label);
-          return { key, index, field };
+          return { key, index, field, path };
         });
         edit.append(button("Save new verified version", () => {
           const content = structuredClone(item.content);
-          for (const { key, index, field } of edits) content[key][index].text = field.value.trim();
+          for (const { key, index, field, path } of edits) {
+            if (path) {
+              let target = content;
+              for (const part of path.slice(0, -1)) target = target[part];
+              target[path.at(-1)].text = field.value.trim();
+            } else content[key][index].text = field.value.trim();
+          }
           if (item.artifact_type === "application_answer") {
             const joined = content.answer_blocks.map((block) => block.text).join(" ");
             content.character_count = joined.length;

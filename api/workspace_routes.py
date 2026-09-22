@@ -1,6 +1,6 @@
 """Minimal public Job Workspace routes."""
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 
 from agent_runtime.workspace.repository import JobWorkspaceRepository
 from agent_runtime.workspace.types import ApplicationStatus
@@ -17,6 +17,7 @@ from api.routes.runs import get_run_service
 from api.services.workspace_service import WorkspaceAnalysisService
 from agent_runtime.workspace.types import ArtifactType
 from agent_runtime.feedback.types import FeedbackSourceType
+from job_agent.pdf_rendering import render_tailored_resume_pdf
 from api.feedback_instrumentation import record_action
 from api.session_dependencies import SessionRuntime, get_session_runtime
 
@@ -153,3 +154,20 @@ def application_events(application_id: str, repository: JobWorkspaceRepository =
 def application_artifacts(application_id: str, repository: JobWorkspaceRepository = Depends(get_workspace_repository)):
     return ApplicationArtifactsResponse(artifacts=[PublicApplicationArtifact.model_validate(
         item.model_dump(exclude={"application_id"})) for item in repository.list_artifacts(application_id)])
+
+
+@router.get("/applications/{application_id}/artifacts/{artifact_id}/resume.pdf")
+def application_resume_pdf(
+    application_id: str,
+    artifact_id: str,
+    repository: JobWorkspaceRepository = Depends(get_workspace_repository),
+) -> Response:
+    artifact = repository.get_artifact(application_id, artifact_id)
+    if artifact.artifact_type != ArtifactType.TAILORED_RESUME:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=422, detail="Only tailored resume artifacts can be exported as resume PDFs.")
+    return Response(
+        content=render_tailored_resume_pdf(artifact.content),
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="tailored-resume.pdf"'},
+    )

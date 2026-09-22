@@ -34,11 +34,24 @@ def _block_texts(content: dict | None, artifact_type: str) -> dict[str, str]:
     if not content:
         return {}
     if artifact_type == "tailored_resume":
-        return {f"{kind}-{index}": block["text"] for kind in
-            ("professional_summary", "experience_bullets", "highlighted_skills")
-            for index, block in enumerate(content.get(kind, []))}
-    key = "blocks" if artifact_type == "cover_letter" else "answer_blocks"
+        resume = TailoredResume.model_validate(content)
+        return {claim.claim_id: claim.text for claim in resume.claims()}
+    if artifact_type == "cover_letter":
+        letter = CoverLetter.model_validate(content)
+        return {f"paragraph-{index}": paragraph.text
+                for index, paragraph in enumerate(letter.paragraphs, start=1)}
+    key = "answer_blocks"
     return {block["block_id"]: block["text"] for block in content.get(key, [])}
+
+
+def _artifact_claims(content: dict, artifact_type: str) -> list[dict]:
+    if artifact_type == "tailored_resume":
+        return [claim.model_dump(mode="json")
+                for claim in TailoredResume.model_validate(content).claims()]
+    if artifact_type == "cover_letter":
+        return [paragraph.model_dump(mode="json")
+                for paragraph in CoverLetter.model_validate(content).paragraphs]
+    return list(content.get("answer_blocks") or [])
 
 
 class PackRepository:
@@ -207,6 +220,13 @@ class PackRepository:
     def item(self, pack_id: str, item_id: str) -> ApplicationPackItem:
         with self._factory() as session: return self._item(self._require_item(session, pack_id, item_id))
 
+    def item_for_artifact(self, artifact_id: str) -> ApplicationPackItem | None:
+        """Return the Pack item that owns an immutable Workspace artifact."""
+        with self._factory() as session:
+            row = session.scalar(select(ApplicationPackItemRow).where(
+                ApplicationPackItemRow.artifact_id == artifact_id))
+            return self._item(row) if row is not None else None
+
     def add_item(self, pack_id: str, *, expected_version: int, artifact_type: str,
                  idempotency_key: str, source_question: str | None = None,
                  max_length: int | None = None, requires_manual_answer: bool = False,
@@ -297,8 +317,7 @@ class PackRepository:
                 workflow_mode=pack.workflow_mode,
                 version=artifact_version, status="draft", content_json=canonical_json(validated),
                 evidence_ids_json=canonical_json(sorted({identifier for block in
-                    (validated.get("blocks") or validated.get("answer_blocks") or
-                     validated.get("professional_summary", []) + validated.get("experience_bullets", []) + validated.get("highlighted_skills", []))
+                    (_artifact_claims(validated, item.artifact_type))
                     for identifier in block.get("evidence_ids", [])})),
                 verification_status="pending", created_by=f"pack:{pack_id}:{item_id}",
                 created_at=datetime.now(UTC))

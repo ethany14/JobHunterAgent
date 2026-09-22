@@ -6,6 +6,9 @@ from typing import Any
 
 import anyio
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 
 from api.error_handlers import install_error_handlers
 from api.context_routes import router as context_router
@@ -20,7 +23,9 @@ from api.session_dependencies import SessionRuntime, create_session_runtime
 from api.session_routes import router as sessions_router
 from api.workspace_routes import router as workspace_router
 from api.feedback_routes import router as feedback_router
+from api.assistant_routes import router as assistant_router
 from api.services.run_service import BackendRoutingRunService, RunService
+from api.resume_routes import router as resume_router
 
 
 def create_app(
@@ -72,9 +77,22 @@ def create_app(
     application.include_router(mock_interview_router)
     application.include_router(workspace_router)
     application.include_router(feedback_router)
+    application.include_router(assistant_router)
+    application.include_router(resume_router)
     from api.skill_evolution_routes import router as skill_evolution_router
     application.include_router(skill_evolution_router)
     install_error_handlers(application)
+
+    web_root = Path(__file__).resolve().parent.parent / "web_app"
+    if web_root.exists():
+        application.mount("/web-assets", StaticFiles(directory=web_root), name="web-assets")
+
+        @application.get("/app", include_in_schema=False)
+        async def web_app() -> FileResponse:
+            return FileResponse(
+                web_root / "index.html",
+                headers={"Cache-Control": "no-store"},
+            )
 
     @application.get("/health", tags=["health"])
     async def health() -> dict[str, Any]:

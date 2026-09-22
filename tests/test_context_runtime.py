@@ -276,6 +276,39 @@ def test_conversation_tool_groups_are_never_split(runtime):
     assert [m.role for m in prepared.messages[-3:]] == ["assistant", "tool", "tool"]
 
 
+def test_historical_tool_group_is_atomic_but_not_permanently_mandatory(runtime):
+    _, _, sessions, snapshots, _, _ = runtime
+    state = sessions.create(
+        SessionState(session_id="session-1", status=SessionStatus.RUNNING),
+        SessionEvent(session_id="session-1", event_type=SessionEventType.SESSION_CREATED),
+        messages=[
+            SessionMessageDraft(message=AgentMessage(
+                message_id="old-user", role="user", content="old lookup")),
+            SessionMessageDraft(message=AgentMessage(
+                message_id="old-assistant-tool", role="assistant", tool_calls=[
+                    NormalizedToolCall(tool_call_id="old-call", tool_name="lookup"),
+                ])),
+            SessionMessageDraft(message=AgentMessage(
+                message_id="old-tool-result", role="tool", content="result " * 500,
+                tool_call_id="old-call", tool_name="lookup")),
+            SessionMessageDraft(message=AgentMessage(
+                message_id="old-final", role="assistant", content="The lookup is complete.")),
+            SessionMessageDraft(message=AgentMessage(
+                message_id="active-user", role="user", content="Start a new task.")),
+        ],
+    )
+    service = SessionContextProjector(
+        sessions=sessions, snapshots=snapshots,
+        system_policy="trusted system policy", max_input_tokens=250,
+    )
+    prepared = service.prepare(state)
+    included = set(prepared.snapshot.included_message_ids)
+    excluded = set(prepared.snapshot.excluded_message_ids)
+    assert "active-user" in included
+    assert {"old-assistant-tool", "old-tool-result"} <= excluded
+    assert not ({"old-assistant-tool", "old-tool-result"} & included)
+
+
 def test_incomplete_tool_group_fails_safely(runtime):
     _, _, sessions, _, _, _ = runtime
     state = sessions.create(

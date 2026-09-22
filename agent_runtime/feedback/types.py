@@ -23,6 +23,7 @@ class FeedbackSourceType(StrEnum):
     INTERVIEW_FEEDBACK = "interview_feedback"
     APPLICATION_STATUS = "application_status"
     MANUAL_FEEDBACK = "manual_feedback"
+    CONVERSATION_PATTERN = "conversation_pattern"
 
 
 class FeedbackProcessStatus(StrEnum):

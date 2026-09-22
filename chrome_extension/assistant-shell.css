@@ -1,0 +1,335 @@
+:root {
+  color-scheme: light dark;
+  --copilot-bg: #ffffff;
+  --copilot-surface: #f7f7f5;
+  --copilot-surface-strong: #efefec;
+  --copilot-text: #202123;
+  --copilot-muted: #6f7075;
+  --copilot-border: #deded9;
+  --copilot-accent: #202123;
+  --copilot-accent-text: #ffffff;
+  --copilot-success: #202123;
+  --copilot-success-bg: #efefec;
+  --copilot-shadow: 0 12px 36px rgba(27, 28, 29, 0.12);
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  color: var(--copilot-text);
+  background: var(--copilot-bg);
+}
+
+.app-shell {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: 100%;
+  min-width: 300px;
+  height: 100dvh;
+  background: var(--copilot-bg);
+}
+
+.app-shell > main {
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.app-shell .topbar {
+  position: relative;
+  top: auto;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 80px;
+  gap: 4px;
+  min-height: 64px;
+  padding: 8px 10px;
+  color: var(--copilot-text);
+  background: color-mix(in srgb, var(--copilot-bg) 94%, transparent);
+  border-bottom: 1px solid var(--copilot-border);
+  backdrop-filter: blur(10px);
+}
+
+.app-shell .header-actions {
+  position: static;
+  display: grid;
+  grid-template-columns: 40px 40px;
+  gap: 0;
+}
+
+.app-shell .icon-button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  color: var(--copilot-text);
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  font-size: 19px;
+}
+
+.app-shell .icon-button:hover { background: var(--copilot-surface-strong); }
+
+.app-shell .workspace-switcher {
+  min-width: 0;
+  text-align: left;
+}
+
+.app-shell .workspace-switcher > summary {
+  display: grid;
+  gap: 1px;
+  min-height: 44px;
+  padding: 5px 10px;
+  border-radius: 10px;
+}
+
+.app-shell .workspace-switcher > summary:hover { background: var(--copilot-surface); }
+.app-shell .workspace-eyebrow {
+  display: block;
+  margin: 0;
+  color: var(--copilot-muted);
+  font-size: 10px;
+  line-height: 1.15;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.app-shell .workspace-switcher strong { font-size: 14px; line-height: 1.2; }
+.app-shell .workspace-switcher summary > span:last-child { font-size: 11px; }
+.app-shell .workspace-popover {
+  top: calc(100% + 8px);
+  width: min(340px, calc(100vw - 20px));
+  color: var(--copilot-text);
+  background: var(--copilot-bg);
+  border-color: var(--copilot-border);
+  border-radius: 16px;
+  box-shadow: var(--copilot-shadow);
+}
+
+.app-shell #assistant-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100%;
+  min-height: 0;
+}
+
+.app-shell .timeline {
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  margin: 0;
+  padding: 28px max(18px, calc((100% - 680px) / 2)) 22px;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+.app-shell .timeline > * { flex-shrink: 0; }
+
+.app-shell .conversation-message,
+.app-shell .activity-disclosure,
+.app-shell .artifact-card,
+.app-shell .approval-card,
+.app-shell .confirmation-card,
+.app-shell .tool-activity {
+  margin-bottom: 26px;
+}
+
+.app-shell .conversation-message { font-size: 15px; }
+.app-shell .conversation-message.assistant {
+  width: 100%;
+  max-width: 680px;
+  line-height: 1.62;
+}
+.app-shell .conversation-message.user {
+  width: auto;
+  max-width: 86%;
+  padding: 10px 14px;
+  color: var(--copilot-text);
+  background: var(--copilot-surface-strong);
+  border-radius: 18px 18px 4px 18px;
+  line-height: 1.45;
+}
+
+.app-shell .activity-disclosure {
+  overflow: hidden;
+  color: var(--copilot-text);
+  background: var(--copilot-surface);
+  border: 1px solid var(--copilot-border);
+  border-radius: 14px;
+}
+.app-shell .activity-disclosure > summary {
+  display: block;
+  min-height: 0;
+  padding: 12px 14px;
+  font-size: 13px;
+  font-weight: 650;
+  list-style: none;
+}
+.app-shell .activity-disclosure > summary::before {
+  content: "›";
+  display: inline-block;
+  margin-right: 8px;
+  transition: transform 150ms ease;
+}
+.app-shell .activity-disclosure[open] > summary::before { transform: rotate(90deg); }
+.app-shell .activity-disclosure > ul {
+  margin: 0;
+  padding: 0 14px 13px 35px;
+  color: var(--copilot-muted);
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.app-shell .artifact-card,
+.app-shell .approval-card,
+.app-shell .confirmation-card {
+  width: 100%;
+  padding: 16px;
+  overflow: hidden;
+  color: var(--copilot-text);
+  background: var(--copilot-bg);
+  border: 1px solid var(--copilot-border);
+  border-radius: 18px;
+  box-shadow: 0 1px 2px rgba(27, 28, 29, .04);
+}
+.app-shell .artifact-card h3,
+.app-shell .approval-card h3,
+.app-shell .confirmation-card h3 { font-size: 16px; }
+.app-shell .artifact-meta { color: var(--copilot-muted); }
+.app-shell .artifact-preview {
+  color: var(--copilot-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.app-shell .composer-wrap {
+  grid-row: 3;
+  position: static;
+  z-index: 20;
+  padding: 0 12px 10px;
+  background: var(--copilot-bg);
+}
+.app-shell .quick-actions {
+  display: flex;
+  gap: 8px;
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 0 0 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.app-shell .quick-actions::-webkit-scrollbar { display: none; }
+.app-shell .quick-actions button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 6px 11px;
+  color: var(--copilot-muted);
+  background: var(--copilot-bg);
+  border: 1px solid var(--copilot-border);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 550;
+}
+.app-shell .composer {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 34px;
+  align-items: end;
+  gap: 6px;
+  width: min(100%, 700px);
+  max-width: none;
+  margin: 0 auto;
+  padding: 10px 10px 8px 11px;
+  color: var(--copilot-text);
+  background: var(--copilot-bg);
+  border: 1px solid var(--copilot-border);
+  border-radius: 22px;
+  box-shadow: var(--copilot-shadow);
+}
+.app-shell .composer:focus-within {
+  border-color: #aaa9a3;
+  box-shadow: 0 12px 38px rgba(27, 28, 29, .15);
+}
+.app-shell .composer textarea {
+  width: 100%;
+  min-height: 40px;
+  max-height: 150px;
+  padding: 9px 2px 5px;
+  resize: none;
+  color: var(--copilot-text);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  line-height: 1.45;
+}
+.app-shell .composer-context,
+.app-shell .send-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+}
+.app-shell .composer-context { color: var(--copilot-muted); background: transparent; }
+.app-shell .send-button {
+  color: var(--copilot-accent-text);
+  background: var(--copilot-accent);
+  font-size: 18px;
+}
+.app-shell .send-button:disabled { opacity: .35; }
+.app-shell .session-controls { min-height: 0; margin-top: 4px; }
+
+.app-shell .app-drawer {
+  color: var(--copilot-text);
+  background: var(--copilot-bg);
+}
+.app-shell .artifact-drawer {
+  color: var(--copilot-text);
+  background: var(--copilot-bg);
+  border-color: var(--copilot-border);
+}
+
+.app-shell .drawer-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.app-shell .artifact-document-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  line-height: 1.65;
+}
+
+@media (max-width: 360px) {
+  .app-shell .topbar {
+    grid-template-columns: 36px minmax(0, 1fr) 72px;
+    padding-inline: 6px;
+  }
+  .app-shell .header-actions { grid-template-columns: 36px 36px; }
+  .app-shell .timeline { padding-inline: 13px; }
+  .app-shell .composer-wrap { padding-inline: 10px; }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --copilot-bg: #212121;
+    --copilot-surface: #2b2b2b;
+    --copilot-surface-strong: #303030;
+    --copilot-text: #ececec;
+    --copilot-muted: #a9a9ad;
+    --copilot-border: #414141;
+    --copilot-accent: #ececec;
+    --copilot-accent-text: #202123;
+    --copilot-success: #ececec;
+    --copilot-success-bg: #303030;
+    --copilot-shadow: 0 14px 40px rgba(0, 0, 0, .34);
+  }
+}

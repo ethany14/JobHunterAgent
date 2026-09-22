@@ -105,6 +105,18 @@ def test_deterministic_bounded_plan_and_followup_policy():
     assert build_plan(**{**args, "mode": InterviewMode.PROJECT_DEEP_DIVE}).items[0].competency == "personal_contribution"
 
 
+def test_mock_interview_starts_without_an_approved_pack(setup):
+    controller, _, application_id, _ = setup
+    controller.packs.list_for_application = lambda _application_id: []
+    started = controller.start(application_id, idempotency_key="direct-start",
+        target_question_count=3)
+    assert started.status == MockStatus.AWAITING_ANSWER
+    plan = controller.interviews.plan(started.mock_interview_id)
+    assert plan.source_mode == "job_analysis"
+    assert plan.pack_id is None
+    assert plan.pack_version is None
+
+
 def test_answer_quote_and_numeric_grounding():
     question = MockInterviewQuestion(question_id="q", plan_item_id="p",
         question_text="What happened?", question_type="role_fit",
@@ -352,12 +364,14 @@ def test_chrome_mock_interview_uses_safe_dom_and_declared_paths():
     from pathlib import Path
     root = Path(__file__).resolve().parents[1] / "chrome_extension"
     controller = (root / "mock-interview-controller.js").read_text(encoding="utf-8")
-    client = (root / "api-client.js").read_text(encoding="utf-8")
-    html = (root / "sidepanel.html").read_text(encoding="utf-8")
+    client = (root.parent / "web_app/api.js").read_text(encoding="utf-8")
+    html = (root.parent / "web_app/index.html").read_text(encoding="utf-8")
     assert "innerHTML" not in controller
     assert "textContent" in controller
     for action in ("answers", "skip", "end", "cancel", "resume"):
         assert f'mutate("{action}"' in controller
-    assert "/api/mock-interviews/" in client
+    assert "/mock-interviews" in client
+    assert 'data-view-panel="interviews"' not in html
+    assert 'id="composer"' in html
     for element_id in ("mock-start", "mock-question", "mock-answer", "mock-report"):
-        assert f'id="{element_id}"' in html
+        assert f'id="{element_id}"' not in html

@@ -241,12 +241,25 @@ class SessionContextProjector:
             ),
             None,
         )
+        # A tool result is mandatory only until the model has consumed it in
+        # the current user turn. Historical tool exchanges remain atomic, but
+        # compete with other old conversation groups for the remaining budget.
+        # This prevents a long-lived Session from accumulating every tool
+        # result as permanent mandatory context.
+        active_user_sequence = latest_user.sequence if latest_user else 0
+        required_tool_groups = [
+            group for group in tool_groups
+            if group[0].sequence > active_user_sequence
+        ]
         regular_groups = [
             group
             for group in groups
-            if group not in tool_groups and group is not active_task_group
+            if group not in required_tool_groups and group is not active_task_group
         ]
-        tool_blocks = [self._group_block(group, required_tool=True) for group in tool_groups]
+        tool_blocks = [
+            self._group_block(group, required_tool=True)
+            for group in required_tool_groups
+        ]
         mandatory_cost = sum(block.estimated_tokens for block in [*blocks, *tool_blocks])
         if mandatory_cost > self._max_input_tokens:
             raise ContextBudgetExceededError("Mandatory Session context exceeds its token budget.")
@@ -275,7 +288,7 @@ class SessionContextProjector:
             else:
                 excluded.extend(item.message_id for item in group)
         selected_regular.reverse()
-        required_groups = [*tool_groups]
+        required_groups = [*required_tool_groups]
         if active_task_group is not None and active_task_group not in required_groups:
             required_groups.append(active_task_group)
         selected_ids = {

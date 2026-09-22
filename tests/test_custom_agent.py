@@ -31,7 +31,10 @@ from job_agent.schemas import (
     JobAnalysis,
     JobRequirement,
     ResumeAnalysis,
+    ResumeEntry,
     ResumeEvidence,
+    ResumeSection,
+    ResumeSourceEntry,
     SkillAssessment,
     SkillEvidence,
     SkillMatch,
@@ -611,16 +614,75 @@ def test_custom_resume_analysis_preserves_verbatim_evidence_text():
     assert outcome.updates["resume_analysis"].evidence[0].exact_text == verbatim
 
 
+def test_custom_loop_retries_then_discards_non_verbatim_model_evidence(custom_runtime):
+    analysis = ResumeAnalysis(
+        summary="Developer",
+        skills=["Python"],
+        evidence=[
+            ResumeEvidence(
+                evidence_id="valid",
+                source_section="Experience",
+                exact_text="Built Python APIs.",
+            ),
+            ResumeEvidence(
+                evidence_id="combined",
+                source_section="Education",
+                exact_text="Example University\nExpected May 2027",
+            ),
+        ],
+        source_entries=[
+            ResumeSourceEntry(
+                source_entry_id="temporary-experience",
+                entry_type="experience",
+                heading="Developer",
+                evidence_ids=["valid"],
+            ),
+            ResumeSourceEntry(
+                source_entry_id="temporary-education",
+                entry_type="education",
+                heading="Example University",
+                evidence_ids=["combined"],
+            ),
+        ],
+        education=[],
+    )
+    analyzer = QueueAnalyzer([analysis, analysis])
+    loop = make_loop(custom_runtime.repository, JobAgentStepHandler(analyzer))
+    state = AgentState(
+        run_id="discard-invalid-evidence",
+        resume_text="Built Python APIs.\nExample University\nOther text\nExpected May 2027",
+        job_description="Requires Python",
+        step=Step.ANALYZE_RESUME,
+    )
+    outcome = loop._execute_step(state)
+    grounded = ResumeAnalysis.model_validate(outcome.updates["resume_analysis"])
+
+    assert [item.exact_text for item in grounded.evidence] == [
+        "Built Python APIs."
+    ]
+    assert len(grounded.source_entries) == 1
+    assert grounded.source_entries[0].entry_type == "experience"
+    assert [call[0] for call in analyzer.calls].count(ResumeAnalysis) == 2
+
+
 def test_verifier_rejects_claim_without_evidence_ids():
     unsupported_claim = SupportedClaim.model_construct(
+        claim_id="unsupported",
         text="Python developer",
         evidence_ids=[],
+        source_entry_id="legacy:summary",
+        target_requirement_ids=[],
     )
-    unvalidated_resume = TailoredResume.model_construct(
-        professional_summary=[unsupported_claim],
-        experience_bullets=[SupportedClaim(text=FACT, evidence_ids=[FACT_ID])],
-        highlighted_skills=[SupportedClaim(text="Python", evidence_ids=[FACT_ID])],
-    )
+    unvalidated_resume = TailoredResume.model_construct(sections=[
+        ResumeSection.model_construct(section_type="summary", title="Summary", entries=[
+            ResumeEntry.model_construct(entry_id="summary", bullets=[unsupported_claim])]),
+        ResumeSection.model_construct(section_type="experience", title="Experience", entries=[
+            ResumeEntry.model_construct(entry_id="experience", bullets=[
+                SupportedClaim(text=FACT, evidence_ids=[FACT_ID])])]),
+        ResumeSection.model_construct(section_type="skills", title="Skills", entries=[
+            ResumeEntry.model_construct(entry_id="skills", bullets=[
+                SupportedClaim(text="Python", evidence_ids=[FACT_ID])])]),
+    ])
     state = AgentState(
         run_id="missing-evidence-id",
         resume_text=FACT,

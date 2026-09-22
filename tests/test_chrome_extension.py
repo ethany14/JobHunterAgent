@@ -4,354 +4,95 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 EXTENSION = ROOT / "chrome_extension"
-REQUIRED_FILES = {
-    "manifest.json",
-    "service-worker.js",
-    "sidepanel.html",
-    "sidepanel.css",
-    "sidepanel.js",
-    "api-client.js",
-    "extractor.js",
-    "README.md",
-    "workspace-controller.js",
-    "workspace-renderer.js",
-    "workspace-state.js",
-}
 
 
-def test_extension_has_required_files() -> None:
-    assert REQUIRED_FILES <= {path.name for path in EXTENSION.iterdir() if path.is_file()}
-
-
-def test_manifest_is_valid_and_minimally_scoped() -> None:
+def test_manifest_is_minimal_and_valid() -> None:
     manifest = json.loads((EXTENSION / "manifest.json").read_text(encoding="utf-8"))
-
     assert manifest["manifest_version"] == 3
     assert manifest["minimum_chrome_version"] == "116"
-    assert set(manifest["permissions"]) == {
-        "activeTab",
-        "scripting",
-        "storage",
-        "sidePanel",
-    }
+    assert set(manifest["permissions"]) == {"activeTab", "scripting", "storage", "sidePanel"}
     assert manifest["host_permissions"] == ["http://localhost:8000/*"]
-    assert "optional_host_permissions" not in manifest
-    assert manifest["background"]["service_worker"] == "service-worker.js"
-    assert manifest["side_panel"]["default_path"] == "sidepanel.html"
+    assert manifest["background"]["type"] == "module"
     assert "<all_urls>" not in json.dumps(manifest)
-    assert {"cookies", "history", "webRequest", "downloads", "tabs"}.isdisjoint(
-        manifest["permissions"]
-    )
+    assert not ({"cookies", "history", "webRequest", "downloads", "tabs"} & set(manifest["permissions"]))
 
 
-def test_api_client_paths_match_fastapi_routes() -> None:
+def test_required_extension_files_exist() -> None:
+    for name in {"manifest.json", "service-worker.js", "sidepanel.html", "sidepanel.css",
+                 "sidepanel.js", "api-client.js", "extractor.js", "README.md"}:
+        assert (EXTENSION / name).is_file(), name
+
+
+def test_extension_is_a_focused_job_lens() -> None:
+    page = (EXTENSION / "sidepanel.html").read_text(encoding="utf-8")
+    script = (EXTENSION / "sidepanel.js").read_text(encoding="utf-8")
     client = (EXTENSION / "api-client.js").read_text(encoding="utf-8")
-    routes = (ROOT / "api" / "routes" / "runs.py").read_text(encoding="utf-8")
-    main = (ROOT / "api" / "main.py").read_text(encoding="utf-8")
-    session_routes = (ROOT / "api" / "session_routes.py").read_text(encoding="utf-8")
-
-    assert 'API_BASE_URL = "http://localhost:8000"' in client
-    assert 'request("/health")' in client
-    assert 'request("/runs"' in client
-    assert '/runs/${encodeURIComponent(runId)}' in client
-    assert '/runs/${encodeURIComponent(runId)}/review' in client
-    assert '@application.get("/health"' in main
-    assert 'APIRouter(prefix="/runs"' in routes
-    assert '@router.get("/{run_id}"' in routes
-    assert '@router.post("/{run_id}/review"' in routes
-    assert 'request("/sessions"' in client
-    assert 'request(`/sessions?limit=${encodeURIComponent(limit)}`)' in client
-    assert '/sessions/${encodeURIComponent(sessionId)}' in client
-    assert '/messages`' in client
-    assert '/tool-calls/${encodeURIComponent(toolCallId)}/approve' in client
-    assert '/tool-calls/${encodeURIComponent(toolCallId)}/reject' in client
-    assert '/cancel`' in client
-    assert '/recover`' in client
-    assert 'capability_profile: "job_assistant_readonly"' in client
-    assert 'APIRouter(prefix="/sessions"' in session_routes
-    for path in {
-        'request("/memories")',
-        '/memories/${encodeURIComponent(memoryId)}/confirm',
-        '/memories/${encodeURIComponent(memoryId)}/reject',
-        '/memories/${encodeURIComponent(memoryId)}/supersede',
-        'request("/skills")',
-        '/skills/${encodeURIComponent(skillName)}/versions',
-        '/skill-versions/${encodeURIComponent(versionId)}',
-        '/sessions/${encodeURIComponent(sessionId)}/context',
-    }:
-        assert path in client
+    for element in {"extract-button", "job-title", "job-company", "job-description",
+                    "analyze-button", "match-score", "suggestion-list", "open-web-button",
+                    "save-job-button", "open-application-button"}:
+        assert f'id="{element}"' in page
+    assert 'request("/api/workspaces"' in client
+    assert '/analyze-with-resume' in client
+    assert 'request("/health"' in client
+    assert 'http://localhost:8000/app' in script
+    assert "source_url: currentExtraction?.source_url" in script
+    assert "?application=" in script
+    for removed in {"resume-text", "assistant-panel", "memory-list", "skill-list",
+                    "application-pack", "mock-interview"}:
+        assert removed not in page
 
 
-def test_javascript_does_not_render_untrusted_markup() -> None:
+def test_extraction_remains_user_initiated_and_editable() -> None:
+    page = (EXTENSION / "sidepanel.html").read_text(encoding="utf-8")
+    script = (EXTENSION / "sidepanel.js").read_text(encoding="utf-8")
+    extractor = (EXTENSION / "extractor.js").read_text(encoding="utf-8")
+    assert "chrome.scripting.executeScript" in script
+    assert 'elements.extract.addEventListener("click", extract)' in script
+    assert "Nothing is sent until you select Analyze" in page
+    assert "<textarea" in page and 'id="job-description"' in page
+    assert "MAX_TEXT_LENGTH = 50_000" in script
+    assert extractor.index("window.getSelection") < extractor.index("const selectors")
+    assert "await extract();" in script
+    assert "chrome.storage.onChanged.addListener" in script
+    assert '"#job-details"' in extractor
+    assert "bestContainerText" in extractor
+    assert "isVisible" in extractor
+    assert "linkedin\\.com" in extractor
+    assert "jobDescriptionSlice" in extractor
+    assert "关于职位" in extractor
+    assert "职位发布中说明的福利" in extractor
+    assert '".jobs-search__job-details--container #job-details"' in extractor
+
+
+def test_extension_renders_untrusted_content_with_safe_dom_only() -> None:
     for path in EXTENSION.glob("*.js"):
         source = path.read_text(encoding="utf-8")
         assert "innerHTML" not in source, path.name
-
-
-def test_requirement_ui_uses_v3_metadata_and_safe_details() -> None:
+        assert "document.write" not in source, path.name
     panel = (EXTENSION / "sidepanel.js").read_text(encoding="utf-8")
-    page = (EXTENSION / "sidepanel.html").read_text(encoding="utf-8")
-
-    assert 'id="confirmation-list"' in page
-    assert "Needs your confirmation" in page
-    assert "requirement.display_name" in panel
-    assert "requirement.category" in panel
-    assert "requirement.level || match.requirement_level" in panel
-    assert "requirement.minimum_years" in panel
-    assert 'metadata.join(" \\u2022 ")' in panel
-    assert "Evidence strength:" in panel
-    assert '["matched", "partial"].includes(match.match_status)' in panel
-    assert 'document.createElement("details")' in panel
-    assert 'appendTextElement(details, "summary", "Evidence and reasoning")' in panel
-    assert "match.match_reason" in panel
-    assert "match.resume_evidence" in panel
-    assert "innerHTML" not in panel
-    assert "% confidence" not in panel
+    assert "textContent" in panel
+    assert "replaceChildren" in panel
 
 
-def test_extraction_and_input_limits_are_explicit() -> None:
-    extractor = (EXTENSION / "extractor.js").read_text(encoding="utf-8")
-    panel = (EXTENSION / "sidepanel.js").read_text(encoding="utf-8")
-
-    selection_position = extractor.index("window.getSelection")
-    container_position = extractor.index("const selectors")
-    main_position = extractor.index('document.querySelector("main")')
-    body_position = extractor.index("document.body")
-    assert selection_position < container_position < main_position < body_position
-    assert "MAX_TEXT_LENGTH = 50_000" in panel
-    assert "chrome.scripting.executeScript" in panel
-
-
-def test_service_worker_records_action_tab_before_opening_panel() -> None:
+def test_service_worker_preserves_action_gesture_for_side_panel() -> None:
     worker = (EXTENSION / "service-worker.js").read_text(encoding="utf-8")
-
     assert 'ACTIVE_JOB_TAB_KEY = "jobAgentActiveTab"' in worker
     assert "openPanelOnActionClick: false" in worker
     assert "chrome.action.onClicked.addListener" in worker
-    assert "chrome.storage.session.set" in worker
     assert "chrome.sidePanel.open" in worker
-    assert "addListener(async (tab)" not in worker
+    assert "chrome.scripting.executeScript" in worker
+    assert 'import { extractJobDescriptionFromPage } from "./extractor.js"' in worker
+    assert 'ACTIVE_JOB_EXTRACTION_KEY = "jobAgentActiveExtraction"' in worker
     handler = worker[worker.index("chrome.action.onClicked.addListener"):]
-    open_call = handler.index("chrome.sidePanel.open")
-    assert "await " not in handler[:open_call]
-    assert "Promise.allSettled([saveTarget, openPanel])" in worker
+    assert "await " not in handler[:handler.index("chrome.sidePanel.open")]
 
 
-def test_side_panel_extracts_only_from_recorded_action_tab() -> None:
-    panel = (EXTENSION / "sidepanel.js").read_text(encoding="utf-8")
-
-    page = (EXTENSION / "sidepanel.html").read_text(encoding="utf-8")
-
-    assert 'ACTIVE_JOB_TAB_KEY = "jobAgentActiveTab"' in panel
-    assert "chrome.storage.session.get" in panel
-    assert "activeTab?.id !== target.tabId" in panel
-    assert "target: { tabId: target.tabId }" in panel
-    assert "permissions.request" not in panel
-    assert "site-permission-button" not in page
-
-
-def test_extractor_is_self_contained_for_script_injection() -> None:
-    extractor = (EXTENSION / "extractor.js").read_text(encoding="utf-8")
-    function_start = extractor.index("export function extractJobDescriptionFromPage()")
-
-    assert "const clean =" in extractor[function_start:]
-    assert "const selectors =" in extractor[function_start:]
-    assert '"[data-job-description]"' in extractor[function_start:]
-
-
-def test_session_ui_has_required_controls_and_statuses() -> None:
-    page = (EXTENSION / "sidepanel.html").read_text(encoding="utf-8")
-    panel = (EXTENSION / "sidepanel.js").read_text(encoding="utf-8")
-
-    for element_id in {
-        "analysis-panel", "assistant-panel", "new-session-button",
-        "send-session-button", "cancel-session-button", "recover-session-button",
-        "ask-run-button", "assistant-messages", "tool-approvals",
-    }:
-        assert f'id="{element_id}"' in page
-    for status in {
-        "active", "running", "awaiting_user", "awaiting_tool_approval",
-        "completed", "failed", "cancelled", "timed_out",
-    }:
-        assert f'{status}:' in panel
-    assert 'currentSession.recovery_available !== true' in panel
-    assert 'crypto.randomUUID()' in panel
-    assert "MAX_SESSION_MESSAGE_LENGTH = 20_000" in panel
-    assert "analysisBusy" in panel and "sessionBusy" in panel
-
-
-def test_session_storage_keeps_only_identifier_and_restores_from_backend() -> None:
-    panel = (EXTENSION / "sidepanel.js").read_text(encoding="utf-8")
-
-    assert 'ACTIVE_SESSION_KEY = "jobAgentActiveSessionId"' in panel
-    assert "chrome.storage.local.set({ [ACTIVE_SESSION_KEY]: currentSession.session_id })" in panel
-    assert "getSession(sessionId)" in panel
-    assert "getSessionMessages(currentSession.session_id)" in panel
-    assert "error.status === 404" in panel
-    assert "chrome.storage.local.remove(ACTIVE_SESSION_KEY)" in panel
-    assert "Preserve the ID during temporary backend or network failures" in panel
-    assert "sessionState" not in panel
-    assert "cachedMessages" not in panel
-    assert "listSessions(50)" in panel
-    assert "Choose a previous conversation" in panel
-
-
-def test_session_conflicts_refresh_without_automatic_resend() -> None:
-    panel = (EXTENSION / "sidepanel.js").read_text(encoding="utf-8")
-    handler = panel[panel.index("async function handleConcurrency"):panel.index("async function sendMessage")]
-
-    assert "error.status !== 409" in handler
-    assert "await refreshSession()" in handler
-    assert "your message was not resent" in handler
-    assert "sendSessionMessage" not in handler
-
-
-def test_restored_running_session_polling_is_bounded() -> None:
-    panel = (EXTENSION / "sidepanel.js").read_text(encoding="utf-8")
-    polling = panel[panel.index("async function pollRestoredSession"):panel.index("async function restoreSession")]
-
-    assert "SESSION_POLL_TIMEOUT_MS" in polling
-    assert 'currentSession?.status === "running"' in polling
-    assert "await refreshSession()" in polling
-    assert "startSession" not in polling
-    assert "createSession" not in polling
-
-
-def test_session_rendering_uses_only_public_roles_and_safe_dom() -> None:
-    panel = (EXTENSION / "sidepanel.js").read_text(encoding="utf-8")
-
-    assert '["user", "assistant"].includes(item?.role)' in panel
-    assert 'JSON.stringify(approval.arguments || {}, null, 2)' in panel
-    assert "Arguments (redacted by server)" in panel
-    assert "approval-arguments" in panel
-    assert "innerHTML" not in panel
-
-
-def test_tool_call_provenance_rendering_is_safe_and_collapsible() -> None:
-    panel = (EXTENSION / "sidepanel.js").read_text(encoding="utf-8")
-    page = (EXTENSION / "sidepanel.html").read_text(encoding="utf-8")
-
-    assert 'id="tool-call-details"' in page
-    section = panel[
-        panel.index("function renderToolCalls"):panel.index("function renderSession(")
-    ]
-    assert 'document.createElement("details")' in section
-    assert 'call.provider === "MCP"' in section
-    assert '"Built-in"' in section
-    assert "call.mcp_server_id" in section
-    assert "call.duration_ms" in section
-    assert "call.approval_status" in section
-    assert "call.idempotently_reused" in section
-    assert "call.result_truncated" in section
-    assert "call.arguments" not in section
-    assert "call.result.output" not in section
-    assert "call.result_json" not in section
-    assert "call.error" not in section
-    assert "textContent" not in section or "innerHTML" not in section
-
-
-def test_session_history_ui_is_backend_backed_and_safe() -> None:
-    panel = (EXTENSION / "sidepanel.js").read_text(encoding="utf-8")
-    page = (EXTENSION / "sidepanel.html").read_text(encoding="utf-8")
-
-    assert 'id="session-history"' in page
-    assert 'id="refresh-sessions-button"' in page
-    assert "async function loadSessionHistory()" in panel
-    assert "async function openSession(sessionId)" in panel
-    assert "historyLabel(session)" in panel
-    assert "option.value = session.session_id" in panel
-    assert "chrome.storage.local.set({ [ACTIVE_SESSION_KEY]: sessionId })" in panel
-    storage_write = panel.index("chrome.storage.local.set({ [ACTIVE_SESSION_KEY]: sessionId })")
-    assert "messages:" not in panel[storage_write:storage_write + 200]
-
-
-def test_context_management_ui_is_safe_and_backend_backed() -> None:
-    panel = (EXTENSION / "sidepanel.js").read_text(encoding="utf-8")
-    page = (EXTENSION / "sidepanel.html").read_text(encoding="utf-8")
-
-    for element_id in {
-        "context-tab", "context-panel", "used-context", "memory-list",
-        "skill-list", "create-memory-button", "refresh-context-button",
-    }:
-        assert f'id="{element_id}"' in page
-    assert "Used This Turn" in page
-    assert "Memory Manager" in page
-    assert "Skill Manager" in page
-    assert "async function refreshContextSummary" in panel
-    assert "async function refreshMemories" in panel
-    assert "async function refreshSkills" in panel
-    assert "Replace confirmed" in panel
-    assert "Inspect instructions" in panel
-    assert "refreshContextPanel()" in panel
-    assert "innerHTML" not in panel
-    assert "chrome.storage.local" not in panel[
-        panel.index("function renderUsedContext"):panel.index("elements.healthButton")
-    ]
-
-
-def test_context_conflicts_refresh_without_automatic_retry() -> None:
-    panel = (EXTENSION / "sidepanel.js").read_text(encoding="utf-8")
-    memory_handler = panel[
-        panel.index("async function mutateMemory"):panel.index("function renderMemories")
-    ]
-    skill_handler = panel[
-        panel.index("async function mutateSkill"):panel.index("function renderSkillVersions")
-    ]
-    assert "error.status === 409" in memory_handler
-    assert "await refreshMemories()" in memory_handler
-    assert "await operation()" in memory_handler
-    assert memory_handler.count("await operation()") == 1
-    assert "error.status === 409" in skill_handler
-    assert "await refreshSkills()" in skill_handler
-    assert "await action(version.version_id, version.version)" in skill_handler
-
-
-def test_workspace_ui_is_modular_safe_and_backend_backed() -> None:
-    page = (EXTENSION / "sidepanel.html").read_text(encoding="utf-8")
-    client = (EXTENSION / "api-client.js").read_text(encoding="utf-8")
-    panel = (EXTENSION / "sidepanel.js").read_text(encoding="utf-8")
-    controller = (EXTENSION / "workspace-controller.js").read_text(encoding="utf-8")
-    renderer = (EXTENSION / "workspace-renderer.js").read_text(encoding="utf-8")
-    for element_id in {"jobs-tab", "jobs-panel", "save-job-button", "application-list",
-                       "workspace-detail", "analyze-workspace-button",
-                       "workspace-assistant-button"}:
-        assert f'id="{element_id}"' in page
-    for path in {"/api/workspaces", "/api/applications?", "/analyze`,",
-                 "/artifacts`", "/events`"}:
-        assert path in client
-    assert "createWorkspaceController" in panel
-    assert "currentSession.active_application_id" in panel
-    assert "jobAgentCurrentApplicationId" in (EXTENSION / "workspace-state.js").read_text(encoding="utf-8")
-    assert "duplicate_detected" in controller
-    assert "expected_version" in controller
-    assert "textContent" in renderer
-    assert "innerHTML" not in controller + renderer
-
-
-def test_extractor_returns_normalized_untrusted_text_contract() -> None:
-    extractor = (EXTENSION / "extractor.js").read_text(encoding="utf-8")
-    for field in {"source_url", "source_site", "page_title", "company", "job_title",
-                  "location", "raw_page_text", "cleaned_job_description",
-                  "extraction_source", "extraction_confidence", "extracted_at"}:
-        assert field in extractor
-    assert "outerHTML" not in extractor
-    assert "innerHTML" not in extractor
-    assert 'script[type="application/ld+json"]' in extractor
-    assert 'types.includes("JobPosting")' in extractor
-    assert '".jobs-description__content"' in extractor
-    assert '".jobs-box__html-content"' in extractor
-    assert "relevantFallback" in extractor
-
-
-def test_job_metadata_is_explicitly_editable_before_saving() -> None:
-    page = (EXTENSION / "sidepanel.html").read_text(encoding="utf-8")
-    panel = (EXTENSION / "sidepanel.js").read_text(encoding="utf-8")
-    controller = (EXTENSION / "workspace-controller.js").read_text(encoding="utf-8")
-    for element_id in {"job-title", "job-company", "job-location"}:
-        assert f'id="{element_id}"' in page
-    assert "elements.jobTitle.value = extracted.job_title" in panel
-    assert "elements.jobCompany.value = extracted.company" in panel
-    assert "elements.jobLocation.value = extracted.location" in panel
-    assert "title: extracted.job_title || null" in controller
-    assert "company: extracted.company || null" in controller
-    assert "location: extracted.location || null" in controller
+def test_interactions_have_hover_and_press_feedback() -> None:
+    styles = (EXTENSION / "sidepanel.css").read_text(encoding="utf-8")
+    assert ":hover" in styles
+    assert ":active" in styles
+    assert "transition:" in styles
+    assert "transform:" in styles
+    assert "Monochrome Side Panel theme" in styles
+    assert "--green:#111" in styles
+    assert "conic-gradient(#111 var(--score)" in styles

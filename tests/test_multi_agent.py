@@ -328,8 +328,8 @@ def test_template_restricted_api_and_safe_task_response(setup):
 def test_chrome_task_activity_safe_rendering():
     root = Path(__file__).resolve().parents[1] / "chrome_extension"
     source = (root / "task-activity.js").read_text(encoding="utf-8")
-    page = (root / "sidepanel.html").read_text(encoding="utf-8")
-    assert "task-activity-list" in page
+    page = (root.parent / "web_app/index.html").read_text(encoding="utf-8")
+    assert "task-activity-list" not in page
     assert "textContent" in source and "innerHTML" not in source
     assert "input_spec" not in source and "output_spec" not in source
 

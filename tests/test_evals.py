@@ -81,7 +81,10 @@ def test_tailored_resume_text_includes_every_claim_group():
         experience_bullets=[SupportedClaim(text="Bullet", evidence_ids=["EXP-2"])],
         highlighted_skills=[SupportedClaim(text="Python", evidence_ids=["EXP-3"])],
     )
-    assert tailored_resume_text(resume) == "Summary\nBullet\nPython"
+    assert tailored_resume_text(resume) == (
+        "PROFESSIONAL SUMMARY\nSummary\n\n"
+        "EXPERIENCE\n• Bullet\n\nSKILLS\nPython"
+    )
 
 
 def test_summary_excludes_na_and_invalid_input_from_recall_and_latency():

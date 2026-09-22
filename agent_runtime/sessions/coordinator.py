@@ -44,6 +44,7 @@ from agent_runtime.context.snapshots import (
 if TYPE_CHECKING:
     from agent_runtime.context.projection import SessionContextProjector
     from agent_runtime.context.repository import ContextSnapshotRepository
+    from agent_runtime.learning.service import ConversationLearningService
 
 SESSION_SYSTEM_MESSAGE = (
     "Use available tools when current database information is required. Do not "
@@ -72,6 +73,7 @@ class SessionCoordinator:
         context_projector: "SessionContextProjector | None" = None,
         context_snapshots: "ContextSnapshotRepository | None" = None,
         default_allowed_skills: frozenset[str] = frozenset(),
+        conversation_learning: "ConversationLearningService | None" = None,
     ) -> None:
         self._sessions = sessions
         self._tool_calls = tool_calls
@@ -102,6 +104,7 @@ class SessionCoordinator:
         self._context_snapshots = context_snapshots
         self._context_projector = context_projector
         self._default_allowed_skills = default_allowed_skills
+        self._conversation_learning = conversation_learning
         if lease_seconds <= 0 or safety_margin_seconds < 0:
             raise ValueError("Lease settings are invalid.")
         if model_timeout_seconds + safety_margin_seconds >= lease_seconds:
@@ -672,6 +675,16 @@ class SessionCoordinator:
             snapshot = self._context_snapshots.get(state.last_context_snapshot_id)
             if snapshot is not None and snapshot.status == ContextSnapshotStatus.PREPARED:
                 self._context_snapshots.mark_used(snapshot.snapshot_id)
+        if assistant is not None and self._conversation_learning is not None:
+            # The user-visible response is already durable. Learning is best
+            # effort and cannot turn a successful session into a failed one.
+            try:
+                self._conversation_learning.observe_completed_turn(
+                    session_id=state.session_id,
+                    assistant_message_id=assistant.message_id,
+                )
+            except Exception:
+                pass
         return self._outcome(
             SessionOutcomeStatus.RESPONSE_READY,
             state,

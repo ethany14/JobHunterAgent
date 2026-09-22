@@ -46,13 +46,14 @@ class PlanItem(StrictModel):
 
 
 class MockInterviewPlan(StrictModel):
-    schema_version: int = 1
+    schema_version: int = 2
     plan_id: str
     mock_interview_id: str
     job_snapshot_id: str
     job_snapshot_hash: str
-    pack_id: str
-    pack_version: int
+    pack_id: str | None = None
+    pack_version: int | None = None
+    source_mode: str = "job_analysis"
     evidence: list[dict]
     selected_requirement_ids: list[str]
     requirement_texts: dict[str, str] = Field(default_factory=dict)

@@ -17,6 +17,7 @@ from agent_runtime.interviewer.types import (
 from agent_runtime.interviewer.errors import InterviewStaleVersionError
 from agent_runtime.interviewer.policy import InterviewPriorityPolicy, validate_candidate
 from agent_runtime.interviewer.errors import InterviewValidationError
+from agent_runtime.mock_interview.errors import MockInterviewValidation
 from agent_runtime.interviewer.errors import InterviewConflictError
 from agent_runtime.evidence.types import EvidenceStatus
 from agent_runtime.sessions.repository import SessionRepository
@@ -29,6 +30,32 @@ from fastapi.testclient import TestClient
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import inspect
+
+
+def test_interview_validation_errors_return_safe_actionable_reasons():
+    app = create_app(run_service=object(), session_runtime=object())
+
+    @app.get("/test/mock-validation")
+    def mock_validation():
+        raise MockInterviewValidation(
+            "An approved Pack for the current Job is required.")
+
+    @app.get("/test/evidence-validation")
+    def evidence_validation():
+        raise InterviewValidationError(
+            "Analyze the current Job snapshot before interviewing.")
+
+    @app.get("/test/unknown-validation")
+    def unknown_validation():
+        raise MockInterviewValidation("private/provider/path/detail")
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        assert client.get("/test/mock-validation").json()["detail"]["message"] == (
+            "An approved Pack for the current Job is required.")
+        assert client.get("/test/evidence-validation").json()["detail"]["message"] == (
+            "Analyze the current Job snapshot before interviewing.")
+        assert client.get("/test/unknown-validation").json()["detail"]["message"] == (
+            "Interview input or source is invalid.")
 
 
 class FakeInterviewModel:
@@ -387,11 +414,11 @@ def test_interviewer_chrome_safe_rendering_and_paths():
     from pathlib import Path
     root = Path(__file__).resolve().parents[1]
     controller = (root / "chrome_extension/interview-controller.js").read_text(encoding="utf-8")
-    client = (root / "chrome_extension/api-client.js").read_text(encoding="utf-8")
+    client = (root / "web_app/api.js").read_text(encoding="utf-8")
     assert "textContent" in controller
     assert "innerHTML" not in controller
     assert "getActiveInterview" in controller
-    assert "/api/interviews/" in client
+    assert "/mock-interviews" in client
     assert "/api/applications/" in client
 
 

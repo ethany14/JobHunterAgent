@@ -11,6 +11,8 @@ from agent_runtime.feedback.processor import FeedbackProcessor
 from agent_runtime.feedback.repository import FeedbackRepository
 from agent_runtime.feedback.types import CandidateStatus, CandidateType, FeedbackEvent, FeedbackSourceType
 from agent_runtime.memory.types import MemoryProvenance, MemoryScope, MemorySensitivity, MemoryType
+from agent_runtime.memory.proposals import extract_memory_proposals
+from agent_runtime.evidence.extraction import career_fact_candidates, extract_evidence_candidates
 
 
 class FeedbackService:
@@ -93,14 +95,20 @@ class FeedbackService:
             memory_id = str(uuid5(NAMESPACE_URL, f"feedback:{candidate_id}:memory"))
             memory = self.memories.get(memory_id, owner_id=owner_id)
             if memory is None:
+                proposals = [item for item in extract_memory_proposals(candidate.proposed_content)
+                             if item.key == candidate.proposed_key_or_name]
+                proposal = proposals[0] if len(proposals) == 1 else None
+                value = proposal.value if proposal else candidate.proposed_content
+                display_text = (f"{candidate.proposed_key_or_name} = {value}"
+                                if proposal else candidate.proposed_content[:2000])
                 scope = MemoryScope.USER if candidate.scope.value == "user" else MemoryScope.PROJECT
                 scope_id = owner_id if scope == MemoryScope.USER else f"application:{candidate.scope_id}"
                 memory = self.memories.create_candidate(owner_id=owner_id, scope=scope,
                     scope_id=scope_id, memory_id=memory_id,
                     memory_key=candidate.proposed_key_or_name,
                     memory_type=MemoryType.PREFERENCE,
-                    display_text=candidate.proposed_content[:2000],
-                    content={"value": candidate.proposed_content},
+                    display_text=display_text,
+                    content={"value": value},
                     provenance=[MemoryProvenance(source_type="explicit_user_feedback",
                         source_id=candidate_id, actor_type="user", user_confirmed=True)],
                     sensitivity=MemorySensitivity.PERSONAL,
@@ -112,16 +120,24 @@ class FeedbackService:
         elif candidate.candidate_type == CandidateType.CAREER_EVIDENCE:
             if self.evidence is None:
                 raise FeedbackValidationError("Evidence repository is unavailable.")
+            extracted = career_fact_candidates(extract_evidence_candidates(candidate.proposed_content))
+            if len(extracted) > 1:
+                raise FeedbackValidationError(
+                    "Feedback contains multiple career facts; review them as separate candidates."
+                )
+            proposed_fact = extracted[0].source_quote if extracted else candidate.proposed_content
             evidence_id = candidate.linked_evidence_id or str(uuid5(
                 NAMESPACE_URL, f"feedback:{candidate_id}:evidence"))
             try:
                 record = self.evidence.get(evidence_id)
             except EvidenceNotFoundError:
                 record = self.evidence.create_candidate(category="experience",
-                    claim_text=candidate.proposed_content, source_type="user_attested",
-                    exact_quote=candidate.proposed_content, created_by="local-user",
+                    claim_text=proposed_fact, source_type="user_attested",
+                    exact_quote=proposed_fact, created_by="local-user",
+                    source_reference=candidate_id,
+                    tags=["extraction:evidence-candidate-v1"],
                     evidence_id=evidence_id)
-            if record.current.claim_text != candidate.proposed_content:
+            if record.current.claim_text != proposed_fact:
                 raise FeedbackConflictError("Evidence wording changed before confirmation.")
             if record.status.value == "candidate":
                 self.evidence.confirm(record.evidence_id, record.version)

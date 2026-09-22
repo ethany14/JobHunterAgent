@@ -74,5 +74,6 @@ export function createWorkspaceController({ elements, getResume, getJobText, get
 
   async function restore() { const stored = await chrome.storage.local.get(CURRENT_APPLICATION_KEY); if (stored[CURRENT_APPLICATION_KEY]) await open(stored[CURRENT_APPLICATION_KEY]); }
   elements.save.addEventListener("click", save); elements.open.addEventListener("click", () => state.current && open(state.current.application_id)); elements.refresh.addEventListener("click", () => refresh()); elements.more.addEventListener("click", () => refresh({ append: true })); elements.search.addEventListener("change", () => refresh()); elements.filter.addEventListener("change", () => refresh()); elements.analyze.addEventListener("click", analyze); elements.update.addEventListener("click", update); elements.transition.addEventListener("click", transition); elements.assistant.addEventListener("click", () => state.current && onOpenAssistant(state.current.application_id));
-  return { state, refresh, open, restore, updateSaveState: () => { elements.save.disabled = !canSaveJob(getJobText(), state.busy); } };
+  return { state, refresh, open, restore, analyze, save,
+    updateSaveState: () => { elements.save.disabled = !canSaveJob(getJobText(), state.busy); } };
 }

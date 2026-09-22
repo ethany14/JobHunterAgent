@@ -63,7 +63,9 @@ def test_analyze_files_serializes_supported_claims(tmp_path):
     job.write_text("Requires Python", encoding="utf-8")
     with patch("main.graph.invoke", return_value=graph_result()):
         result = analyze_files(resume, job, thread_id="test-001")
-    assert result["tailored_resume"]["professional_summary"][0]["evidence_ids"] == [FACT_ID]
+    assert TailoredResume.model_validate(
+        result["tailored_resume"]
+    ).professional_summary[0].evidence_ids == [FACT_ID]
     assert result["skill_match"]["missing_preferred_requirements"] == []
 
 

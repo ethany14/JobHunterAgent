@@ -23,7 +23,8 @@ _COVERAGE = {
 
 
 def build_plan(*, interview_id: str, snapshot_id: str, snapshot_hash: str,
-               pack_id: str, pack_version: int, evidence: list[dict],
+               pack_id: str | None = None, pack_version: int | None = None,
+               source_mode: str = "job_analysis", evidence: list[dict],
                requirement_ids: list[str], mode: InterviewMode,
                requirement_texts: dict[str, str] | None = None,
                job_description_excerpt: str = "",
@@ -52,6 +53,7 @@ def build_plan(*, interview_id: str, snapshot_id: str, snapshot_hash: str,
     return MockInterviewPlan(plan_id=str(uuid5(NAMESPACE_URL, f"{interview_id}:plan")),
         mock_interview_id=interview_id, job_snapshot_id=snapshot_id,
         job_snapshot_hash=snapshot_hash, pack_id=pack_id, pack_version=pack_version,
+        source_mode=source_mode,
         evidence=evidence, selected_requirement_ids=requirement_ids,
         requirement_texts=requirement_texts or {},
         job_description_excerpt=job_description_excerpt,

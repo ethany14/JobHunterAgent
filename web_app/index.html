@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Northstar Career Copilot</title>
+  <link rel="stylesheet" href="/web-assets/styles.css?v=copilot-optimistic-20260922">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="rail">
+      <a class="brand" href="#overview" aria-label="Northstar home"><span class="brand-mark">N</span><span>Northstar</span></a>
+      <nav aria-label="Primary">
+        <button class="nav-item is-active" data-view="overview"><span>⌁</span>Overview</button>
+        <button class="nav-item" data-view="jobs"><span>◫</span>Jobs</button>
+        <button class="nav-item" data-view="copilot"><span>✦</span>Copilot</button>
+        <button class="nav-item" data-view="materials"><span>◇</span>Materials</button>
+        <button class="nav-item" data-view="evidence"><span>⌘</span>Evidence</button>
+        <button class="nav-item" data-view="learning"><span>↗</span>Learning</button>
+      </nav>
+      <div class="rail-bottom">
+        <button class="nav-item" data-view="settings"><span>⚙</span>Settings</button>
+        <div class="local-badge"><i id="health-dot"></i><span id="health-label">Connecting</span></div>
+      </div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div><p class="eyebrow">CAREER WORKSPACE</p><h1 id="view-title">Good morning</h1></div>
+        <div class="top-actions">
+          <button class="icon-button" id="refresh-button" aria-label="Refresh">↻</button>
+          <button class="primary-button" data-view-target="copilot">Ask Copilot <span>↗</span></button>
+        </div>
+      </header>
+      <div id="toast" class="toast" role="status" hidden></div>
+
+      <section class="view is-active" data-view-panel="overview">
+        <div class="hero-panel">
+          <div><p class="eyebrow">YOUR NEXT MOVE</p><h2>Turn the right role into<br><em>a strong application.</em></h2><p>One quiet workspace for job analysis, evidence, tailored materials, and interview practice.</p></div>
+          <button class="orb-action" data-view-target="jobs" aria-label="Open jobs"><span>→</span></button>
+        </div>
+        <div class="metrics-grid">
+          <article><span>Saved roles</span><strong id="metric-jobs">—</strong><small>active applications</small></article>
+          <article><span>Average match</span><strong id="metric-score">—</strong><small>across analyzed roles</small></article>
+          <article><span>Career evidence</span><strong id="metric-evidence">—</strong><small>confirmed examples</small></article>
+        </div>
+        <div class="section-heading"><div><p class="eyebrow">FOCUS</p><h3>Current applications</h3></div><button class="text-button" data-view-target="jobs">View all →</button></div>
+        <div id="overview-jobs" class="list-stack empty-state">No saved jobs yet.</div>
+      </section>
+
+      <section class="view" data-view-panel="jobs">
+        <div class="section-heading"><div><p class="eyebrow">PIPELINE</p><h2>Saved jobs</h2></div><button class="primary-button" id="new-job-button">+ Add job</button></div>
+        <div class="split-layout">
+          <div><div class="filter-row"><input id="job-search" type="search" placeholder="Search roles or companies"><button class="soft-button" id="reload-jobs">Refresh</button></div><div id="job-list" class="list-stack empty-state">No saved jobs yet.</div></div>
+          <aside id="job-detail" class="detail-panel"><p class="eyebrow">SELECT A ROLE</p><h3>Your job details appear here.</h3><p>Save a role from the extension or add one here.</p></aside>
+        </div>
+      </section>
+
+      <section class="view" data-view-panel="copilot">
+        <div class="copilot-layout">
+          <aside class="conversation-sidebar">
+            <button class="primary-button sidebar-new-chat" id="new-session">+ New conversation</button>
+            <p class="eyebrow">CONVERSATIONS</p>
+            <div id="session-history" class="session-history" aria-label="Previous conversations"></div>
+          </aside>
+          <div class="conversation-panel">
+            <div class="conversation-head"><div><p class="eyebrow">PRIVATE WORKSPACE</p><h2 id="conversation-title">Career Copilot</h2></div><button class="icon-button" id="delete-session" title="Delete this conversation" aria-label="Delete conversation">×</button></div>
+            <div id="conversation" class="conversation"><div class="assistant-message"><span class="message-mark">✦</span><p>Ask about a saved role, compare requirements, or plan your next application step.</p></div></div>
+            <form id="composer" class="composer"><textarea id="message-input" maxlength="20000" rows="2" placeholder="Message your Career Copilot"></textarea><button class="send-button" type="submit" aria-label="Send">↑</button></form>
+          </div>
+          <aside class="context-strip"><p class="eyebrow">CONTEXT</p><div id="copilot-context"><p>Start a conversation or select a saved job.</p></div></aside>
+        </div>
+      </section>
+
+      <section class="view" data-view-panel="materials">
+        <div class="section-heading"><div><p class="eyebrow">APPLICATION STUDIO</p><h2>Materials</h2></div><button class="primary-button" id="generate-pack">Generate application pack</button></div>
+        <p class="section-copy">Versioned, evidence-grounded resumes, cover letters, and application answers.</p>
+        <div id="material-list" class="card-grid empty-state">Select a job to view its materials.</div>
+      </section>
+
+      <section class="view" data-view-panel="evidence">
+        <div class="section-heading"><div><p class="eyebrow">SOURCE OF TRUTH</p><h2>Career evidence</h2></div><button class="primary-button" id="new-evidence">+ Add evidence</button></div>
+        <div id="evidence-list" class="card-grid empty-state">No evidence loaded.</div>
+      </section>
+
+      <section class="view" data-view-panel="learning">
+        <div class="section-heading"><div><p class="eyebrow">GOVERNED LEARNING</p><h2>Memory & skills</h2></div></div>
+        <p class="section-copy">Copilot observes completed conversations and proposes reusable preferences or career context. Nothing is used until you confirm the candidate.</p>
+        <div class="two-column"><article class="feature-panel vertical"><h3>Conversation-learned memory</h3><div id="memory-list">Loading…</div></article><article class="feature-panel vertical"><h3>Active skills</h3><div id="skill-list">Loading…</div></article></div>
+      </section>
+
+      <section class="view" data-view-panel="settings">
+        <div class="section-heading"><div><p class="eyebrow">LOCAL PROFILE</p><h2>Settings</h2></div></div>
+        <div class="settings-grid">
+          <article class="feature-panel vertical"><h3>Resume library</h3><p>Upload a text-based PDF. Your default resume is used by the browser extension.</p><label class="upload-zone"><input id="resume-file" type="file" accept="application/pdf,.pdf"><span>Choose PDF resume</span><small>PDF · up to 10 MB</small></label><div id="resume-list" class="compact-list"></div></article>
+          <article class="feature-panel vertical"><h3>Local backend</h3><p>All features use the JobHunterAgent service running on this computer.</p><code>http://localhost:8000</code><button class="soft-button" id="check-health">Check connection</button></article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="job-dialog">
+    <form id="job-form" method="dialog" class="dialog-form"><div class="dialog-head"><div><p class="eyebrow">NEW WORKSPACE</p><h2>Add a job</h2></div><button type="button" data-close-dialog="job-dialog" class="icon-button" aria-label="Close">×</button></div><label>Job title<input name="title" maxlength="256"></label><label>Company<input name="company" maxlength="256"></label><label>Location<input name="location" maxlength="256"></label><label>Original job URL<input name="source_url" type="url" maxlength="2048" placeholder="https://company.example/jobs/role"></label><label>Job description<textarea name="job_description" required maxlength="50000" rows="10"></textarea></label><div class="dialog-actions"><button type="button" data-close-dialog="job-dialog" class="soft-button">Cancel</button><button type="submit" class="primary-button">Save job</button></div></form>
+  </dialog>
+  <dialog id="evidence-dialog"><form id="evidence-form" method="dialog" class="dialog-form"><div class="dialog-head"><div><p class="eyebrow">CAREER EVIDENCE</p><h2>Add a candidate</h2></div><button type="button" data-close-dialog="evidence-dialog" class="icon-button" aria-label="Close">×</button></div><label>Category<select name="category"><option value="experience">Experience</option><option value="project">Project</option><option value="skill">Skill</option><option value="achievement">Achievement</option><option value="leadership">Leadership</option><option value="education">Education</option></select></label><label>Evidence statement<textarea name="claim_text" required maxlength="5000" rows="5" placeholder="Describe a fact you can personally confirm"></textarea></label><label>Project or employer<input name="employer_or_project" maxlength="256"></label><div class="dialog-actions"><button type="button" data-close-dialog="evidence-dialog" class="soft-button">Cancel</button><button type="submit" class="primary-button">Save candidate</button></div></form></dialog>
+  <dialog id="material-dialog"><div class="dialog-form"><div class="dialog-head"><div><p class="eyebrow">APPLICATION MATERIAL</p><h2 id="material-title">Artifact</h2></div><button type="button" data-close-dialog="material-dialog" class="icon-button" aria-label="Close">×</button></div><pre id="material-content" class="artifact-content"></pre><div id="material-actions" class="dialog-actions"></div></div></dialog>
+  <script type="module" src="/web-assets/app.js?v=copilot-optimistic-20260922"></script>
+</body>
+</html>

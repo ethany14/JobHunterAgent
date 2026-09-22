@@ -14,6 +14,9 @@ from agent_runtime.memory.policy import (
     MemoryPolicy,
     MemoryPolicyDecision,
 )
+from agent_runtime.memory.proposals import (
+    MemoryProposal, extract_memory_proposals, proposal_conflicts,
+)
 from agent_runtime.memory.repository import MemoryRepository
 from agent_runtime.memory.query import MemoryQuery
 from agent_runtime.memory.retrieval import MemoryRetrievalResult, MemoryRetriever, RetrievedMemory
@@ -31,8 +34,9 @@ __all__ = [
     "InvalidMemoryTransitionError", "LocalOwnerProfile", "LocalOwnerResolver",
     "MemoryAlreadyExistsError", "MemoryConfirmationRequiredError", "MemoryEvent",
     "MemoryEventType", "MemoryItem", "MemoryNotFoundError", "MemoryPolicy",
-    "MemoryPolicyDecision", "MemoryProvenance", "MemoryRepository", "MemoryScope",
+    "MemoryPolicyDecision", "MemoryProposal", "MemoryProvenance", "MemoryRepository", "MemoryScope",
     "MemoryQuery", "MemoryRetrievalResult", "MemoryRetriever", "MemoryScoreBreakdown",
     "MemorySensitivity", "MemoryStatus", "MemoryType", "RetrievedMemory",
-    "StaleMemoryError", "lexical_tokens", "score_memory",
+    "StaleMemoryError", "extract_memory_proposals", "lexical_tokens",
+    "proposal_conflicts", "score_memory",
 ]

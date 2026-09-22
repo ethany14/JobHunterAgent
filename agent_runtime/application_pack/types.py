@@ -48,10 +48,68 @@ class GroundedBlock(PackModel):
     evidence_version_ids: list[str] = Field(default_factory=list)
 
 
+class CoverLetterParagraph(PackModel):
+    paragraph_type: Literal["opening", "fit", "evidence", "motivation", "closing"]
+    text: str = Field(min_length=1, max_length=5000)
+    evidence_ids: list[str] = Field(default_factory=list)
+    evidence_version_ids: list[str] = Field(default_factory=list)
+    target_requirement_ids: list[str] = Field(default_factory=list)
+
+
+def upgrade_cover_letter_v1_to_v2(value: dict) -> dict:
+    """Upgrade persisted GroundedBlock cover letters without inventing content."""
+    if "blocks" not in value:
+        raise ValueError("Legacy cover letter is missing blocks.")
+    paragraphs = []
+    for index, raw in enumerate(value.get("blocks") or []):
+        block = raw if isinstance(raw, dict) else raw.model_dump(mode="python")
+        block_type = str(block.get("block_type", "factual"))
+        paragraph_type = (
+            "closing" if block_type == "closing"
+            else "motivation" if block_type in {"motivation", "transition"}
+            else "evidence"
+        )
+        paragraphs.append({
+            "paragraph_type": paragraph_type, "text": block.get("text", ""),
+            "evidence_ids": block.get("evidence_ids") or [],
+            "evidence_version_ids": block.get("evidence_version_ids") or [],
+            "target_requirement_ids": [],
+        })
+    return {
+        "schema_version": 2,
+        "greeting": value.get("greeting") or "Dear Hiring Team,",
+        "paragraphs": paragraphs,
+        "closing": value.get("closing") or "Sincerely,",
+        "signer_name": value.get("signer_name"),
+    }
+
+
 class CoverLetter(PackModel):
-    greeting: str | None = None
-    blocks: list[GroundedBlock] = Field(min_length=1)
-    closing: str | None = None
+    schema_version: Literal[2] = 2
+    greeting: str = "Dear Hiring Team,"
+    paragraphs: list[CoverLetterParagraph] = Field(min_length=1, max_length=5)
+    closing: str = "Sincerely,"
+    signer_name: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def upgrade_blocks(cls, value):
+        if not isinstance(value, dict) or "paragraphs" in value:
+            return value
+        if "blocks" not in value:
+            return value
+        return upgrade_cover_letter_v1_to_v2(value)
+
+    @property
+    def blocks(self) -> list[GroundedBlock]:
+        return [GroundedBlock(
+            block_id=f"paragraph-{index}", text=item.text,
+            block_type=("factual" if item.paragraph_type in {"fit", "evidence"}
+                        else "closing" if item.paragraph_type == "closing"
+                        else "motivation"),
+            evidence_ids=item.evidence_ids,
+            evidence_version_ids=item.evidence_version_ids,
+        ) for index, item in enumerate(self.paragraphs, start=1)]
 
 
 class ApplicationAnswer(PackModel):

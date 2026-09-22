@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Career Copilot layout preview</title>
+  <link rel="stylesheet" href="../../chrome_extension/sidepanel.css">
+  <link rel="stylesheet" href="../../chrome_extension/assistant-shell.css">
+  <style>
+    body.preview-narrow { min-width: 0; }
+    body.preview-narrow .copilot-header,
+    body.preview-narrow main,
+    body.preview-narrow .conversation-footer { width: var(--preview-width); }
+    body.preview-narrow .copilot-header {
+      grid-template-columns: 36px minmax(0, 1fr) 72px;
+      padding-right: 6px;
+      padding-left: 6px;
+    }
+    body.preview-320 main { padding-right: 12px; padding-left: 12px; }
+    body.preview-320 .conversation-message { width: 94%; }
+    body.preview-320 .conversation-footer { padding-right: 10px; padding-left: 10px; }
+  </style>
+</head>
+<body>
+  <div id="career-copilot" class="app-shell" data-demo="false">
+  <header class="copilot-header topbar">
+      <button class="header-action" aria-label="Open saved jobs">Jobs</button>
+      <div class="workspace-switcher">
+        <summary>
+          <strong>AI Strategy Consultant</strong>
+          <span>Deloitte · Materials ready</span>
+        </summary>
+      </div>
+      <div class="header-actions">
+        <button class="header-action">New</button>
+        <button class="header-action settings-action" aria-label="Open settings" title="Settings">⚙</button>
+      </div>
+  </header>
+
+  <main id="assistant-panel" class="copilot-shell">
+
+    <section class="assistant-timeline timeline" aria-label="Conversation">
+      <article class="conversation-message user">
+        <p class="message-content">Help me tailor my application for this role.</p>
+      </article>
+      <article class="conversation-message assistant">
+        <p class="message-content">I analyzed the role and compared it with your confirmed experience. Your strongest matches are business intelligence, AI project work, and analytical skills.</p>
+      </article>
+      <article class="conversation-message assistant">
+        <p class="message-content">I found two areas worth clarifying before finalizing the resume: stakeholder management and project planning.</p>
+      </article>
+      <details class="activity-disclosure">
+        <summary>Application analysis complete</summary>
+        <ul>
+          <li>Resume evidence analyzed</li>
+          <li>Job requirements analyzed</li>
+          <li>Matching completed</li>
+          <li>Factual verification passed</li>
+        </ul>
+      </details>
+      <article class="conversation-message assistant">
+        <p class="message-content">Did you personally present your Tableau analysis to managers, clients, or another stakeholder group?</p>
+        <div class="inline-response">
+          <textarea rows="3" aria-label="Interview answer" placeholder="Type your answer"></textarea>
+          <div class="inline-actions"><button class="primary-button">Send</button><button class="text-button">Skip</button></div>
+        </div>
+      </article>
+      <article class="artifact-card">
+        <h3 class="artifact-name">Tailored resume</h3>
+        <p class="artifact-meta">Version 2 · Verified</p>
+        <p class="artifact-preview">Market and strategy analyst with experience translating complex data into recommendations for business leaders.</p>
+        <div class="card-actions"><button class="primary-button">Review</button><button class="secondary-button">Export</button></div>
+      </article>
+    </section>
+
+    <footer class="conversation-footer composer-wrap">
+      <section class="quick-actions" aria-label="Suggested actions">
+        <button>Practice interview</button>
+        <button>Generate cover letter</button>
+        <button>Show gaps</button>
+      </section>
+      <div class="composer">
+        <button class="composer-context" aria-label="Add context">+</button>
+        <textarea rows="2" placeholder="Message Career Copilot" aria-label="Message Career Copilot"></textarea>
+        <button class="composer-send" aria-label="Send message">↑</button>
+      </div>
+    </footer>
+  </main>
+  </div>
+  <script>
+    const previewWidth = Number(new URLSearchParams(location.search).get("width"));
+    if (previewWidth === 320 || previewWidth === 420) {
+      document.body.classList.add("preview-narrow", `preview-${previewWidth}`);
+      document.body.style.setProperty("--preview-width", `${previewWidth}px`);
+    }
+  </script>
+</body>
+</html>

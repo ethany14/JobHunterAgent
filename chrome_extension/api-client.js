@@ -1,576 +1,71 @@
 "use strict";
 
 const API_BASE_URL = "http://localhost:8000";
-const REQUEST_TIMEOUT_MS = 60_000;
+const REQUEST_TIMEOUT_MS = 300_000;
 
 export class ApiError extends Error {
-  constructor(message, { status = 0, detail = null } = {}) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-    this.detail = detail;
-  }
+  constructor(message, { status = 0 } = {}) { super(message); this.name = "ApiError"; this.status = status; }
 }
 
-function validationMessage(detail) {
-  if (detail && typeof detail === "object" && typeof detail.message === "string") {
-    return detail.message;
-  }
-  if (!Array.isArray(detail)) {
-    return typeof detail === "string" ? detail : null;
-  }
-  return detail
-    .map((item) => {
-      const location = Array.isArray(item?.loc) ? item.loc.slice(1).join(".") : "input";
-      const message = typeof item?.msg === "string" ? item.msg : "is invalid";
-      return `${location || "input"}: ${message}`;
-    })
-    .join("; ");
-}
-
-function safeErrorMessage(status, detail) {
-  const validation = validationMessage(detail);
-  if (status === 422) {
-    return validation ? `Please check the submitted text: ${validation}` : "Please check the submitted text.";
-  }
-  if (status === 404) {
-    return validation || "The requested resource no longer exists.";
-  }
-  if (status === 409) {
-    return validation || "This run cannot be reviewed in its current state.";
-  }
+function safeDetail(payload, status) {
+  const detail = payload?.detail;
+  if (typeof detail === "string") return detail;
+  if (typeof detail?.message === "string") return detail.message;
+  if (status === 409) return "Upload a default PDF resume in the full web workspace first.";
+  if (status === 422) return "Check the job description and try again.";
   return "The backend could not complete the request.";
 }
 
 async function request(path, options = {}) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs ?? REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || REQUEST_TIMEOUT_MS);
   try {
-    const { timeoutMs: _timeoutMs, ...fetchOptions } = options;
-    const response = await fetch(`${API_BASE_URL}${path}`, {
-      ...fetchOptions,
-      headers: {
-        Accept: "application/json",
-        ...(options.body ? { "Content-Type": "application/json" } : {}),
-        ...options.headers,
-      },
-      signal: controller.signal,
-    });
+    const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers: { Accept: "application/json", ...(options.body ? { "Content-Type": "application/json" } : {}), ...(options.headers || {}) }, signal: controller.signal });
     const payload = await response.json().catch(() => null);
-    if (!response.ok) {
-      const detail = payload?.detail ?? null;
-      throw new ApiError(safeErrorMessage(response.status, detail), {
-        status: response.status,
-        detail,
-      });
-    }
+    if (!response.ok) throw new ApiError(safeDetail(payload, response.status), { status: response.status });
     return payload;
   } catch (error) {
-    if (error?.name === "AbortError") {
-      throw new ApiError("The backend request timed out. Please try again.");
-    }
-    if (error instanceof ApiError) {
-      throw error;
-    }
-    throw new ApiError("Cannot reach the Job Agent backend at http://localhost:8000.");
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-export function materializeSkillCandidate(candidateId, expectedVersion, skillName, semanticVersion = "1.0.0") {
-  return request(`/api/skill-candidates/${encodeURIComponent(candidateId)}/materialize`, {
-    method: "POST", body: JSON.stringify({ expected_version: expectedVersion,
-      idempotency_key: crypto.randomUUID(), skill_name: skillName, semantic_version: semanticVersion }),
-  });
-}
-
-export function getStagedSkillCandidate(candidateId) {
-  return request(`/api/skill-candidates/${encodeURIComponent(candidateId)}/staged`);
-}
-
-export function restageSkillCandidate(candidateId, expectedVersion) {
-  return request(`/api/skill-candidates/${encodeURIComponent(candidateId)}/restage`, {
-    method: "POST", body: JSON.stringify({ expected_version: expectedVersion,
-      idempotency_key: crypto.randomUUID() }),
-  });
-}
-
-export function evaluateSkillCandidate(candidateId, expectedVersion, repetitions = 3) {
-  return request(`/api/skill-candidates/${encodeURIComponent(candidateId)}/evaluations`, {
-    method: "POST", timeoutMs: 600_000,
-    body: JSON.stringify({ expected_version: expectedVersion,
-      idempotency_key: crypto.randomUUID(), repetitions }),
-  });
-}
-
-export function getSkillEvaluation(evaluationId, includeResults = false) {
-  const suffix = includeResults ? "/results" : "";
-  return request(`/api/skill-evaluations/${encodeURIComponent(evaluationId)}${suffix}`);
-}
-
-export function publishSkillCandidate(candidateId, expectedVersion, acknowledgeSoftRegressions = false) {
-  return request(`/api/skill-candidates/${encodeURIComponent(candidateId)}/publish`, {
-    method: "POST", body: JSON.stringify({ expected_version: expectedVersion,
-      idempotency_key: crypto.randomUUID(),
-      acknowledge_soft_regressions: acknowledgeSoftRegressions }),
-  });
-}
-
-export function rejectStagedSkillCandidate(candidateId, expectedVersion) {
-  return request(`/api/skill-candidates/${encodeURIComponent(candidateId)}/reject`, {
-    method: "POST", body: JSON.stringify({ expected_version: expectedVersion,
-      idempotency_key: crypto.randomUUID() }),
-  });
-}
-
-export function listGovernedSkills() { return request("/api/skills"); }
-export function listGovernedSkillVersions(name) {
-  return request(`/api/skills/${encodeURIComponent(name)}/versions`);
-}
-export function getGovernedSkillMetrics(name) {
-  return request(`/api/skills/${encodeURIComponent(name)}/metrics`);
-}
-export function activateGovernedSkill(name, versionId, expectedVersion, mode) {
-  return request(`/api/skills/${encodeURIComponent(name)}/activate`, {
-    method: "POST", body: JSON.stringify({ version_id: versionId, mode,
-      expected_version: expectedVersion, idempotency_key: crypto.randomUUID() }),
-  });
-}
-export function rollbackGovernedSkill(name, failedVersionId, targetVersionId, expectedVersion, reason) {
-  return request(`/api/skills/${encodeURIComponent(name)}/rollback`, {
-    method: "POST", body: JSON.stringify({ failed_version_id: failedVersionId,
-      target_version_id: targetVersionId, expected_version: expectedVersion,
-      reason, idempotency_key: crypto.randomUUID() }),
-  });
-}
-
-export function health() {
-  return request("/health");
-}
-
-export function createRun(resumeText, jobDescription) {
-  return request("/runs", {
-    method: "POST",
-    body: JSON.stringify({
-      resume_text: resumeText,
-      job_description: jobDescription,
-    }),
-  });
-}
-
-export function getRun(runId) {
-  return request(`/runs/${encodeURIComponent(runId)}`);
-}
-
-export function reviewRun(runId, approved, feedback = null) {
-  return request(`/runs/${encodeURIComponent(runId)}/review`, {
-    method: "POST",
-    body: JSON.stringify({ approved, feedback }),
-  });
-}
-
-export function createSession(activeRunId = null, applicationId = null) {
-  return request("/sessions", {
-    method: "POST",
-    body: JSON.stringify({
-      capability_profile: "job_assistant_readonly",
-      active_run_id: activeRunId,
-      application_id: applicationId,
-    }),
-  });
-}
-
-export function saveWorkspace(workspace) {
-  return request("/api/workspaces", { method: "POST", body: JSON.stringify(workspace) });
-}
-
-export function listApplications({ status = "", search = "", limit = 25, cursor = "" } = {}) {
-  const params = new URLSearchParams({ limit: String(limit) });
-  if (status) params.set("status", status);
-  if (search) params.set("search", search);
-  if (cursor) params.set("cursor", cursor);
-  return request(`/api/applications?${params.toString()}`);
-}
-
-export function getApplication(applicationId) {
-  return request(`/api/applications/${encodeURIComponent(applicationId)}`);
-}
-
-export function updateApplication(applicationId, values) {
-  return request(`/api/applications/${encodeURIComponent(applicationId)}`, {
-    method: "PATCH", body: JSON.stringify(values),
-  });
-}
-
-export function transitionApplication(applicationId, targetStatus, expectedVersion, appliedAt = null) {
-  return request(`/api/applications/${encodeURIComponent(applicationId)}/status`, {
-    method: "PATCH",
-    body: JSON.stringify({ target_status: targetStatus, expected_version: expectedVersion, applied_at: appliedAt }),
-  });
-}
-
-export function analyzeApplication(applicationId, snapshotId, resumeText, expectedVersion) {
-  return request(`/api/applications/${encodeURIComponent(applicationId)}/analyze`, {
-    method: "POST",
-    body: JSON.stringify({ snapshot_id: snapshotId, resume_text: resumeText, expected_version: expectedVersion }),
-  });
-}
-
-export function listApplicationArtifacts(applicationId) {
-  return request(`/api/applications/${encodeURIComponent(applicationId)}/artifacts`);
-}
-
-export function listApplicationEvents(applicationId) {
-  return request(`/api/applications/${encodeURIComponent(applicationId)}/events`);
-}
-
-export function listSessions(limit = 25) {
-  return request(`/sessions?limit=${encodeURIComponent(limit)}`);
-}
-
-export function getSession(sessionId) {
-  return request(`/sessions/${encodeURIComponent(sessionId)}`);
-}
-
-export function getSessionMessages(sessionId) {
-  return request(`/sessions/${encodeURIComponent(sessionId)}/messages`);
-}
-
-export function sendSessionMessage(sessionId, messageId, content, expectedVersion) {
-  return request(`/sessions/${encodeURIComponent(sessionId)}/messages`, {
-    method: "POST",
-    body: JSON.stringify({
-      message_id: messageId,
-      content,
-      expected_version: expectedVersion,
-    }),
-  });
-}
-
-export function approveToolCall(sessionId, toolCallId, expectedVersion) {
-  return request(
-    `/sessions/${encodeURIComponent(sessionId)}/tool-calls/${encodeURIComponent(toolCallId)}/approve`,
-    {
-      method: "POST",
-      body: JSON.stringify({ expected_version: expectedVersion }),
-    },
-  );
-}
-
-export function rejectToolCall(sessionId, toolCallId, expectedVersion) {
-  return request(
-    `/sessions/${encodeURIComponent(sessionId)}/tool-calls/${encodeURIComponent(toolCallId)}/reject`,
-    {
-      method: "POST",
-      body: JSON.stringify({ expected_version: expectedVersion }),
-    },
-  );
-}
-
-export function cancelSession(sessionId, expectedVersion, reason) {
-  return request(`/sessions/${encodeURIComponent(sessionId)}/cancel`, {
-    method: "POST",
-    body: JSON.stringify({ expected_version: expectedVersion, reason }),
-  });
-}
-
-export function recoverSession(sessionId, expectedVersion) {
-  return request(`/sessions/${encodeURIComponent(sessionId)}/recover`, {
-    method: "POST",
-    body: JSON.stringify({ expected_version: expectedVersion }),
-  });
-}
-
-export function listMemories() {
-  return request("/memories");
-}
-
-export function createMemory(memory) {
-  return request("/memories", {
-    method: "POST",
-    body: JSON.stringify(memory),
-  });
-}
-
-export function confirmMemory(memoryId, expectedVersion) {
-  return request(`/memories/${encodeURIComponent(memoryId)}/confirm`, {
-    method: "POST",
-    body: JSON.stringify({ expected_version: expectedVersion }),
-  });
-}
-
-export function rejectMemory(memoryId, expectedVersion) {
-  return request(`/memories/${encodeURIComponent(memoryId)}/reject`, {
-    method: "POST",
-    body: JSON.stringify({ expected_version: expectedVersion }),
-  });
-}
-
-export function supersedeMemory(memoryId, expectedVersion, replacementMemoryId, replacementVersion) {
-  return request(`/memories/${encodeURIComponent(memoryId)}/supersede`, {
-    method: "POST",
-    body: JSON.stringify({
-      expected_version: expectedVersion,
-      replacement_memory_id: replacementMemoryId,
-      replacement_expected_version: replacementVersion,
-    }),
-  });
-}
-
-export function deleteMemory(memoryId, expectedVersion) {
-  return request(
-    `/memories/${encodeURIComponent(memoryId)}?expected_version=${encodeURIComponent(expectedVersion)}`,
-    { method: "DELETE" },
-  );
-}
-
-export function listSkills() {
-  return request("/skills");
-}
-
-export function listSkillVersions(skillName) {
-  return request(`/skills/${encodeURIComponent(skillName)}/versions`);
-}
-
-export function getSkillVersion(versionId) {
-  return request(`/skill-versions/${encodeURIComponent(versionId)}`);
-}
-
-function mutateSkill(versionId, action, expectedVersion) {
-  return request(`/skill-versions/${encodeURIComponent(versionId)}/${action}`, {
-    method: "POST",
-    body: JSON.stringify({ expected_version: expectedVersion }),
-  });
-}
-
-export function approveSkill(versionId, expectedVersion) {
-  return mutateSkill(versionId, "approve", expectedVersion);
-}
-
-export function activateSkill(versionId, expectedVersion) {
-  return mutateSkill(versionId, "activate", expectedVersion);
-}
-
-export function rejectSkill(versionId, expectedVersion) {
-  return mutateSkill(versionId, "reject", expectedVersion);
-}
-
-export function retireSkill(versionId, expectedVersion) {
-  return mutateSkill(versionId, "retire", expectedVersion);
-}
-
-export function getSessionContext(sessionId) {
-  return request(`/sessions/${encodeURIComponent(sessionId)}/context`);
-}
-
-export function listCareerEvidence(filters = {}) {
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(filters)) {
-    if (value) query.set(key, value);
-  }
-  return request(`/api/evidence${query.size ? `?${query}` : ""}`);
-}
-
-export function createCareerEvidence(body) {
-  return request("/api/evidence/candidates", { method: "POST", body: JSON.stringify(body) });
-}
-
-export function getCareerEvidenceVersions(id) {
-  return request(`/api/evidence/${encodeURIComponent(id)}/versions`);
-}
-
-export function mutateCareerEvidence(id, action, expectedVersion, extra = {}) {
-  return request(`/api/evidence/${encodeURIComponent(id)}/${action}`, {
-    method: "POST", body: JSON.stringify({ expected_version: expectedVersion, ...extra }),
-  });
-}
-
-export function listApplicationEvidence(applicationId) {
-  return request(`/api/applications/${encodeURIComponent(applicationId)}/evidence`);
-}
-
-export function startInterview(applicationId, limits = {}) {
-  return request(`/api/applications/${encodeURIComponent(applicationId)}/interviews`, {
-    method: "POST", body: JSON.stringify(limits),
-  });
-}
-
-export function getActiveInterview(applicationId) {
-  return request(`/api/applications/${encodeURIComponent(applicationId)}/interviews/active`);
-}
-
-export function startMockInterview(applicationId, options) {
-  return request(`/api/applications/${encodeURIComponent(applicationId)}/mock-interviews`, {
-    method: "POST", body: JSON.stringify(options),
-  });
-}
-
-export function getActiveMockInterview(applicationId) {
-  return request(`/api/applications/${encodeURIComponent(applicationId)}/mock-interviews/active`);
-}
-
-export function getMockInterview(id) {
-  return request(`/api/mock-interviews/${encodeURIComponent(id)}`);
-}
-
-export function getMockInterviewReport(id) {
-  return request(`/api/mock-interviews/${encodeURIComponent(id)}/report`);
-}
-
-export function getMockInterviewCandidates(id) {
-  return request(`/api/mock-interviews/${encodeURIComponent(id)}/evidence-candidates`);
-}
-
-export function mutateMockInterview(id, action, expectedVersion, idempotencyKey, extra = {}) {
-  return request(`/api/mock-interviews/${encodeURIComponent(id)}/${action}`, {
-    method: "POST", body: JSON.stringify({
-      expected_version: expectedVersion, idempotency_key: idempotencyKey, ...extra,
-    }),
-  });
-}
-
-export function getInterview(interviewId) {
-  return request(`/api/interviews/${encodeURIComponent(interviewId)}`);
-}
-
-export function mutateInterview(interviewId, action, expectedVersion, extra = {}) {
-  return request(`/api/interviews/${encodeURIComponent(interviewId)}/${action}`, {
-    method: "POST",
-    body: JSON.stringify({ expected_version: expectedVersion,
-      idempotency_key: crypto.randomUUID(), ...extra }),
-  });
-}
-
-export function decideInterviewCandidate(interviewId, evidenceId, action, expectedVersion, extra = {}) {
-  return mutateInterview(interviewId, `candidates/${encodeURIComponent(evidenceId)}/${action}`,
-    expectedVersion, extra);
-}
-
-export function createApplicationPack(applicationId, expectedVersion, idempotencyKey) {
-  return request(`/api/applications/${encodeURIComponent(applicationId)}/packs`, {
-    method: "POST", body: JSON.stringify({ expected_version: expectedVersion, idempotency_key: idempotencyKey }),
-  });
-}
-
-export function listApplicationPacks(applicationId) {
-  return request(`/api/applications/${encodeURIComponent(applicationId)}/packs`);
-}
-
-export function getApplicationPack(packId) {
-  return request(`/api/packs/${encodeURIComponent(packId)}`);
-}
-
-export function generatePackItem(packId, action, expectedVersion, idempotencyKey, extra = {}) {
-  return request(`/api/packs/${encodeURIComponent(packId)}/${action}`, {
-    method: "POST", body: JSON.stringify({ expected_version: expectedVersion,
-      idempotency_key: idempotencyKey, ...extra }),
-  });
-}
-
-export function mutatePackItem(packId, itemId, action, expectedVersion, idempotencyKey, extra = {}) {
-  return request(`/api/packs/${encodeURIComponent(packId)}/items/${encodeURIComponent(itemId)}/${action}`, {
-    method: "POST", body: JSON.stringify({ expected_version: expectedVersion,
-      idempotency_key: idempotencyKey, ...extra }),
-  });
-}
-
-export function getPackItemEvidence(packId, itemId) {
-  return request(`/api/packs/${encodeURIComponent(packId)}/items/${encodeURIComponent(itemId)}/evidence`);
-}
-
-export function getPackItemVersions(packId, itemId) {
-  return request(`/api/packs/${encodeURIComponent(packId)}/items/${encodeURIComponent(itemId)}/versions`);
-}
-
-export function getPackEvents(packId) {
-  return request(`/api/packs/${encodeURIComponent(packId)}/events`);
-}
-
-export function createMultiAgentRun(applicationId, options) {
-  return request(`/api/applications/${encodeURIComponent(applicationId)}/multi-agent-runs`, {
-    method: "POST", body: JSON.stringify(options),
-  });
-}
-
-export function getMultiAgentRun(rootTaskId) {
-  return request(`/api/multi-agent-runs/${encodeURIComponent(rootTaskId)}`);
-}
-
-export function getMultiAgentTasks(rootTaskId) {
-  return request(`/api/multi-agent-runs/${encodeURIComponent(rootTaskId)}/tasks`);
-}
-
-export function getMultiAgentTimeline(rootTaskId) {
-  return request(`/api/multi-agent-runs/${encodeURIComponent(rootTaskId)}/timeline`);
-}
-
-export function cancelMultiAgentRun(rootTaskId, expectedVersion) {
-  return request(`/api/multi-agent-runs/${encodeURIComponent(rootTaskId)}/cancel`, {
-    method: "POST", body: JSON.stringify({ expected_version: expectedVersion }),
-  });
-}
-
-export function resumeMultiAgentRun(rootTaskId, taskId, expectedVersion, continueWithoutClarification = false) {
-  return request(`/api/multi-agent-runs/${encodeURIComponent(rootTaskId)}/resume`, {
-    method: "POST", body: JSON.stringify({ task_id: taskId,
-      expected_version: expectedVersion,
-      continue_without_clarification: continueWithoutClarification }),
-  });
-}
-
-export function listApplicationAgentTasks(applicationId) {
-  return request(`/api/applications/${encodeURIComponent(applicationId)}/agent-tasks`);
-}
-
-export function cancelAgentTask(taskId, expectedVersion, subtree = false) {
-  return request(`/api/agent-tasks/${encodeURIComponent(taskId)}/cancel`, {
-    method: "POST", body: JSON.stringify({ expected_version: expectedVersion, subtree }),
-  });
-}
-
-export function retryAgentTask(taskId, expectedVersion) {
-  return request(`/api/agent-tasks/${encodeURIComponent(taskId)}/retry`, {
-    method: "POST", body: JSON.stringify({ expected_version: expectedVersion }),
-  });
-}
-
-export function createFeedback(sourceType, content, sourceActionId = crypto.randomUUID(), applicationId = null) {
-  return request("/api/feedback", { method: "POST", body: JSON.stringify({
-    source_type: sourceType, content, source_action_id: sourceActionId,
-    application_id: applicationId,
-  }) });
-}
-
-export function listLearningCandidates(candidateType = null) {
-  const query = candidateType ? `?candidate_type=${encodeURIComponent(candidateType)}` : "";
-  return request(`/api/learning-candidates${query}`);
-}
-
-export function getLearningCandidateEvents(candidateId) {
-  return request(`/api/learning-candidates/${encodeURIComponent(candidateId)}/events`);
-}
-
-export function getLearningCandidateConflicts(candidateId) {
-  return request(`/api/learning-candidates/${encodeURIComponent(candidateId)}/conflicts`);
-}
-
-export function mutateLearningCandidate(candidateId, action, expectedVersion, content = null) {
-  return request(`/api/learning-candidates/${encodeURIComponent(candidateId)}/${action}`, {
-    method: "POST", body: JSON.stringify({ expected_version: expectedVersion,
-      idempotency_key: crypto.randomUUID(), content }),
-  });
-}
-
-export function submitMockInterviewFeedback(mockInterviewId, helpful, feedback = null, editedStructure = null) {
-  return request(`/api/mock-interviews/${encodeURIComponent(mockInterviewId)}/feedback`, {
-    method: "POST", body: JSON.stringify({ source_action_id: crypto.randomUUID(),
-      helpful, feedback, edited_structure: editedStructure }),
-  });
-}
-
-export function submitInterviewStyleFeedback(interviewSessionId, feedback) {
-  return request(`/api/interviews/${encodeURIComponent(interviewSessionId)}/feedback`, {
-    method: "POST", body: JSON.stringify({ source_action_id: crypto.randomUUID(), feedback }),
-  });
-}
+    if (error?.name === "AbortError") throw new ApiError("The analysis timed out. The run may still be processing; check the full workspace.");
+    if (error instanceof ApiError) throw error;
+    throw new ApiError("Cannot reach JobHunterAgent at http://localhost:8000.");
+  } finally { clearTimeout(timeout); }
+}
+
+export const health = () => request("/health", { timeoutMs: 8_000 });
+export const saveWorkspace = (workspace) => request("/api/workspaces", {
+  method: "POST",
+  body: JSON.stringify({ ...workspace, reopen_existing: true }),
+});
+export const analyzeApplication = (applicationId, expectedVersion) => request(
+  `/api/applications/${encodeURIComponent(applicationId)}/analyze-with-resume`,
+  { method: "POST", body: JSON.stringify({ expected_version: expectedVersion, resume_id: null }) },
+);
+
+// Compatibility exports for dormant, unmounted controllers. The focused Side
+// Panel does not import these modules, but keeping their API adapters valid
+// preserves isolated rendering tests and future Copilot-launched flows.
+export const createFeedback = (sourceType, content, sourceActionId = crypto.randomUUID(), applicationId = null) =>
+  request("/api/feedback", { method: "POST", body: JSON.stringify({ source_type: sourceType, content, source_action_id: sourceActionId, application_id: applicationId }) });
+export const listLearningCandidates = (type = null) => request(`/api/learning-candidates${type ? `?candidate_type=${encodeURIComponent(type)}` : ""}`);
+export const getLearningCandidateEvents = (id) => request(`/api/learning-candidates/${encodeURIComponent(id)}/events`);
+export const getLearningCandidateConflicts = (id) => request(`/api/learning-candidates/${encodeURIComponent(id)}/conflicts`);
+export const mutateLearningCandidate = (id, action, version, content = null) => request(`/api/learning-candidates/${encodeURIComponent(id)}/${action}`, { method: "POST", body: JSON.stringify({ expected_version: version, idempotency_key: crypto.randomUUID(), content }) });
+export const materializeSkillCandidate = (id, version, name, semanticVersion = "1.0.0") => request(`/api/skill-candidates/${encodeURIComponent(id)}/materialize`, { method: "POST", body: JSON.stringify({ expected_version: version, idempotency_key: crypto.randomUUID(), skill_name: name, semantic_version: semanticVersion }) });
+export const getStagedSkillCandidate = (id) => request(`/api/skill-candidates/${encodeURIComponent(id)}/staged`);
+export const restageSkillCandidate = (id, version) => request(`/api/skill-candidates/${encodeURIComponent(id)}/restage`, { method: "POST", body: JSON.stringify({ expected_version: version, idempotency_key: crypto.randomUUID() }) });
+export const evaluateSkillCandidate = (id, version, repetitions = 3) => request(`/api/skill-candidates/${encodeURIComponent(id)}/evaluations`, { method: "POST", timeoutMs: 600_000, body: JSON.stringify({ expected_version: version, idempotency_key: crypto.randomUUID(), repetitions }) });
+export const getSkillEvaluation = (id, results = false) => request(`/api/skill-evaluations/${encodeURIComponent(id)}${results ? "/results" : ""}`);
+export const publishSkillCandidate = (id, version, acknowledge = false) => request(`/api/skill-candidates/${encodeURIComponent(id)}/publish`, { method: "POST", body: JSON.stringify({ expected_version: version, idempotency_key: crypto.randomUUID(), acknowledge_soft_regressions: acknowledge }) });
+export const rejectStagedSkillCandidate = (id, version) => request(`/api/skill-candidates/${encodeURIComponent(id)}/reject`, { method: "POST", body: JSON.stringify({ expected_version: version, idempotency_key: crypto.randomUUID() }) });
+export const listGovernedSkills = () => request("/api/skills");
+export const getGovernedSkillMetrics = (name) => request(`/api/skills/${encodeURIComponent(name)}/metrics`);
+export const activateGovernedSkill = (name, versionId, version, mode) => request(`/api/skills/${encodeURIComponent(name)}/activate`, { method: "POST", body: JSON.stringify({ version_id: versionId, mode, expected_version: version, idempotency_key: crypto.randomUUID() }) });
+export const rollbackGovernedSkill = (name, failedId, targetId, version, reason) => request(`/api/skills/${encodeURIComponent(name)}/rollback`, { method: "POST", body: JSON.stringify({ failed_version_id: failedId, target_version_id: targetId, expected_version: version, reason, idempotency_key: crypto.randomUUID() }) });
+export const getActiveMockInterview = (applicationId) => request(`/api/applications/${encodeURIComponent(applicationId)}/mock-interviews/active`);
+export const getMockInterview = (id) => request(`/api/mock-interviews/${encodeURIComponent(id)}`);
+export const getMockInterviewReport = (id) => request(`/api/mock-interviews/${encodeURIComponent(id)}/report`);
+export const getMockInterviewCandidates = (id) => request(`/api/mock-interviews/${encodeURIComponent(id)}/evidence-candidates`);
+export const startMockInterview = (applicationId, options) => request(`/api/applications/${encodeURIComponent(applicationId)}/mock-interviews`, { method: "POST", body: JSON.stringify(options) });
+export const mutateMockInterview = (id, action, version, key, extra = {}) => request(`/api/mock-interviews/${encodeURIComponent(id)}/${action}`, { method: "POST", body: JSON.stringify({ expected_version: version, idempotency_key: key, ...extra }) });
+export const mutateCareerEvidence = (id, action, version, extra = {}) => request(`/api/evidence/${encodeURIComponent(id)}/${action}`, { method: "POST", body: JSON.stringify({ expected_version: version, ...extra }) });
+export const submitMockInterviewFeedback = (id, helpful, feedback = null, editedStructure = null) => request(`/api/mock-interviews/${encodeURIComponent(id)}/feedback`, { method: "POST", body: JSON.stringify({ source_action_id: crypto.randomUUID(), helpful, feedback, edited_structure: editedStructure }) });

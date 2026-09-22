@@ -12,7 +12,9 @@ from custom_agent.policy import Transition, TransitionPolicy
 from custom_agent.repository import StateRepository
 from custom_agent.state import AgentState, AgentStatus, Step
 from custom_agent.steps import StepHandler
+from job_agent.domain import retain_verbatim_resume_evidence
 from job_agent.results import public_result
+from job_agent.schemas import ResumeAnalysis
 
 
 class AgentLoop:
@@ -53,7 +55,7 @@ class AgentLoop:
             raise InvalidTransitionError("A terminal run cannot continue.")
         while state.step != Step.HUMAN_REVIEW:
             try:
-                outcome = self._handler.execute(state.step, state)
+                outcome = self._execute_step(state)
                 produced_fields = set(outcome.updates)
                 updates = dict(outcome.updates)
                 if state.step == Step.REVISE_RESUME:
@@ -113,6 +115,38 @@ class AgentLoop:
                 )
                 raise
         return state
+
+    def _execute_step(self, state: AgentState):
+        """Execute one step, with bounded recovery for malformed model quotes.
+
+        Resume evidence validation remains strict.  The active custom runtime
+        retries extraction once before retaining only the verbatim candidates
+        from a mixed response.  An extraction with no grounded evidence still
+        fails rather than manufacturing evidence.
+        """
+        if state.step != Step.ANALYZE_RESUME:
+            return self._handler.execute(state.step, state)
+
+        last_error: ValueError | None = None
+        for _ in range(2):
+            outcome = self._handler.execute(state.step, state)
+            if "resume_analysis" not in outcome.updates:
+                return outcome
+            analysis = ResumeAnalysis.model_validate(
+                outcome.updates["resume_analysis"]
+            )
+            candidate = self._updated(state, {"resume_analysis": analysis})
+            try:
+                self._handler.execute(Step.VALIDATE_EVIDENCE, candidate)
+                return outcome
+            except ValueError as exc:
+                last_error = exc
+
+        grounded = retain_verbatim_resume_evidence(analysis, state.resume_text)
+        if not grounded.evidence:
+            assert last_error is not None
+            raise last_error
+        return type(outcome)(updates={"resume_analysis": grounded})
 
     def review(
         self,

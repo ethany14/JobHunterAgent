@@ -356,6 +356,7 @@ class InterviewRepository:
                 "category": EvidenceCategory.EXPERIENCE, "claim_text": claim,
                 "source_type": EvidenceSourceType.INTERVIEW,
                 "source_reference": answer_turn_id, "exact_quote": quote,
+                "tags": ["extraction:evidence-candidate-v1"],
             }, None)
             now = datetime.now(UTC)
             evidence = CareerEvidenceRow(
@@ -367,7 +368,9 @@ class InterviewRepository:
             version = evidence_repo._add_version(session, evidence.evidence_id, 1, fields, "interviewer")
             session.flush()
             evidence_repo._event(session, evidence, "EVIDENCE_CREATED", version.evidence_version_id,
-                                 {"interview_turn_id": answer_turn_id})
+                                 {"interview_turn_id": answer_turn_id,
+                                  "interview_session_id": interview_id,
+                                  "extraction_version": "evidence-candidate-v1"})
             assessment = session.get(AssessmentRow, row.current_assessment_id)
             assessment.evidence_status = EvidenceAssessmentStatus.EVIDENCE_CANDIDATE.value
             assessment.version += 1

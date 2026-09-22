@@ -134,7 +134,10 @@ def test_rendering_copies_existing_claim_text_without_strengthening(builtin_runt
     _, executor, context = builtin_runtime
     text_output = call(executor, context, "render_tailored_resume", {"run_id": "run-1", "format": "text"})
     markdown_output = call(executor, context, "render_tailored_resume", {"run_id": "run-1", "format": "markdown"})
-    assert text_output["content"] == "Built Python APIs.\nBuilt Python APIs.\nPython"
+    assert text_output["content"] == (
+        "PROFESSIONAL SUMMARY\nBuilt Python APIs.\n\n"
+        "EXPERIENCE\n• Built Python APIs.\n\nSKILLS\nPython"
+    )
     assert "- Built Python APIs." in markdown_output["content"]
     assert "scalable" not in markdown_output["content"].lower()
 
