@@ -34,7 +34,8 @@ class FakePackModel:
     def resume(self, state, preferences):
         item = state.resume_analysis.evidence[0]
         return TailoredResume(professional_summary=[SupportedClaim(
-            text=item.exact_text, evidence_ids=[item.evidence_id])],
+            text=item.exact_text, evidence_ids=[item.evidence_id],
+            source_entry_id=item.source_entry_id or "legacy:unattributed")],
             experience_bullets=[], highlighted_skills=[])
 
     def verify_resume(self, state):
@@ -434,7 +435,8 @@ def test_candidate_evidence_is_excluded_and_summary_preference_is_enforced(setup
     snap = packs.snapshot(pack.pack_id)
     assert candidate.evidence_id not in {item.evidence_id for item in snap.items}
     claim = SupportedClaim(text="Built Python APIs. Built Python APIs. Built Python APIs.",
-        evidence_ids=[snap.items[0].evidence_version_id])
+        evidence_ids=[snap.items[0].evidence_version_id],
+        source_entry_id="legacy:unattributed")
     content = TailoredResume(professional_summary=[claim],
         experience_bullets=[], highlighted_skills=[]).model_dump(mode="json")
     verdict = ArtifactVerifier().verify(content, "tailored_resume", snap.items,
@@ -636,7 +638,8 @@ def test_integrated_pack_review_survives_database_restart(setup):
             fact = next(item for item in state.resume_analysis.evidence
                         if item.exact_text == "Designed SQL reports.")
             return TailoredResume(professional_summary=[SupportedClaim(
-                text=fact.exact_text, evidence_ids=[fact.evidence_id])],
+                text=fact.exact_text, evidence_ids=[fact.evidence_id],
+                source_entry_id=fact.source_entry_id or "legacy:unattributed")],
                 experience_bullets=[], highlighted_skills=[])
 
     workflow._model = InterviewAwareModel()

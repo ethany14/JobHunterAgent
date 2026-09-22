@@ -37,7 +37,7 @@ def make_result(title: str, score: float, statuses: dict[str, str]) -> PublicRun
             missing.append(MissingRequirement(canonical_name=name, original_text=name))
         if status == "needs_confirmation":
             confirmations.append(requirement)
-    claim = SupportedClaim(text="Built Python APIs.", evidence_ids=["EXP-1"])
+    claim = SupportedClaim(text="Built Python APIs.", evidence_ids=["EXP-1"], source_entry_id="legacy:unattributed")
     return PublicRunResult(
         resume_analysis=ResumeAnalysis(summary="Developer", skills=["Python"], evidence=[evidence], education=[]),
         job_analysis=JobAnalysis(title=title, summary="Role", requirements=requirements, responsibilities=[]),
@@ -46,7 +46,7 @@ def make_result(title: str, score: float, statuses: dict[str, str]) -> PublicRun
             overall_score=score, score_breakdown=ScoreBreakdown(overall_score=score),
             confirmation_requirements=confirmations),
         tailored_resume=TailoredResume(professional_summary=[claim], experience_bullets=[claim],
-            highlighted_skills=[SupportedClaim(text="Python", evidence_ids=["EXP-1"])]),
+            highlighted_skills=[SupportedClaim(text="Python", evidence_ids=["EXP-1"], source_entry_id="legacy:skills")]),
         verification=VerificationResult(passed=True, unsupported_claims=[], revision_feedback=[]),
         revision_feedback=[], revision_count=0, max_revisions=3)
 

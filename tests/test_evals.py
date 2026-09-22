@@ -77,9 +77,9 @@ def test_count_forbidden_claims_is_case_insensitive():
 
 def test_tailored_resume_text_includes_every_claim_group():
     resume = TailoredResume(
-        professional_summary=[SupportedClaim(text="Summary", evidence_ids=["EXP-1"])],
-        experience_bullets=[SupportedClaim(text="Bullet", evidence_ids=["EXP-2"])],
-        highlighted_skills=[SupportedClaim(text="Python", evidence_ids=["EXP-3"])],
+        professional_summary=[SupportedClaim(text="Summary", evidence_ids=["EXP-1"], source_entry_id="legacy:summary")],
+        experience_bullets=[SupportedClaim(text="Bullet", evidence_ids=["EXP-2"], source_entry_id="legacy:experience")],
+        highlighted_skills=[SupportedClaim(text="Python", evidence_ids=["EXP-3"], source_entry_id="legacy:skills")],
     )
     assert tailored_resume_text(resume) == (
         "PROFESSIONAL SUMMARY\nSummary\n\n"

@@ -44,9 +44,9 @@ def graph_result():
             explanation="Python is supported.", recommendations=[],
         ),
         "tailored_resume": TailoredResume(
-            professional_summary=[SupportedClaim(text=FACT, evidence_ids=[FACT_ID])],
-            experience_bullets=[SupportedClaim(text=FACT, evidence_ids=[FACT_ID])],
-            highlighted_skills=[SupportedClaim(text="Python", evidence_ids=[FACT_ID])],
+            professional_summary=[SupportedClaim(text=FACT, evidence_ids=[FACT_ID], source_entry_id="legacy:summary")],
+            experience_bullets=[SupportedClaim(text=FACT, evidence_ids=[FACT_ID], source_entry_id="legacy:experience")],
+            highlighted_skills=[SupportedClaim(text="Python", evidence_ids=[FACT_ID], source_entry_id="legacy:skills")],
         ),
         "verification": VerificationResult(
             passed=True, unsupported_claims=[], revision_feedback=[]

@@ -52,10 +52,11 @@ def claim_similarity(left: str, right: str) -> float:
 
 def _strength(claim: SupportedClaim, index: int) -> tuple[int, int, int, int]:
     tokens = claim_token_set(claim.text)
-    specificity = len(claim.evidence_ids)
-    action_outcome = int(bool(tokens & _ACTION_WORDS)) + int(bool(re.search(r"\d", claim.text)))
+    action = int(bool(tokens & _ACTION_WORDS))
+    supported_outcome = int(bool(re.search(r"\d", claim.text)))
+    specificity = min(len(tokens), 40)
     coverage = len(claim.target_requirement_ids)
-    return specificity, action_outcome, coverage, -index
+    return action + supported_outcome, specificity, coverage, -index
 
 
 def find_duplicate_claims(
@@ -99,19 +100,24 @@ def deduplicate_claims(
 def clean_tailored_resume(
     resume: TailoredResume, *, threshold: float = 0.82,
 ) -> tuple[TailoredResume, list[DuplicateClaim]]:
-    """Remove predictable duplicates while preserving the first section/entry layout."""
-    all_claims = resume.claims()
-    _, duplicates = deduplicate_claims(all_claims, threshold)
-    removed = {item.removed_claim_id for item in duplicates}
+    """Remove duplicates within one source entry and normalize Skill aliases.
+
+    Similar wording across distinct employers or projects is not sufficient proof
+    that the underlying experience is duplicated, so cross-entry claims are never
+    removed here.
+    """
+    duplicates: list[DuplicateClaim] = []
     sections: list[ResumeSection] = []
     for section in resume.sections:
         entries = []
         skill_names: dict[str, str] = {}
         for entry in section.entries:
+            entry_claims, entry_duplicates = deduplicate_claims(
+                entry.bullets, threshold
+            )
+            duplicates.extend(entry_duplicates)
             bullets = []
-            for claim in entry.bullets:
-                if claim.claim_id in removed:
-                    continue
+            for claim in entry_claims:
                 if section.section_type == "skills":
                     canonical = normalize_claim_text(claim.text).replace("postgresql", "postgres")
                     if canonical in skill_names:
@@ -144,10 +150,25 @@ def validate_resume_structure(
     source_entries: Sequence[ResumeSourceEntry],
     *,
     known_evidence_ids: set[str] | None = None,
+    allow_legacy_source_ids: bool = False,
+    source_resume_text: str | None = None,
 ) -> list[ResumeQualityIssue]:
     issues: list[ResumeQualityIssue] = []
     sources = {entry.source_entry_id: entry for entry in source_entries}
     claims_by_section: dict[str, list[SupportedClaim]] = {}
+    claims_by_entry: list[tuple[str, str, list[SupportedClaim]]] = []
+
+    if source_resume_text is not None:
+        normalized_resume = normalize_claim_text(source_resume_text)
+        header_values = [resume.header.name, *resume.header.contact_lines]
+        unsupported_header = [value for value in header_values
+                              if value and normalize_claim_text(value) not in normalized_resume]
+        if unsupported_header:
+            issues.append(ResumeQualityIssue(
+                code="unsupported_header_metadata",
+                message="Resume header contains text not present in the source resume.",
+            ))
+
     for section in resume.sections:
         claims = [claim for entry in section.entries for claim in entry.bullets]
         claims_by_section.setdefault(section.section_type, []).extend(claims)
@@ -157,6 +178,42 @@ def validate_resume_structure(
                 section_type=section.section_type,
             ))
         for entry in section.entries:
+            claims_by_entry.append((section.section_type, entry.entry_id, entry.bullets))
+            source_bound = section.section_type in {"experience", "projects", "education"}
+            entry_source = sources.get(entry.entry_id) if source_bound else None
+            if source_bound and entry_source is None:
+                issues.append(ResumeQualityIssue(
+                    code="unknown_source_entry",
+                    message="Resume entry does not identify a known source entry.",
+                    claim_ids=[item.claim_id for item in entry.bullets],
+                    section_type=section.section_type,
+                ))
+            if entry_source is not None:
+                expected_metadata = {
+                    "heading": entry_source.heading,
+                    "subheading": entry_source.organization,
+                    "location": entry_source.location,
+                    "start_date": entry_source.start_date,
+                    "end_date": entry_source.end_date,
+                }
+                actual_metadata = {
+                    "heading": entry.heading,
+                    "subheading": entry.subheading,
+                    "location": entry.location,
+                    "start_date": entry.start_date,
+                    "end_date": entry.end_date,
+                }
+                mismatched = [name for name, expected in expected_metadata.items()
+                              if normalize_claim_text(actual_metadata[name] or "")
+                              != normalize_claim_text(expected or "")]
+                if mismatched:
+                    issues.append(ResumeQualityIssue(
+                        code="source_metadata_mismatch",
+                        message=("Resume entry metadata differs from its source entry: "
+                                 + ", ".join(mismatched) + "."),
+                        claim_ids=[item.claim_id for item in entry.bullets],
+                        section_type=section.section_type,
+                    ))
             for claim in entry.bullets:
                 if not claim.evidence_ids:
                     issues.append(ResumeQualityIssue(
@@ -171,10 +228,23 @@ def validate_resume_structure(
                         message=f"Claim cites unknown evidence IDs: {', '.join(unknown)}.",
                         claim_ids=[claim.claim_id], section_type=section.section_type,
                     ))
+                is_legacy = claim.source_entry_id.startswith("legacy:")
                 source = sources.get(claim.source_entry_id)
-                if source is None and not claim.source_entry_id.startswith("legacy:"):
+                if is_legacy and not allow_legacy_source_ids:
+                    issues.append(ResumeQualityIssue(
+                        code="legacy_source_entry",
+                        message="New resume claims cannot use legacy source entries.",
+                        claim_ids=[claim.claim_id], section_type=section.section_type,
+                    ))
+                elif source is None and not (allow_legacy_source_ids and is_legacy):
                     issues.append(ResumeQualityIssue(
                         code="unknown_source_entry", message="Claim cites an unknown source entry.",
+                        claim_ids=[claim.claim_id], section_type=section.section_type,
+                    ))
+                if source_bound and source is not None and claim.source_entry_id != entry.entry_id:
+                    issues.append(ResumeQualityIssue(
+                        code="entry_source_mismatch",
+                        message="Claim is attached to a different resume source entry.",
                         claim_ids=[claim.claim_id], section_type=section.section_type,
                     ))
                 if source and not set(claim.evidence_ids).issubset(source.evidence_ids):
@@ -218,11 +288,29 @@ def validate_resume_structure(
                     message="Professional summary substantially repeats another resume bullet.",
                     claim_ids=[summary_claim.claim_id, other.claim_id], section_type="summary",
                 ))
-    for duplicate in find_duplicate_claims(resume.claims()):
-        issues.append(ResumeQualityIssue(
-            code="duplicate_claim", message="Resume contains substantially duplicate claims.",
-            claim_ids=[duplicate.kept_claim_id, duplicate.removed_claim_id],
-        ))
+    for section_type, _, claims in claims_by_entry:
+        for duplicate in find_duplicate_claims(claims):
+            issues.append(ResumeQualityIssue(
+                code="duplicate_claim",
+                message="A resume source entry contains substantially duplicate claims.",
+                claim_ids=[duplicate.kept_claim_id, duplicate.removed_claim_id],
+                section_type=section_type,
+            ))
+    for left_index, (left_section, left_entry, left_claims) in enumerate(claims_by_entry):
+        for right_section, right_entry, right_claims in claims_by_entry[left_index + 1:]:
+            if left_entry == right_entry:
+                continue
+            for left in left_claims:
+                for right in right_claims:
+                    if claim_similarity(left.text, right.text) >= .82:
+                        issues.append(ResumeQualityIssue(
+                            code="cross_source_similarity",
+                            message=("Similar wording appears under different source entries; "
+                                     "review it without automatically deleting either fact."),
+                            claim_ids=[left.claim_id, right.claim_id],
+                            section_type=(left_section if left_section == right_section else None),
+                            severity="warning",
+                        ))
     skills = claims_by_section.get("skills", [])
     seen: dict[str, str] = {}
     for claim in skills:
@@ -237,8 +325,9 @@ def validate_resume_structure(
 
 
 def quality_result(issues: Sequence[ResumeQualityIssue]) -> ResumeQualityResult:
-    unique_feedback = list(dict.fromkeys(item.message for item in issues))
+    errors = [item for item in issues if item.severity == "error"]
+    unique_feedback = list(dict.fromkeys(item.message for item in errors))
     return ResumeQualityResult(
-        passed=not issues, issues=list(issues), revision_feedback=unique_feedback,
+        passed=not errors, issues=list(issues), revision_feedback=unique_feedback,
     )
 

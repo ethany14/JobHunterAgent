@@ -309,10 +309,12 @@ class FakePackModel:
         evidence = state.resume_analysis.evidence[0]
         if self.bad_first:
             return TailoredResume(professional_summary=[SupportedClaim(
-                text="Increased revenue by 30%.", evidence_ids=[evidence.evidence_id])],
+                text="Increased revenue by 30%.", evidence_ids=[evidence.evidence_id],
+                source_entry_id=evidence.source_entry_id or "legacy:unattributed")],
                 experience_bullets=[], highlighted_skills=[])
         return TailoredResume(professional_summary=[SupportedClaim(
-            text=evidence.exact_text, evidence_ids=[evidence.evidence_id])],
+            text=evidence.exact_text, evidence_ids=[evidence.evidence_id],
+            source_entry_id=evidence.source_entry_id or "legacy:unattributed")],
             experience_bullets=[], highlighted_skills=[])
 
     def verify_resume(self, state):

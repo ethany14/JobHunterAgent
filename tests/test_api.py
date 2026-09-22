@@ -218,7 +218,7 @@ def graph_state(*, interrupted: bool, approved: bool | None, revision_count: int
             overall_score=100,
         ).model_dump(mode="json"),
         "tailored_resume": TailoredResume(
-            professional_summary=[SupportedClaim(text=FACT, evidence_ids=[FACT_ID])],
+            professional_summary=[SupportedClaim(text=FACT, evidence_ids=[FACT_ID], source_entry_id="legacy:summary")],
             experience_bullets=[],
             highlighted_skills=[],
         ).model_dump(mode="json"),

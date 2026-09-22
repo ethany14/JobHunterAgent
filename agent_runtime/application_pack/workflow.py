@@ -30,9 +30,10 @@ from agent_runtime.workspace.repository import JobWorkspaceRepository
 from agent_runtime.workspace.types import ArtifactType
 from custom_agent.handlers import JobAgentStepHandler
 from custom_agent.state import AgentState, AgentStatus, Step
+from job_agent.domain import make_source_entry_id, normalize_text
 from job_agent.model import DEFAULT_ENV_PATH, create_model, invoke_structured, optional_setting
 from job_agent.schemas import (
-    JobAnalysis, ResumeAnalysis, ResumeEvidence, SkillMatch, TailoredResume,
+    JobAnalysis, ResumeAnalysis, ResumeEvidence, ResumeSourceEntry, SkillMatch, TailoredResume,
     UnsupportedClaim, VerificationResult,
 )
 
@@ -81,6 +82,73 @@ class PackModelClient(Protocol):
     def cover_letter(self, context: str) -> CoverLetter: ...
     def application_answer(self, context: str) -> ApplicationAnswer: ...
     def revise_blocks(self, artifact_type: str, context: str) -> CoverLetter | ApplicationAnswer: ...
+
+
+def resume_analysis_from_snapshot(
+    snapshot: GenerationEvidenceSnapshot,
+) -> ResumeAnalysis:
+    """Build stable source ownership for confirmed Pack evidence."""
+    grouped: dict[tuple[str, str, str, str, str, str], list] = {}
+    for item in snapshot.items:
+        category = (item.category or "").casefold()
+        section = normalize_text(item.source_section or "")
+        if category == "education" or "education" in section:
+            entry_type = "education"
+        elif category == "project" or "project" in section:
+            entry_type = "project"
+        elif category == "skill" or "skill" in section:
+            entry_type = "skills"
+        else:
+            entry_type = "experience"
+        heading = item.role or item.source_section or item.employer_or_project or "Confirmed evidence"
+        organization = item.employer_or_project if entry_type == "experience" else None
+        if entry_type == "project" and item.employer_or_project:
+            heading = item.employer_or_project
+        key = (
+            entry_type,
+            heading,
+            organization or "",
+            item.start_date or "",
+            item.end_date or "",
+            item.source_section or "",
+        )
+        grouped.setdefault(key, []).append(item)
+
+    evidence: list[ResumeEvidence] = []
+    sources: list[ResumeSourceEntry] = []
+    for key, items in grouped.items():
+        entry_type, heading, organization, start_date, end_date, _ = key
+        source_id = make_source_entry_id(
+            entry_type,
+            heading,
+            organization or None,
+            start_date or None,
+            end_date or None,
+            [item.claim_text for item in items],
+        )
+        evidence_ids = [item.evidence_version_id for item in items]
+        sources.append(ResumeSourceEntry(
+            source_entry_id=source_id,
+            entry_type=entry_type,
+            heading=heading,
+            organization=organization or None,
+            start_date=start_date or None,
+            end_date=end_date or None,
+            evidence_ids=evidence_ids,
+        ))
+        evidence.extend(ResumeEvidence(
+            evidence_id=item.evidence_version_id,
+            source_section=item.source_section or "Confirmed Career Evidence",
+            exact_text=item.claim_text,
+            source_entry_id=source_id,
+        ) for item in items)
+    return ResumeAnalysis(
+        summary="Confirmed evidence",
+        skills=[],
+        evidence=evidence,
+        education=[],
+        source_entries=sources,
+    )
 
 
 class SharedPackModel:
@@ -237,10 +305,8 @@ class ApplicationPackWorkflow:
                       feedback: ArtifactVerification | None = None) -> AgentState:
         snap = self._packs.snapshot(pack_id)
         job, match = self._source(snap.application_id)
-        evidence = [ResumeEvidence(evidence_id=e.evidence_version_id,
-                    source_section=e.source_section or "Confirmed Career Evidence",
-                    exact_text=e.claim_text) for e in snap.items]
-        source_text = "\n".join(e.claim_text for e in snap.items)
+        resume_analysis = resume_analysis_from_snapshot(snap)
+        source_text = "\n".join(e.exact_text for e in resume_analysis.evidence)
         verification = None
         if feedback is not None:
             verification = VerificationResult(passed=False,
@@ -250,7 +316,7 @@ class ApplicationPackWorkflow:
         return AgentState(run_id=pack_id, step=Step.REVISE_RESUME if feedback else Step.WRITE_RESUME,
             status=AgentStatus.REVISING if feedback else AgentStatus.RUNNING,
             resume_text=source_text, job_description=self._workspace.current_snapshot(snap.application_id).cleaned_job_description,
-            resume_analysis=ResumeAnalysis(summary="Confirmed evidence", skills=[], evidence=evidence, education=[]),
+            resume_analysis=resume_analysis,
             job_analysis=job, skill_match=match,
             tailored_resume=TailoredResume.model_validate(content) if content else None,
             verification=verification)

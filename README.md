@@ -149,6 +149,12 @@ The extension is intentionally smaller than the web application. It can:
 - compare it with the default resume and show a match score and suggestions;
 - open the saved application in the full web workspace.
 
+**Analyze fit** uses the analysis-only pipeline: input validation, resume evidence
+analysis, job analysis, and requirement matching. It makes three logical model calls
+and does not write or verify a tailored resume, create a reviewable run, or enter
+human review. Full `/runs` and Application Pack workflows retain the complete
+write/verify/revise/review lifecycle.
+
 Install it locally:
 
 1. Start the FastAPI service.
@@ -197,6 +203,12 @@ Application Packs contain versioned tailored resumes, cover letters, application
 answers, verification results, and review state. Generated claims remain subject to
 the same evidence rules during revision. Tailored resumes can be downloaded as PDF
 or copied as text.
+
+New resume drafts must bind every claim to a real extracted source entry and may not
+use `legacy:*` source IDs. Entry headings, organizations, locations, and dates are
+checked against that source entry before a draft is persisted. The explicit v1
+artifact upgrader retains `legacy:*` IDs only so historical artifacts remain
+readable; it is not a generation fallback.
 
 ### Evidence and learning
 
@@ -422,16 +434,26 @@ Run the browser-side unit tests:
 node --test tests/test_copilot_ui.mjs tests/test_learning_ui.mjs tests/test_mock_interview_ui.mjs
 ```
 
-The current release baseline is:
+The current local release baseline is:
 
 ```text
-627 passed, 1 skipped
+638 passed, 1 skipped
 18 JavaScript tests passed
 ```
 
 Tests use fake models or scripted adapters by default and do not make paid model
 calls. Live evaluations are opt-in. Reproducible datasets, runners, raw outputs, and
 version metadata live under `evals/`.
+
+GitHub Actions runs both commands on every push and pull request through
+`.github/workflows/ci.yml`. It never runs a real-model evaluation. Live evaluations
+remain explicit, paid, manual commands.
+
+Human material-quality review uses 10–20 anonymized real resume/JD pairs and scores
+factual accuracy, non-duplication, and application readiness. The governed local
+packet format and privacy rules are in `evals/human_quality_review/README.md`.
+Synthetic stability cases do not count as real-material review, and every failed
+human review must identify a regression test before the packet validates.
 
 Common evaluation commands:
 

@@ -18,7 +18,7 @@ from agent_runtime.memory.proposals import (
 from job_agent.domain import normalize_resume_analysis, normalize_tailored_resume_claim_ids
 from job_agent.quality import (
     claim_similarity, clean_tailored_resume, deduplicate_claims,
-    find_duplicate_claims, validate_resume_structure,
+    find_duplicate_claims, quality_result, validate_resume_structure,
 )
 from job_agent.rendering import render_tailored_resume, render_tailored_resume_markdown
 from job_agent.schemas import (
@@ -59,11 +59,14 @@ def structured_resume(*, duplicate=False) -> TailoredResume:
 def sources():
     return [
         ResumeSourceEntry(source_entry_id="SRC-work", entry_type="experience",
-                          heading="Developer", evidence_ids=["EXP-1"]),
+                          heading="Developer", organization="Acme",
+                          start_date="2022", end_date="2024",
+                          evidence_ids=["EXP-1"]),
         ResumeSourceEntry(source_entry_id="SRC-project", entry_type="project",
                           heading="Forecasting", evidence_ids=["EXP-2"]),
         ResumeSourceEntry(source_entry_id="SRC-education", entry_type="education",
-                          heading="B.S. Computer Science", evidence_ids=["EXP-3"]),
+                          heading="B.S. Computer Science", organization="Example University",
+                          evidence_ids=["EXP-3"]),
     ]
 
 
@@ -89,6 +92,52 @@ def test_v1_resume_upgrades_explicitly_and_claim_ids_are_stable():
     assert first.claims()[0].claim_id == second.claims()[0].claim_id
     with pytest.raises(Exception):
         TailoredResume.model_validate({"professional_summary": []})
+
+
+def test_new_v2_claim_requires_a_real_source_id_but_v1_still_upgrades():
+    invalid = {
+        "schema_version": 2,
+        "sections": [{"section_type": "experience", "title": "Experience",
+            "entries": [{"entry_id": "SRC-work", "bullets": [{
+                "text": "Built APIs.", "evidence_ids": ["EXP-1"],
+            }]}]}],
+    }
+    with pytest.raises(Exception):
+        TailoredResume.model_validate(invalid)
+    legacy = TailoredResume.model_validate({
+        "professional_summary": [{"text": "Built APIs.", "evidence_ids": ["EXP-1"]}],
+        "experience_bullets": [], "highlighted_skills": [],
+    })
+    assert legacy.claims()[0].source_entry_id == "legacy:summary"
+    assert "Built APIs." in render_tailored_resume(legacy)
+
+
+def test_strict_validation_rejects_legacy_and_cross_employer_ownership():
+    resume = structured_resume()
+    data = resume.model_dump(mode="python")
+    data["sections"][1]["entries"][0]["bullets"][0]["source_entry_id"] = "legacy:unattributed"
+    issues = validate_resume_structure(TailoredResume.model_validate(data), sources(),
+        known_evidence_ids={"EXP-1", "EXP-2", "EXP-3"}, allow_legacy_source_ids=False)
+    assert "legacy_source_entry" in {item.code for item in issues}
+
+    data = structured_resume().model_dump(mode="python")
+    data["sections"][1]["entries"][0]["bullets"][0].update({
+        "source_entry_id": "SRC-project", "evidence_ids": ["EXP-2"],
+    })
+    issues = validate_resume_structure(TailoredResume.model_validate(data), sources(),
+        known_evidence_ids={"EXP-1", "EXP-2", "EXP-3"})
+    assert "entry_source_mismatch" in {item.code for item in issues}
+
+
+def test_strict_validation_rejects_invented_entry_metadata_and_header():
+    data = structured_resume().model_dump(mode="python")
+    data["header"]["name"] = "Invented Candidate"
+    data["sections"][1]["entries"][0]["subheading"] = "Invented Company"
+    issues = validate_resume_structure(TailoredResume.model_validate(data), sources(),
+        known_evidence_ids={"EXP-1", "EXP-2", "EXP-3"},
+        source_resume_text="Alex\nDeveloper\nAcme\nBuilt Python APIs for internal reporting.")
+    assert {item.code for item in issues} >= {
+        "unsupported_header_metadata", "source_metadata_mismatch"}
 
 
 def test_source_and_claim_ids_ignore_temporary_model_ids():
@@ -129,8 +178,9 @@ def test_dedup_detects_exact_variants_and_paraphrases_without_python_false_posit
     ]
     assert claim_similarity(values[0].text, values[1].text) == 1
     duplicates = find_duplicate_claims(values, threshold=.70)
-    assert {item.removed_claim_id for item in duplicates} >= {"b", "c"}
+    assert {item.removed_claim_id for item in duplicates} == {"a", "b"}
     kept, _ = deduplicate_claims(values, threshold=.70)
+    assert any(item.claim_id == "c" for item in kept)
     assert any(item.claim_id == "d" for item in kept)
 
 
@@ -139,6 +189,27 @@ def test_cleanup_removes_duplicate_and_records_adjustment():
     assert len(duplicates) == 1
     assert len(cleaned.claims_for("experience")) == 1
     assert cleaned.quality_adjustments
+
+
+def test_cleanup_keeps_similar_claims_under_different_employers():
+    resume = structured_resume()
+    data = resume.model_dump(mode="python")
+    second = {
+        "entry_id": "SRC-project",
+        "heading": "Forecasting",
+        "bullets": [claim("Built Python APIs for internal reporting.", "other",
+                          "SRC-project", "EXP-2").model_dump(mode="python")],
+    }
+    data["sections"][2]["entries"] = [second]
+    value = TailoredResume.model_validate(data)
+    cleaned, duplicates = clean_tailored_resume(value)
+    assert len([item for item in cleaned.claims()
+                if item.text == "Built Python APIs for internal reporting."]) == 2
+    assert not duplicates
+    result = quality_result(validate_resume_structure(cleaned, sources(),
+        known_evidence_ids={"EXP-1", "EXP-2", "EXP-3"}))
+    assert any(item.code == "cross_source_similarity" and item.severity == "warning"
+               for item in result.issues)
 
 
 def test_cleanup_normalizes_postgres_skill_aliases():

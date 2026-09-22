@@ -86,7 +86,11 @@ def skill_assessment() -> SkillAssessment:
 
 
 def claim(text: str, evidence_id: str = FACT_ID) -> SupportedClaim:
-    return SupportedClaim(text=text, evidence_ids=[evidence_id])
+    return SupportedClaim(
+        text=text,
+        evidence_ids=[evidence_id],
+        source_entry_id="legacy:unattributed",
+    )
 
 
 def tailored(summary: str = "Python developer", evidence_id: str = FACT_ID) -> TailoredResume:

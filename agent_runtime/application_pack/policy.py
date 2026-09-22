@@ -73,6 +73,11 @@ class EvidenceSelectionPolicy:
                 selection_reason=reason, associated_requirement_ids=associated,
                 claim_text=version.claim_text, exact_quote=version.exact_quote,
                 source_section=version.source_section,
+                category=version.category.value,
+                employer_or_project=version.employer_or_project,
+                role=version.role,
+                start_date=version.start_date,
+                end_date=version.end_date,
             ))
             remaining -= cost
         return selected

@@ -230,11 +230,16 @@ def test_supported_claim_cleans_and_deduplicates_evidence_ids():
     claim = SupportedClaim(
         text="  Built Python APIs.  ",
         evidence_ids=[" EXP-1 ", "EXP-1", "EXP-2"],
+        source_entry_id="legacy:unattributed",
     )
     assert claim.text == "Built Python APIs."
     assert claim.evidence_ids == ["EXP-1", "EXP-2"]
     with pytest.raises(ValueError, match="must not be blank"):
-        SupportedClaim(text="Python", evidence_ids=["EXP-1", " "])
+        SupportedClaim(
+            text="Python",
+            evidence_ids=["EXP-1", " "],
+            source_entry_id="legacy:unattributed",
+        )
 
 
 @pytest.mark.parametrize("schema", [JobRequirement, MissingRequirement])

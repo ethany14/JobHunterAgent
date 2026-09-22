@@ -19,6 +19,7 @@ from agent_runtime.application_pack.policy import classify_question, requires_ma
 from agent_runtime.application_pack.verifier import ArtifactVerifier
 from agent_runtime.application_pack.workflow import (
     PACK_PROMPT_VERSION, ApplicationPackWorkflow, PackModelClient, SharedPackModel,
+    resume_analysis_from_snapshot,
 )
 from agent_runtime.evidence.repository import CareerEvidenceRepository
 from agent_runtime.interviewer.controller import InterviewController
@@ -319,9 +320,7 @@ def _writer_state(task: AgentTask, context: ExecutionContext,
     snapshot = GenerationEvidenceSnapshot.model_validate(_one(context, "generation_evidence_snapshot"))
     job = JobAnalysis.model_validate(_one(context, "job_analysis"))
     match = SkillMatch.model_validate(_one(context, "match_report"))
-    evidence = [ResumeEvidence(evidence_id=item.evidence_version_id,
-                source_section=item.source_section or "Confirmed Career Evidence",
-                exact_text=item.claim_text) for item in snapshot.items]
+    resume_analysis = resume_analysis_from_snapshot(snapshot)
     from job_agent.schemas import UnsupportedClaim
     feedback = None
     if report is not None and not report.passed:
@@ -329,9 +328,10 @@ def _writer_state(task: AgentTask, context: ExecutionContext,
             unsupported_claims=[UnsupportedClaim(claim=issue.unsupported_text or "Unverified draft",
                 reason=issue.reason) for issue in report.issues],
             revision_feedback=[issue.revision_instruction for issue in report.issues])
-    return AgentState(run_id=task.task_id, resume_text="\n".join(e.exact_text for e in evidence),
+    return AgentState(run_id=task.task_id,
+        resume_text="\n".join(e.exact_text for e in resume_analysis.evidence),
         job_description=job.summary, resume_analysis=ResumeAnalysis(
-            summary="Confirmed evidence", skills=[], evidence=evidence, education=[]),
+            **resume_analysis.model_dump(mode="python")),
         job_analysis=job, skill_match=match,
         tailored_resume=TailoredResume.model_validate(current) if current else None,
         verification=feedback)

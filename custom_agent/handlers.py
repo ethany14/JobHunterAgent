@@ -157,7 +157,39 @@ class JobAgentStepHandler:
             self._analyze(TailoredResume, WRITE_RESUME_PROMPT, content)
         ))
         cleaned, _ = clean_tailored_resume(draft)
+        self._validate_generated_resume(cleaned, state)
         return {"tailored_resume": cleaned}
+
+    @staticmethod
+    def _validate_generated_resume(resume: TailoredResume, state: AgentState) -> None:
+        if state.resume_analysis is None:
+            raise ValueError("Resume analysis is required before source validation.")
+        issues = validate_resume_structure(
+            resume,
+            state.resume_analysis.source_entries,
+            known_evidence_ids={
+                item.evidence_id for item in state.resume_analysis.evidence
+            },
+            allow_legacy_source_ids=False,
+            source_resume_text=state.resume_text,
+        )
+        source_safety_codes = {
+            "unknown_source_entry",
+            "legacy_source_entry",
+            "entry_source_mismatch",
+            "invalid_section_membership",
+            "unknown_evidence_id",
+            "claim_without_evidence",
+            "source_metadata_mismatch",
+            "unsupported_header_metadata",
+        }
+        failures = [
+            item for item in issues
+            if item.severity == "error" and item.code in source_safety_codes
+        ]
+        if failures:
+            codes = ", ".join(dict.fromkeys(item.code for item in failures))
+            raise ValueError(f"Generated resume failed source validation: {codes}.")
 
     def _verify_resume(self, state: AgentState) -> dict:
         if state.tailored_resume is None or state.resume_analysis is None:
@@ -202,10 +234,12 @@ class JobAgentStepHandler:
         quality_issues = validate_resume_structure(
             state.tailored_resume, state.resume_analysis.source_entries,
             known_evidence_ids=known_ids,
+            allow_legacy_source_ids=False,
+            source_resume_text=state.resume_text,
         )
         quality = quality_result(quality_issues)
         feedback.extend(quality.revision_feedback)
-        if unsupported != verification.unsupported_claims or quality_issues:
+        if unsupported != verification.unsupported_claims or not quality.passed:
             verification = VerificationResult(
                 passed=False, unsupported_claims=unsupported,
                 revision_feedback=list(dict.fromkeys(feedback)), quality=quality,
@@ -242,6 +276,7 @@ class JobAgentStepHandler:
             self._analyze(TailoredResume, REVISE_RESUME_PROMPT, content)
         ))
         revised, _ = clean_tailored_resume(revised)
+        self._validate_generated_resume(revised, state)
         return {
             "tailored_resume": revised,
             "approved": None,

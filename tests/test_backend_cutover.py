@@ -43,14 +43,14 @@ class CompleteFakeHandler:
             recommendations=[], missing_required_requirements=[],
             missing_preferred_requirements=[], overall_score=100,
             score_breakdown=ScoreBreakdown(overall_score=100))
-        claim = SupportedClaim(text=FACT, evidence_ids=[FACT_ID])
+        claim = SupportedClaim(text=FACT, evidence_ids=[FACT_ID], source_entry_id="legacy:unattributed")
         updates = {
             Step.VALIDATE_INPUT: {}, Step.ANALYZE_RESUME: {"resume_analysis": resume},
             Step.VALIDATE_EVIDENCE: {}, Step.ANALYZE_JOB: {"job_analysis": job},
             Step.MATCH_SKILLS: {"skill_match": match},
             Step.WRITE_RESUME: {"tailored_resume": TailoredResume(
                 professional_summary=[claim], experience_bullets=[claim],
-                highlighted_skills=[SupportedClaim(text="Python", evidence_ids=[FACT_ID])])},
+                highlighted_skills=[SupportedClaim(text="Python", evidence_ids=[FACT_ID], source_entry_id="legacy:skills")])},
             Step.VERIFY_RESUME: {"verification": VerificationResult(
                 passed=True, unsupported_claims=[], revision_feedback=[]),
                 "revision_feedback": []},

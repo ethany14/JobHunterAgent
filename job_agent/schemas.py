@@ -186,7 +186,7 @@ class SupportedClaim(AnalysisModel):
     claim_id: str = ""
     text: NonEmptyString
     evidence_ids: list[str] = Field(min_length=1)
-    source_entry_id: str = "legacy:unattributed"
+    source_entry_id: NonEmptyString
     target_requirement_ids: list[str] = Field(default_factory=list)
 
     @model_validator(mode="before")
@@ -200,7 +200,6 @@ class SupportedClaim(AnalysisModel):
         if not data.get("claim_id") and text:
             digest = hashlib.sha256(f"{text.casefold()}|{evidence}".encode()).hexdigest()[:12]
             data["claim_id"] = f"CLM-{digest}"
-        data.setdefault("source_entry_id", "legacy:unattributed")
         return data
 
     @field_validator("evidence_ids")
@@ -317,11 +316,14 @@ class ResumeQualityIssue(AnalysisModel):
         "duplicate_claim", "summary_too_long", "summary_repeats_bullet",
         "duplicate_skill", "invalid_section_membership", "unknown_source_entry",
         "empty_section", "unformatted_skill_block", "claim_without_evidence",
-        "unknown_evidence_id",
+        "unknown_evidence_id", "legacy_source_entry", "entry_source_mismatch",
+        "source_metadata_mismatch", "unsupported_header_metadata",
+        "cross_source_similarity",
     ]
     message: NonEmptyString
     claim_ids: list[str] = Field(default_factory=list)
     section_type: str | None = None
+    severity: Literal["error", "warning"] = "error"
 
 
 class ResumeQualityResult(AnalysisModel):
@@ -331,7 +333,8 @@ class ResumeQualityResult(AnalysisModel):
 
     @model_validator(mode="after")
     def consistent(self):
-        if self.passed == bool(self.issues):
+        has_errors = any(item.severity == "error" for item in self.issues)
+        if self.passed == has_errors:
             raise ValueError("Quality verdict and issues disagree.")
         return self
 

@@ -1,0 +1,18 @@
+{
+  "target_case_count": 12,
+  "source_kind": "anonymized_real",
+  "strata": [
+    {"role_family": "backend", "target_count": 3},
+    {"role_family": "data_analyst", "target_count": 3},
+    {"role_family": "business_analyst", "target_count": 3},
+    {"role_family": "ai_engineer", "target_count": 3}
+  ],
+  "coverage": [
+    "entry_level",
+    "mid_level",
+    "career_transition",
+    "compound_requirements",
+    "minimum_year_constraints",
+    "multiple_employers_with_similar_work"
+  ]
+}

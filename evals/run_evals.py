@@ -182,8 +182,8 @@ def summarize(results: list[EvaluationResult]) -> dict[str, float | int]:
 
 def _adversarial_state(case: dict[str, Any]) -> dict[str, Any]:
     evidence_id = make_evidence_id(case["resume_text"])
-    supported = [SupportedClaim(text=text, evidence_ids=[evidence_id]) for text in case["supported_claims"]]
-    injected = [SupportedClaim(text=text, evidence_ids=[evidence_id]) for text in case["injected_claims"]]
+    supported = [SupportedClaim(text=text, evidence_ids=[evidence_id], source_entry_id="legacy:unattributed") for text in case["supported_claims"]]
+    injected = [SupportedClaim(text=text, evidence_ids=[evidence_id], source_entry_id="legacy:unattributed") for text in case["injected_claims"]]
     resume_analysis = ResumeAnalysis(
         summary=case["resume_text"], skills=[],
         evidence=[ResumeEvidence(evidence_id=evidence_id, source_section="Resume", exact_text=case["resume_text"])],

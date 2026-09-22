@@ -33,6 +33,7 @@ def create_app(
     *,
     session_runtime: SessionRuntime | None = None,
     session_runtime_factory: Callable[[], SessionRuntime] | None = None,
+    fit_analysis_service: Any | None = None,
 ) -> FastAPI:
     factory = session_runtime_factory
     if factory is None and run_service is None and session_runtime is None:
@@ -66,6 +67,7 @@ def create_app(
     )
     application.state.run_service = run_service
     application.state.session_runtime = session_runtime
+    application.state.fit_analysis_service = fit_analysis_service
     application.include_router(runs_router)
     application.include_router(sessions_router)
     application.include_router(context_router)

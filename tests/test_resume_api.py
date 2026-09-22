@@ -7,7 +7,10 @@ from api.db import create_database
 from api.main import create_app
 from api.resume_routes import extract_pdf_text
 from api.session_dependencies import get_session_runtime
-from api.schemas.runs import CreateRunResponse, RunResponse
+from api.services.fit_analysis_service import FitAnalysisResult
+from job_agent.schemas import (
+    JobAnalysis, SkillMatch,
+)
 
 
 class OwnerResolver:
@@ -15,24 +18,35 @@ class OwnerResolver:
         return SimpleNamespace(owner_id="local-user")
 
 
-class FakeRunService:
-    async def create_run(self, request):
-        assert "Python" in request.resume_text
-        return CreateRunResponse(run_id="quick-run", status="awaiting_review")
-
-    async def get_run(self, run_id):
-        return RunResponse(run_id=run_id, status="awaiting_review", result={
-            "skill_match": {
+class FakeFitAnalysisService:
+    async def analyze(self, *, resume_text, job_description):
+        assert "Python" in resume_text
+        skill_match = SkillMatch.model_validate({
                 "overall_score": 75,
+                "score_breakdown": {"overall_score": 75},
                 "matches": [
-                    {"display_name": "Python", "match_status": "matched"},
-                    {"display_name": "Cloud", "match_status": "partial"},
+                    {"requirement_id": "python", "job_skill": "Python",
+                     "requirement_level": "required", "match_status": "matched",
+                     "resume_evidence": ["Python developer"], "confidence": 1},
+                    {"requirement_id": "cloud", "job_skill": "Cloud",
+                     "requirement_level": "required", "match_status": "partial",
+                     "resume_evidence": ["Python developer"], "confidence": .5},
                 ],
-                "missing_required_requirements": [{"display_name": "Kubernetes"}],
+                "missing_required_requirements": [{"canonical_name": "kubernetes",
+                    "original_text": "Kubernetes"}],
                 "missing_preferred_requirements": [],
                 "confirmation_requirements": [],
-            }
-        })
+                "explanation": "test", "recommendations": [],
+            })
+        return FitAnalysisResult(
+            analysis_id="quick-analysis",
+            resume_analysis={"summary": "Python developer", "skills": ["Python"],
+                "evidence": [], "education": []},
+            job_analysis=JobAnalysis(title=None, summary=job_description,
+                requirements=[], responsibilities=[]),
+            skill_match=skill_match,
+            latency_seconds=.01,
+        )
 
 
 def test_resume_repository_default_lifecycle(tmp_path) -> None:
@@ -54,7 +68,7 @@ def test_resume_repository_default_lifecycle(tmp_path) -> None:
 def test_upload_list_and_quick_analysis_use_server_resume(tmp_path, monkeypatch) -> None:
     database = create_database(f"sqlite:///{(tmp_path / 'api.sqlite').as_posix()}", create_schema_for_tests=True)
     runtime = SimpleNamespace(resumes=ResumeDocumentRepository(database.session_factory), owner_resolver=OwnerResolver())
-    app = create_app(run_service=FakeRunService())
+    app = create_app(run_service=object(), fit_analysis_service=FakeFitAnalysisService())
     app.dependency_overrides[get_session_runtime] = lambda: runtime
     monkeypatch.setattr("api.resume_routes.extract_pdf_text", lambda _content: ("Python developer", 1))
     try:
@@ -67,6 +81,8 @@ def test_upload_list_and_quick_analysis_use_server_resume(tmp_path, monkeypatch)
             result = client.post("/api/quick-analysis", json={"job_description": "Requires Python"})
             assert result.status_code == 200
             assert result.json()["resume_id"] == resume_id
+            assert result.json()["analysis_id"] == "quick-analysis"
+            assert result.json()["status"] == "completed"
             assert result.json()["match_score"] == 75
             assert result.json()["suggestions"]
     finally:
@@ -77,7 +93,7 @@ def test_upload_list_and_quick_analysis_use_server_resume(tmp_path, monkeypatch)
 def test_quick_analysis_requires_a_default_resume(tmp_path) -> None:
     database = create_database(f"sqlite:///{(tmp_path / 'empty.sqlite').as_posix()}", create_schema_for_tests=True)
     runtime = SimpleNamespace(resumes=ResumeDocumentRepository(database.session_factory), owner_resolver=OwnerResolver())
-    app = create_app(run_service=FakeRunService())
+    app = create_app(run_service=object(), fit_analysis_service=FakeFitAnalysisService())
     app.dependency_overrides[get_session_runtime] = lambda: runtime
     try:
         with TestClient(app) as client:

@@ -26,7 +26,11 @@ from custom_agent.policy import TransitionPolicy
 from custom_agent.repository import StateRepository
 from custom_agent.state import AgentState, AgentStatus, Step
 from custom_agent.steps import StepOutcome
-from job_agent.domain import make_evidence_id
+from job_agent.domain import (
+    make_evidence_id,
+    make_source_entry_id,
+    normalize_resume_analysis,
+)
 from job_agent.schemas import (
     JobAnalysis,
     JobRequirement,
@@ -53,6 +57,9 @@ from job_agent.prompts import (
 
 FACT = "Built Python APIs."
 FACT_ID = make_evidence_id(FACT)
+SOURCE_ENTRY_ID = make_source_entry_id(
+    "experience", "Experience", None, None, None, [FACT]
+)
 
 
 def database_url(path) -> str:
@@ -111,11 +118,45 @@ def skill_match() -> SkillMatch:
 
 
 def tailored(text: str = "Python developer") -> TailoredResume:
-    claim = SupportedClaim(text=text, evidence_ids=[FACT_ID])
+    claim = SupportedClaim(
+        text=text, evidence_ids=[FACT_ID], source_entry_id=SOURCE_ENTRY_ID
+    )
     return TailoredResume(
-        professional_summary=[claim],
-        experience_bullets=[SupportedClaim(text=FACT, evidence_ids=[FACT_ID])],
-        highlighted_skills=[SupportedClaim(text="Python", evidence_ids=[FACT_ID])],
+        schema_version=2,
+        sections=[
+            ResumeSection(
+                section_type="summary",
+                title="Summary",
+                entries=[ResumeEntry(entry_id="summary", bullets=[claim])],
+            ),
+            ResumeSection(
+                section_type="experience",
+                title="Experience",
+                entries=[
+                    ResumeEntry(
+                        entry_id=SOURCE_ENTRY_ID,
+                        heading="Experience",
+                        bullets=[SupportedClaim(
+                            text=FACT,
+                            evidence_ids=[FACT_ID],
+                            source_entry_id=SOURCE_ENTRY_ID,
+                        )],
+                    )
+                ],
+            ),
+            ResumeSection(
+                section_type="skills",
+                title="Skills",
+                entries=[ResumeEntry(
+                    entry_id="skills",
+                    bullets=[SupportedClaim(
+                        text="Python",
+                        evidence_ids=[FACT_ID],
+                        source_entry_id=SOURCE_ENTRY_ID,
+                    )],
+                )],
+            ),
+        ],
     )
 
 
@@ -557,6 +598,34 @@ def test_real_step_handler_completes_happy_path_with_fake_model(custom_runtime):
     assert analyzer.calls[1][2] == "Requires Python"
 
 
+@pytest.mark.parametrize("step", [Step.WRITE_RESUME, Step.REVISE_RESUME])
+def test_generated_and_revised_resumes_cannot_use_legacy_sources(step):
+    legacy = TailoredResume(
+        professional_summary=[SupportedClaim(
+            text="Python developer",
+            evidence_ids=[FACT_ID],
+            source_entry_id="legacy:summary",
+        )],
+        experience_bullets=[],
+        highlighted_skills=[],
+    )
+    state = AgentState(
+        run_id=f"strict-source-{step.value}",
+        resume_text=FACT,
+        job_description="Requires Python",
+        step=step,
+        status=(AgentStatus.REVISING
+                if step == Step.REVISE_RESUME else AgentStatus.RUNNING),
+        resume_analysis=normalize_resume_analysis(resume_analysis()),
+        job_analysis=job_analysis(),
+        skill_match=skill_match(),
+        tailored_resume=tailored() if step == Step.REVISE_RESUME else None,
+        verification=failing() if step == Step.REVISE_RESUME else None,
+    )
+    with pytest.raises(ValueError, match="legacy_source_entry"):
+        JobAgentStepHandler(QueueAnalyzer([legacy])).execute(step, state)
+
+
 def test_skill_matching_normalizes_evidence_and_restores_exact_resume_text():
     assessment = SkillAssessment(
         matches=[
@@ -678,10 +747,12 @@ def test_verifier_rejects_claim_without_evidence_ids():
             ResumeEntry.model_construct(entry_id="summary", bullets=[unsupported_claim])]),
         ResumeSection.model_construct(section_type="experience", title="Experience", entries=[
             ResumeEntry.model_construct(entry_id="experience", bullets=[
-                SupportedClaim(text=FACT, evidence_ids=[FACT_ID])])]),
+                SupportedClaim(text=FACT, evidence_ids=[FACT_ID],
+                               source_entry_id="legacy:experience")])]),
         ResumeSection.model_construct(section_type="skills", title="Skills", entries=[
             ResumeEntry.model_construct(entry_id="skills", bullets=[
-                SupportedClaim(text="Python", evidence_ids=[FACT_ID])])]),
+                SupportedClaim(text="Python", evidence_ids=[FACT_ID],
+                               source_entry_id="legacy:skills")])]),
     ])
     state = AgentState(
         run_id="missing-evidence-id",

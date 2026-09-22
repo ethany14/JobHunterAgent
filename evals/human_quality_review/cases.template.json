@@ -1,0 +1,18 @@
+[
+  {
+    "case_id": "real-role-01",
+    "source_kind": "anonymized_real",
+    "consent_confirmed": true,
+    "role_family": "backend",
+    "resume_text": "Replace with an anonymized real resume.",
+    "job_description": "Replace with an anonymized real job description.",
+    "generated_artifact": "Replace with the unedited generated resume or application material.",
+    "artifact_type": "tailored_resume",
+    "model_metadata": {
+      "model": "replace-me",
+      "temperature": 0,
+      "prompt_version": "replace-me",
+      "source_commit": "replace-me"
+    }
+  }
+]

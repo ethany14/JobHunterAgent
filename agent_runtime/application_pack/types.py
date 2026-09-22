@@ -155,6 +155,11 @@ class EvidenceSnapshotItem(PackModel):
     claim_text: str
     exact_quote: str | None = None
     source_section: str | None = None
+    category: str | None = None
+    employer_or_project: str | None = None
+    role: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
     status_at_selection: Literal["confirmed"] = "confirmed"
 
 

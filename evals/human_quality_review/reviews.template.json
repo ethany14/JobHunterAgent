@@ -1,0 +1,12 @@
+[
+  {
+    "case_id": "real-role-01",
+    "reviewer_id": "reviewer-01",
+    "factual_accuracy": 1,
+    "non_duplication": 1,
+    "application_readiness": 1,
+    "failure_reasons": ["other"],
+    "notes": "Replace with specific review notes.",
+    "regression_test": "tests/test_file.py::test_regression_name"
+  }
+]

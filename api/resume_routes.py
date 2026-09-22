@@ -5,6 +5,7 @@ from __future__ import annotations
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
+from threading import Lock
 from urllib.parse import unquote
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
@@ -26,11 +27,24 @@ from api.resume_schemas import (
 )
 from api.session_dependencies import SessionRuntime, get_session_runtime
 from api.services.workspace_service import WorkspaceAnalysisService
+from api.services.fit_analysis_service import FitAnalysisService
 from api.workspace_schemas import AnalyzeApplicationResponse, PublicApplication, PublicApplicationArtifact
 
 router = APIRouter(prefix="/api", tags=["resumes"])
 MAX_PDF_BYTES = 10 * 1024 * 1024
 MAX_RESUME_TEXT = 50_000
+_fit_service_lock = Lock()
+
+
+def get_fit_analysis_service(request: Request) -> FitAnalysisService:
+    service = getattr(request.app.state, "fit_analysis_service", None)
+    if service is None:
+        with _fit_service_lock:
+            service = getattr(request.app.state, "fit_analysis_service", None)
+            if service is None:
+                service = FitAnalysisService()
+                request.app.state.fit_analysis_service = service
+    return service
 
 
 def _resources(runtime: SessionRuntime) -> tuple[ResumeDocumentRepository, str]:
@@ -135,21 +149,26 @@ def _requirement_label(item: dict) -> str:
 async def quick_analysis(
     payload: QuickAnalysisRequest,
     runtime: SessionRuntime = Depends(get_session_runtime),
-    run_service=Depends(get_run_service),
+    fit_service: FitAnalysisService = Depends(get_fit_analysis_service),
 ) -> QuickAnalysisResponse:
     repository, owner_id = _resources(runtime)
     try:
         resume = repository.require(owner_id, payload.resume_id) if payload.resume_id else repository.default(owner_id)
     except ResumeNotFoundError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    created = await run_service.create_run(CreateRunRequest(
-        resume_text=resume.extracted_text,
-        job_description=payload.job_description,
-    ))
-    result = await run_service.get_run(created.run_id)
-    if result.status == "failed" or not result.result:
+    try:
+        result = await fit_service.analyze(
+            resume_text=resume.extracted_text,
+            job_description=payload.job_description,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="The agent could not analyze this job.",
+        ) from exc
+    skill_match = result.skill_match.model_dump(mode="json")
+    if not skill_match:
         raise HTTPException(status_code=502, detail="The agent could not analyze this job.")
-    skill_match = result.result.get("skill_match") or {}
     matches = skill_match.get("matches") or []
     grouped = {name: [item for item in matches if item.get("match_status") == name]
                for name in ("matched", "partial", "missing", "needs_confirmation")}
@@ -171,7 +190,8 @@ async def quick_analysis(
     if not suggestions:
         suggestions.append("Keep the strongest matched requirements prominent and preserve factual evidence links.")
     return QuickAnalysisResponse(
-        run_id=result.run_id, status=result.status, resume_id=resume.resume_id,
+        analysis_id=result.analysis_id, status="completed", resume_id=resume.resume_id,
+        model_calls=result.model_calls, latency_seconds=result.latency_seconds,
         match_score=float(skill_match.get("overall_score") or 0),
         matched_requirements=grouped["matched"], partial_requirements=grouped["partial"],
         missing_requirements=missing, confirmation_requirements=confirmations,

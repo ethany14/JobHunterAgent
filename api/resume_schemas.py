@@ -1,7 +1,7 @@
 """Public contracts for PDF resumes and lightweight job analysis."""
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -38,9 +38,11 @@ class AnalyzeSavedApplicationRequest(ResumeApiModel):
 
 
 class QuickAnalysisResponse(ResumeApiModel):
-    run_id: str
-    status: str
+    analysis_id: str
+    status: Literal["completed"]
     resume_id: str
+    model_calls: int = Field(ge=0)
+    latency_seconds: float = Field(ge=0)
     match_score: float
     matched_requirements: list[dict[str, Any]]
     partial_requirements: list[dict[str, Any]]
