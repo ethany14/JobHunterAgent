@@ -225,9 +225,12 @@ flowchart TB
     API --> RUNS[Custom resume Agent Loop]
     API --> SESSIONS[Session Coordinator]
     API --> WORKSPACE[Job Workspace]
+    API --> MULTI[Multi-Agent task runtime]
 
     SESSIONS --> CONTEXT[Context snapshots]
     SESSIONS --> TOOLS[Tool Runtime]
+    MULTI --> SESSIONS
+    MULTI --> WORKSPACE
     CONTEXT --> MEMORY[Confirmed Memory]
     CONTEXT --> SKILLS[Approved Skills]
     TOOLS --> BUILTIN[Built-in tools]
@@ -237,6 +240,7 @@ flowchart TB
 
     RUNS --> DB[(SQLite via Alembic)]
     SESSIONS --> DB
+    MULTI --> DB
     WORKSPACE --> DB
     CONTEXT --> DB
     TOOLS --> DB
@@ -280,6 +284,64 @@ flowchart TD
 The context snapshot fixes the exact policy, Skill versions, Memory versions,
 conversation groups, evidence sources, and effective tools used for a model call.
 Recovery reuses that snapshot instead of silently selecting newer context.
+
+### Multi-Agent application workflow
+
+The Multi-Agent runtime coordinates a server-defined application plan. It is an
+opt-in orchestration path behind application preparation, not a separate chat persona
+or a user-selectable execution-mode switch. The model cannot invent child agents,
+dependencies, permissions, or budgets.
+
+```mermaid
+flowchart TD
+    A[Source preparation] --> B[Candidate analysis]
+    A --> C[Job analysis]
+    B --> D[Requirement matching]
+    C --> D
+    C --> E[Analysis projection]
+    D --> E
+    D --> F[Evidence-gap classification]
+    E --> F
+
+    F --> G{Clarification requested?}
+    G -->|Yes| H[Evidence interview]
+    G -->|No| I[Freeze generation evidence]
+    H --> I
+
+    I --> J[Artifact writers run independently]
+    C --> J
+    D --> J
+    J --> K[Verify each artifact]
+    K -->|Unsupported claims and revisions remain| L[Revise that artifact]
+    L --> K
+    K -->|Verified or bounded final result| M[Assemble Application Pack]
+    M --> N[Human review]
+```
+
+The runtime provides:
+
+- **Deterministic planning.** Python builds and validates the DAG before any worker
+  runs. Unknown task types, cycles, invalid dependencies, excessive depth, or budgets
+  outside server limits are rejected.
+- **Isolated child sessions.** Each task receives declared input artifacts and a
+  scoped context. It does not inherit sibling conversations, arbitrary tools, or new
+  permissions.
+- **Dependency-aware scheduling.** `requires_success` blocks downstream work after a
+  failed prerequisite; `requires_completion` lets pack assembly account for optional
+  artifacts that ended without succeeding.
+- **Bounded parallelism.** Ready tasks are claimed with leases and heartbeats, while
+  the plan limits total tasks, depth, concurrent work, model calls, tool calls,
+  tokens, cost, and deadlines.
+- **Durable artifacts.** Analyses, evidence snapshots, drafts, verification reports,
+  revisions, and the final pack are versioned outputs rather than hidden agent-to-agent
+  messages.
+- **Safe recovery.** Expired task claims can be recovered within attempt limits;
+  cancellation, timeout, approval, and required user input remain explicit states.
+
+The main application DAG currently prepares a tailored resume, cover letter, and up
+to three application answers. Restricted questions remain manual. A failed required
+artifact blocks final assembly, while optional artifacts are recorded according to
+their terminal outcome. The resulting pack still requires human review.
 
 Important boundaries:
 
@@ -340,6 +402,7 @@ The complete contract is available from `/docs`. Main endpoint groups are:
 | `/api/evidence` | Governed Career Evidence |
 | `/memories`, `/skills` | Memory and Skill lifecycle management |
 | `/api/interviews`, `/api/mock-interviews` | Evidence discovery and interview practice |
+| `/api/applications/{id}/multi-agent-runs`, `/api/multi-agent-runs` | Governed application task plans, progress, cancellation, and resumption |
 | `/api/assistant-sessions` | Safe conversation timeline and registered actions |
 
 Client-facing errors are normalized. API responses do not expose API keys, complete
