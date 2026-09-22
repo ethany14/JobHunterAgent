@@ -28,12 +28,43 @@ the same local service at `http://localhost:8000`.
 - Supports resumable tool calls, approvals, cancellation, deadlines, and recovery.
 - Keeps Memory and Skills governed, versioned, reviewable, and separate from resume evidence.
 
-The primary resume workflow is:
+### Resume agent loop
 
-```text
-Analyze resume -> Analyze job -> Match requirements -> Write
-       -> Verify -> Revise when needed -> Human review
+The active custom backend persists state and an audit event after every completed
+step. Human review is a durable pause rather than a long-running in-memory request.
+
+```mermaid
+flowchart TD
+    A[Create run] --> B[Validate input]
+    B --> C[Analyze resume]
+    C --> D[Validate quoted evidence]
+    D --> E[Analyze job]
+    E --> F[Match requirement groups]
+    F --> G[Write tailored resume]
+    G --> H[Verify every generated claim]
+
+    H -->|Passed| I[Review verified draft]
+    H -->|Failed and revisions remain| J[Revise from verifier feedback]
+    J -->|Persist new resume and clear old verification| H
+    H -->|Revision limit reached| M[Review unverified draft]
+
+    I -->|Approve| K[Approved]
+    I -->|Reject with feedback| J
+    M -->|Reject with feedback| J
+
+    B -. Safe failure .-> L[Failed]
+    C -. Safe failure .-> L
+    D -. Safe failure .-> L
+    E -. Safe failure .-> L
+    F -. Safe failure .-> L
+    G -. Safe failure .-> L
+    H -. Safe failure .-> L
+    J -. Safe failure .-> L
 ```
+
+Only `awaiting_review` and `approved` states publish a stable public result. During
+revision, the latest complete result may remain stored for audit purposes, while the
+run status shows that it is no longer the current completed version.
 
 ## Quick start
 
@@ -186,20 +217,69 @@ process restart; neither may silently confirm new career evidence.
 
 ## Architecture
 
-```text
-Web workspace                 Chrome Side Panel
-      |                              |
-      +----------- FastAPI ----------+
-                       |
-          Custom Agent / Session Coordinator
-             |          |          |
-          Tool Runtime  Context    Job Workspace
-             |          |          |
-          MCP adapter   Memory     Evidence / Packs
-                       Skills
-                          |
-                    SQLite + Alembic
+```mermaid
+flowchart TB
+    WEB[Web workspace] --> API[FastAPI]
+    EXT[Chrome Side Panel] --> API
+
+    API --> RUNS[Custom resume Agent Loop]
+    API --> SESSIONS[Session Coordinator]
+    API --> WORKSPACE[Job Workspace]
+
+    SESSIONS --> CONTEXT[Context snapshots]
+    SESSIONS --> TOOLS[Tool Runtime]
+    CONTEXT --> MEMORY[Confirmed Memory]
+    CONTEXT --> SKILLS[Approved Skills]
+    TOOLS --> BUILTIN[Built-in tools]
+    TOOLS --> MCP[Governed MCP stdio tools]
+    WORKSPACE --> EVIDENCE[Career Evidence]
+    WORKSPACE --> PACKS[Application Packs]
+
+    RUNS --> DB[(SQLite via Alembic)]
+    SESSIONS --> DB
+    WORKSPACE --> DB
+    CONTEXT --> DB
+    TOOLS --> DB
 ```
+
+### Copilot and tool loop
+
+Each model decision and each individual tool call has its own persistence boundary.
+The coordinator never keeps a database transaction open while waiting for a provider
+or tool.
+
+```mermaid
+flowchart TD
+    A[Persist user message] --> B[Claim session execution]
+    B --> C[Prepare and persist context snapshot]
+    C --> D[Invoke model once]
+    D --> E[Persist assistant response]
+    E --> G[Mark snapshot used]
+    G --> F{Tool calls requested?}
+
+    F -->|No| H[Return response and release claim]
+
+    F -->|Yes| I[Persist ordered pending calls]
+    I --> J[Process first pending call]
+    J --> K{Approval required?}
+    K -->|Yes| L[Persist awaiting approval and release claim]
+    L -->|Approved| M[Persist approval]
+    L -->|Rejected| N[Persist safe rejection tool message]
+    M --> O[Execute through persistent ToolExecutor]
+    K -->|No| O
+    O --> P[Persist tool result message]
+    N --> Q{More pending calls?}
+    P --> Q
+    Q -->|Yes| J
+    Q -->|No| C
+
+    D -. Cancellation or deadline .-> R[Discard unpersisted response safely]
+    O -. Uncertain external outcome .-> S[Await manual recovery]
+```
+
+The context snapshot fixes the exact policy, Skill versions, Memory versions,
+conversation groups, evidence sources, and effective tools used for a model call.
+Recovery reuses that snapshot instead of silently selecting newer context.
 
 Important boundaries:
 
