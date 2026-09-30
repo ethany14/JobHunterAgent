@@ -24,8 +24,10 @@ from agent_runtime.application_pack.types import (
 )
 from agent_runtime.application_pack.verifier import ArtifactVerifier
 from agent_runtime.evidence.repository import CareerEvidenceRepository
+from agent_runtime.evidence.types import EvidenceLinkType, EvidenceSourceType
 from agent_runtime.memory.repository import MemoryRepository
 from agent_runtime.memory.types import MemoryScope, MemorySensitivity, MemoryType
+from agent_runtime.resumes.repository import ResumeDocumentRepository, ResumeNotFoundError
 from agent_runtime.workspace.repository import JobWorkspaceRepository
 from agent_runtime.workspace.types import ArtifactType
 from custom_agent.handlers import JobAgentStepHandler
@@ -98,12 +100,25 @@ def resume_analysis_from_snapshot(
             entry_type = "project"
         elif category == "skill" or "skill" in section:
             entry_type = "skills"
+        elif (
+            item.source_type != EvidenceSourceType.RESUME.value
+            and not any((item.employer_or_project, item.role, item.start_date, item.end_date))
+        ):
+            entry_type = "other"
         else:
             entry_type = "experience"
-        heading = item.role or item.source_section or item.employer_or_project or "Confirmed evidence"
-        organization = item.employer_or_project if entry_type == "experience" else None
-        if entry_type == "project" and item.employer_or_project:
-            heading = item.employer_or_project
+        if entry_type == "experience":
+            heading = item.role or item.employer_or_project or item.source_section or "Experience"
+            organization = item.employer_or_project
+        elif entry_type in {"project", "education"}:
+            heading = item.employer_or_project or item.role or item.source_section or entry_type.title()
+            organization = item.role
+        elif entry_type == "skills":
+            heading = item.employer_or_project or item.source_section or "Skills"
+            organization = None
+        else:
+            heading = item.source_section or "Confirmed Career Evidence"
+            organization = None
         key = (
             entry_type,
             heading,
@@ -196,12 +211,32 @@ class SharedPackModel:
 class ApplicationPackWorkflow:
     def __init__(self, *, packs: PackRepository, workspace: JobWorkspaceRepository,
                  evidence: CareerEvidenceRepository, memories: MemoryRepository,
+                 resumes: ResumeDocumentRepository | None = None,
+                 owner_id: str = "local-user",
                  model: PackModelClient | None = None,
                  verifier: ArtifactVerifier | None = None) -> None:
         self._packs, self._workspace, self._evidence, self._memories = packs, workspace, evidence, memories
+        self._resumes, self._owner_id = resumes, owner_id
         self._model = model or SharedPackModel()
         self._verifier = verifier or ArtifactVerifier()
         self._selection = EvidenceSelectionPolicy()
+
+    def _resume_header_lines(self) -> list[str]:
+        if self._resumes is None:
+            return []
+        try:
+            text = self._resumes.default(self._owner_id).extracted_text
+        except ResumeNotFoundError:
+            return []
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        section_names = {
+            "summary", "professional summary", "education", "experience",
+            "work experience", "selected projects", "projects", "skills",
+            "technical skills", "certifications",
+        }
+        boundary = next((index for index, line in enumerate(lines)
+                         if normalize_text(line) in section_names), None)
+        return lines[:boundary] if boundary is not None else []
 
     def _source(self, application_id: str) -> tuple[JobAnalysis, SkillMatch]:
         application = self._workspace.get_application(application_id)
@@ -240,19 +275,47 @@ class ApplicationPackWorkflow:
     def _current_snapshot(self, application_id: str, *, pack_id: str | None = None) -> GenerationEvidenceSnapshot:
         app = self._workspace.get_application(application_id)
         job, _ = self._source(application_id)
+        evidence = self._evidence.list(status="confirmed", limit=500)
+        # Once a structured ResumeAnalysis exists, it is the authoritative resume
+        # import. Older run imports lack source-entry metadata and would otherwise
+        # recreate generic EXPERIENCE/PROJECTS entries alongside the real entries.
+        has_structured_resume = any(
+            artifact.artifact_type == ArtifactType.RESUME_ANALYSIS
+            for artifact in self._workspace.list_artifacts(application_id)
+        )
+        structured_creators = {
+            "fit_analysis",
+            "fit_analysis_import",
+            "pack_resume_import",
+        }
+        has_structured_evidence = any(
+            item.current.source_type == EvidenceSourceType.RESUME
+            and item.current.created_by in structured_creators
+            for item in evidence
+        )
+        if has_structured_resume and has_structured_evidence:
+            evidence = [
+                item for item in evidence
+                if item.current.source_type != EvidenceSourceType.RESUME
+                or item.current.created_by in structured_creators
+            ]
         selected = self._selection.select(
-            evidence=self._evidence.list(status="confirmed", limit=500),
-            links=self._evidence.list_for_application(application_id), job=job)
+            evidence=evidence,
+            links=self._evidence.list_for_application(application_id), job=job,
+            token_budget=4_000)
         if not selected:
             raise PackValidationError("Confirm relevant resume or Career Evidence before generating a Pack.")
         preferences = self._preferences()
         model_configuration = self._model_configuration()
+        resume_header_lines = self._resume_header_lines()
         digest = evidence_set_hash(selected, job_snapshot_id=app.current_snapshot_id,
                                    preferences=preferences, prompt_version=PACK_PROMPT_VERSION,
-                                   model_configuration=model_configuration)
+                                   model_configuration=model_configuration,
+                                   resume_header_lines=resume_header_lines)
         return GenerationEvidenceSnapshot(generation_snapshot_id=str(uuid4()),
             pack_id=pack_id or str(uuid4()), application_id=application_id,
             job_snapshot_id=app.current_snapshot_id, items=selected,
+            resume_header_lines=resume_header_lines,
             preference_versions=preferences, prompt_version=PACK_PROMPT_VERSION,
             model_config_id=str(model_configuration["model_id"]),
             model_configuration=model_configuration, effective_tools=[],
@@ -267,8 +330,53 @@ class ApplicationPackWorkflow:
         if match is not None and match.source_run_id:
             source = self._packs.resume_source(application_id, match.source_run_id)
             if source is not None:
-                self._evidence.import_resume_evidence(source[1], source[0],
-                    source_run_id=match.source_run_id)
+                imported = self._evidence.import_resume_evidence(
+                    source[1], source[0], source_run_id=match.source_run_id
+                )
+                linked = {
+                    item.evidence_id
+                    for item in self._evidence.list_for_application(application_id)
+                }
+                for item in imported:
+                    if item.evidence_id in linked:
+                        continue
+                    self._evidence.link_to_application(
+                        item.evidence_id,
+                        application_id,
+                        expected_version=item.version,
+                        link_type=EvidenceLinkType.RELATED,
+                        created_by="pack_run_import",
+                    )
+        artifacts = self._workspace.list_artifacts(application_id)
+        resume_artifact = next((
+            item for item in reversed(artifacts)
+            if item.artifact_type == ArtifactType.RESUME_ANALYSIS
+        ), None)
+        if resume_artifact is not None and self._resumes is not None:
+            try:
+                resume_document = self._resumes.default(self._owner_id)
+            except ResumeNotFoundError:
+                resume_document = None
+            if resume_document is not None:
+                imported = self._evidence.import_resume_evidence(
+                    ResumeAnalysis.model_validate(resume_artifact.content),
+                    resume_document.extracted_text,
+                    created_by="pack_resume_import",
+                )
+                linked = {
+                    item.evidence_id
+                    for item in self._evidence.list_for_application(application_id)
+                }
+                for item in imported:
+                    if item.evidence_id in linked:
+                        continue
+                    self._evidence.link_to_application(
+                        item.evidence_id,
+                        application_id,
+                        expected_version=item.version,
+                        link_type=EvidenceLinkType.RELATED,
+                        created_by="pack_resume_import",
+                    )
         snapshot = self._current_snapshot(application_id)
         return self._packs.create(snapshot, idempotency_key=idempotency_key,
                                   expected_application_version=expected_version)
@@ -306,7 +414,11 @@ class ApplicationPackWorkflow:
         snap = self._packs.snapshot(pack_id)
         job, match = self._source(snap.application_id)
         resume_analysis = resume_analysis_from_snapshot(snap)
-        source_text = "\n".join(e.exact_text for e in resume_analysis.evidence)
+        source_text = "\n".join([
+            *snap.resume_header_lines,
+            *( ["EXPERIENCE"] if snap.resume_header_lines else [] ),
+            *(e.exact_text for e in resume_analysis.evidence),
+        ])
         verification = None
         if feedback is not None:
             verification = VerificationResult(passed=False,

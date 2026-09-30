@@ -169,6 +169,7 @@ class GenerationEvidenceSnapshot(PackModel):
     application_id: str
     job_snapshot_id: str
     items: list[EvidenceSnapshotItem]
+    resume_header_lines: list[str] = Field(default_factory=list)
     preference_versions: list[dict]
     prompt_version: str
     model_config_id: str

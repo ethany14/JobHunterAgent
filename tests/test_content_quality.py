@@ -18,7 +18,8 @@ from agent_runtime.memory.proposals import (
 from job_agent.domain import normalize_resume_analysis, normalize_tailored_resume_claim_ids
 from job_agent.quality import (
     claim_similarity, clean_tailored_resume, deduplicate_claims,
-    find_duplicate_claims, quality_result, validate_resume_structure,
+    find_duplicate_claims, normalize_generated_resume_metadata, quality_result,
+    validate_resume_structure,
 )
 from job_agent.rendering import render_tailored_resume, render_tailored_resume_markdown
 from job_agent.schemas import (
@@ -138,6 +139,60 @@ def test_strict_validation_rejects_invented_entry_metadata_and_header():
         source_resume_text="Alex\nDeveloper\nAcme\nBuilt Python APIs for internal reporting.")
     assert {item.code for item in issues} >= {
         "unsupported_header_metadata", "source_metadata_mismatch"}
+
+
+def test_generated_metadata_is_restored_only_for_one_valid_source():
+    data = structured_resume().model_dump(mode="python")
+    data["header"] = {
+        "name": "Invented Candidate",
+        "contact_lines": ["invented@example.com"],
+    }
+    entry = data["sections"][1]["entries"][0]
+    entry.update({
+        "entry_id": "model-entry",
+        "heading": "Invented Role",
+        "subheading": "Invented Company",
+        "start_date": "1900",
+        "end_date": "2099",
+    })
+    normalized = normalize_generated_resume_metadata(
+        TailoredResume.model_validate(data),
+        sources(),
+        source_resume_text="Developer\nAcme\n2022\n2024\nBuilt Python APIs.",
+    )
+    restored = normalized.sections[1].entries[0]
+    assert restored.entry_id == "SRC-work"
+    assert restored.heading == "Developer"
+    assert restored.subheading == "Acme"
+    assert restored.start_date == "2022"
+    assert restored.end_date == "2024"
+    assert normalized.header.name is None
+    assert normalized.header.contact_lines == []
+    assert quality_result(validate_resume_structure(
+        normalized,
+        sources(),
+        known_evidence_ids={"EXP-1", "EXP-2", "EXP-3"},
+        source_resume_text="Developer\nAcme\n2022\n2024\nBuilt Python APIs.",
+    )).passed
+
+
+def test_generated_metadata_does_not_repair_cross_source_claims():
+    data = structured_resume().model_dump(mode="python")
+    data["sections"][1]["entries"][0]["bullets"].append(
+        claim("Forecasting project.", "mixed-source", "SRC-project", "EXP-2")
+        .model_dump(mode="python")
+    )
+    normalized = normalize_generated_resume_metadata(
+        TailoredResume.model_validate(data),
+        sources(),
+        source_resume_text="Built Python APIs. Forecasting project.",
+    )
+    issues = validate_resume_structure(
+        normalized,
+        sources(),
+        known_evidence_ids={"EXP-1", "EXP-2", "EXP-3"},
+    )
+    assert "entry_source_mismatch" in {issue.code for issue in issues}
 
 
 def test_source_and_claim_ids_ignore_temporary_model_ids():

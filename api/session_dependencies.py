@@ -263,7 +263,8 @@ def create_session_runtime(
     )
     packs = PackRepository(database.session_factory)
     pack_workflow = ApplicationPackWorkflow(
-        packs=packs, workspace=workspace, evidence=evidence, memories=memories)
+        packs=packs, workspace=workspace, evidence=evidence, memories=memories,
+        resumes=resumes, owner_id=owner_resolver.resolve().owner_id)
     mock_interviewer = MockInterviewController(
         interviews=MockInterviewRepository(database.session_factory),
         sessions=sessions, workspace=workspace, packs=packs, evidence=evidence,

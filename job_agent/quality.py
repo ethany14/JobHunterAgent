@@ -1,14 +1,15 @@
 ﻿"""Deterministic resume content-quality validation and cleanup."""
 from __future__ import annotations
 
+import hashlib
 import re
 from collections.abc import Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from job_agent.schemas import (
-    ResumeQualityIssue, ResumeQualityResult, ResumeSection, ResumeSourceEntry,
-    SupportedClaim, TailoredResume,
+    ResumeEntry, ResumeHeader, ResumeQualityIssue, ResumeQualityResult,
+    ResumeSection, ResumeSourceEntry, SupportedClaim, TailoredResume,
 )
 
 _BULLET_PREFIX = re.compile(r"^\s*(?:[-*•◦+|]|\d+[.)])\s*")
@@ -143,6 +144,175 @@ def clean_tailored_resume(
         "quality_adjustments": adjustments,
     })
     return cleaned, duplicates
+
+
+def normalize_generated_resume_metadata(
+    resume: TailoredResume,
+    source_entries: Sequence[ResumeSourceEntry],
+    *,
+    source_resume_text: str,
+) -> TailoredResume:
+    """Restore display metadata from verified sources without repairing claims."""
+    sources = {entry.source_entry_id: entry for entry in source_entries}
+    allowed_types = {
+        "experience": {"experience"},
+        "projects": {"project"},
+        "education": {"education"},
+    }
+    sections: list[ResumeSection] = []
+    adjustments = list(resume.quality_adjustments)
+    for section in resume.sections:
+        entries: list[ResumeEntry] = []
+        for entry in section.entries:
+            normalized = entry
+            if section.section_type in allowed_types and entry.bullets:
+                source_ids = {claim.source_entry_id for claim in entry.bullets}
+                source = sources.get(next(iter(source_ids))) if len(source_ids) == 1 else None
+                if source is not None and source.entry_type in allowed_types[section.section_type]:
+                    expected = {
+                        "entry_id": source.source_entry_id,
+                        "heading": source.heading,
+                        "subheading": source.organization,
+                        "location": source.location,
+                        "start_date": source.start_date,
+                        "end_date": source.end_date,
+                    }
+                    actual = entry.model_dump(mode="python", exclude={"bullets"})
+                    if any(actual.get(key) != value for key, value in expected.items()):
+                        adjustments.append(
+                            f"Restored {section.section_type} metadata from source entry "
+                            f"{source.source_entry_id}."
+                        )
+                    normalized = ResumeEntry.model_validate({
+                        **entry.model_dump(mode="python"),
+                        **expected,
+                    })
+            entries.append(normalized)
+        sections.append(ResumeSection.model_validate({
+            **section.model_dump(mode="python"),
+            "entries": [item.model_dump(mode="python") for item in entries],
+        }))
+
+    normalized_source = normalize_claim_text(source_resume_text)
+    lines = [line.strip() for line in source_resume_text.splitlines() if line.strip()]
+    section_labels = {
+        "summary", "professional summary", "education", "experience",
+        "work experience", "selected projects", "projects", "skills",
+        "technical skills", "certifications",
+    }
+    first_section = next(
+        (index for index, line in enumerate(lines)
+         if normalize_claim_text(line) in section_labels),
+        None,
+    )
+    source_name = None
+    source_contacts: list[str] = []
+    if first_section is not None and first_section > 0:
+        header_lines = lines[:first_section]
+        candidate = header_lines[0]
+        if len(candidate) <= 120 and "@" not in candidate and "|" not in candidate:
+            source_name = candidate
+            source_contacts = header_lines[1:]
+
+    name = resume.header.name or source_name
+    if name and normalize_claim_text(name) not in normalized_source:
+        name = None
+        adjustments.append("Removed unsupported resume header name.")
+    contact_lines = [
+        value for value in resume.header.contact_lines
+        if normalize_claim_text(value) in normalized_source
+    ]
+    if not contact_lines:
+        contact_lines = source_contacts
+    if contact_lines != resume.header.contact_lines:
+        adjustments.append("Restored resume header metadata from the source resume.")
+    return TailoredResume.model_validate({
+        **resume.model_dump(mode="python"),
+        "header": ResumeHeader(name=name, contact_lines=contact_lines).model_dump(
+            mode="python"
+        ),
+        "sections": [section.model_dump(mode="python") for section in sections],
+        "quality_adjustments": list(dict.fromkeys(adjustments)),
+    })
+
+
+def ensure_foundational_resume_sections(
+    resume: TailoredResume,
+    source_entries: Sequence[ResumeSourceEntry],
+    evidence_by_id: dict[str, str],
+) -> TailoredResume:
+    """Retain source-backed Education and Skills even when the writer omits them."""
+    sections = list(resume.sections)
+    by_type = {section.section_type: section for section in sections}
+    adjustments = list(resume.quality_adjustments)
+    for source_type, section_type, title in (
+        ("education", "education", "Education"),
+        ("skills", "skills", "Skills"),
+    ):
+        section = by_type.get(section_type)
+        entries = list(section.entries) if section is not None else []
+        for source in source_entries:
+            if source.entry_type != source_type:
+                continue
+            existing_index = next((index for index, entry in enumerate(entries)
+                                   if entry.entry_id == source.source_entry_id), None)
+            existing = entries[existing_index] if existing_index is not None else None
+            cited = {evidence_id for claim in (existing.bullets if existing else [])
+                     for evidence_id in claim.evidence_ids}
+            claims = []
+            for evidence_id in source.evidence_ids:
+                if evidence_id in cited:
+                    continue
+                text = evidence_by_id.get(evidence_id)
+                if not text:
+                    continue
+                digest = hashlib.sha256(
+                    f"{source.source_entry_id}|{evidence_id}|{text}".encode()
+                ).hexdigest()[:12]
+                claims.append(SupportedClaim(
+                    claim_id=f"CLM-{digest}",
+                    text=text,
+                    evidence_ids=[evidence_id],
+                    source_entry_id=source.source_entry_id,
+                    target_requirement_ids=[],
+                ))
+            if not claims:
+                continue
+            restored = ResumeEntry(
+                entry_id=source.source_entry_id,
+                heading=source.heading,
+                subheading=source.organization,
+                location=source.location,
+                start_date=source.start_date,
+                end_date=source.end_date,
+                bullets=[*(existing.bullets if existing else []), *claims],
+            )
+            if existing_index is None:
+                entries.append(restored)
+            else:
+                entries[existing_index] = restored
+            adjustments.append(
+                f"Restored source-backed {section_type} entry {source.source_entry_id}."
+            )
+        if entries:
+            replacement = ResumeSection(
+                section_type=section_type,
+                title=section.title if section is not None else title,
+                entries=entries,
+            )
+            if section is None:
+                sections.append(replacement)
+            else:
+                sections[sections.index(section)] = replacement
+            by_type[section_type] = replacement
+
+    order = {"summary": 0, "education": 1, "experience": 2, "projects": 3, "skills": 4}
+    sections.sort(key=lambda item: order[item.section_type])
+    return TailoredResume.model_validate({
+        **resume.model_dump(mode="python"),
+        "sections": [item.model_dump(mode="python") for item in sections],
+        "quality_adjustments": list(dict.fromkeys(adjustments)),
+    })
 
 
 def validate_resume_structure(

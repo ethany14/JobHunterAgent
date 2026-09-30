@@ -13,7 +13,6 @@ from api.workspace_schemas import (
     SaveWorkspaceRequest, SaveWorkspaceResponse, TransitionApplicationRequest,
     UpdateApplicationRequest,
 )
-from api.routes.runs import get_run_service
 from api.services.workspace_service import WorkspaceAnalysisService
 from agent_runtime.workspace.types import ArtifactType
 from agent_runtime.feedback.types import FeedbackSourceType
@@ -110,9 +109,10 @@ def get_application(application_id: str, repository: JobWorkspaceRepository = De
 @router.post("/applications/{application_id}/analyze", response_model=AnalyzeApplicationResponse)
 async def analyze_application(application_id: str, request: AnalyzeApplicationRequest,
                               repository: JobWorkspaceRepository = Depends(get_workspace_repository),
-                              run_service=Depends(get_run_service)):
+                              runtime: SessionRuntime = Depends(get_session_runtime)):
     application, run_id, run_status, artifacts = await WorkspaceAnalysisService(
-        repository, run_service).analyze(application_id, snapshot_id=request.snapshot_id,
+        repository, evidence=runtime.evidence).analyze(
+        application_id, snapshot_id=request.snapshot_id,
         resume_text=request.resume_text, expected_version=request.expected_version)
     return AnalyzeApplicationResponse(application=_application(application), run_id=run_id,
         run_status=run_status, artifacts=[PublicApplicationArtifact.model_validate(

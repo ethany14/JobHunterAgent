@@ -323,15 +323,57 @@ class CareerEvidenceRepository:
                                *, source_run_id: str | None = None,
                                created_by: str = "resume_import") -> list[CareerEvidence]:
         source_ref = hashlib.sha256(normalize_text(original_resume_text).encode()).hexdigest()
+        sources = {item.source_entry_id: item for item in analysis.source_entries}
+        source_by_evidence = {
+            evidence_id: source
+            for source in analysis.source_entries
+            for evidence_id in source.evidence_ids
+        }
+        category_by_type = {
+            "education": EvidenceCategory.EDUCATION,
+            "project": EvidenceCategory.PROJECT,
+            "skills": EvidenceCategory.SKILL,
+            "experience": EvidenceCategory.EXPERIENCE,
+            "summary": EvidenceCategory.EXPERIENCE,
+            "other": EvidenceCategory.EXPERIENCE,
+        }
         result = []
         for item in analysis.evidence:
-            fields = self._validated_fields({
-                "category": EvidenceCategory.EXPERIENCE,
-                "claim_text": item.exact_text, "source_type": EvidenceSourceType.RESUME,
-                "source_reference": source_ref, "exact_quote": item.exact_text,
+            source = sources.get(item.source_entry_id or "") or source_by_evidence.get(
+                item.evidence_id
+            )
+            category = category_by_type.get(
+                source.entry_type if source is not None else "other",
+                EvidenceCategory.EXPERIENCE,
+            )
+            employer_or_project = None
+            role = None
+            start_date = None
+            end_date = None
+            if source is not None:
+                start_date, end_date = source.start_date, source.end_date
+                if source.entry_type == "experience":
+                    employer_or_project, role = source.organization, source.heading
+                elif source.entry_type in {"project", "education"}:
+                    employer_or_project, role = source.heading, source.organization
+                elif source.entry_type == "skills":
+                    employer_or_project = source.heading
+            details = {
+                "category": category,
+                "claim_text": item.exact_text,
+                "source_type": EvidenceSourceType.RESUME,
+                "source_reference": source_ref,
+                "exact_quote": item.exact_text,
                 "source_section": item.source_section,
+                "employer_or_project": employer_or_project,
+                "role": role,
+                "start_date": start_date,
+                "end_date": end_date,
                 "external_evidence_id": item.evidence_id,
                 "source_run_id": source_run_id,
+            }
+            fields = self._validated_fields({
+                **details,
             }, original_resume_text)
             digest = _content_hash(fields)
             with self._sessions() as session:
@@ -345,10 +387,13 @@ class CareerEvidenceRepository:
                     result.append(self._item(session, self._require(session, existing.evidence_id)))
                     continue
             created = self.create_candidate(
-                category=EvidenceCategory.EXPERIENCE, claim_text=item.exact_text,
+                category=category, claim_text=item.exact_text,
                 source_type=EvidenceSourceType.RESUME, original_resume_text=original_resume_text,
                 source_reference=source_ref, exact_quote=item.exact_text,
-                source_section=item.source_section, external_evidence_id=item.evidence_id,
+                source_section=item.source_section,
+                employer_or_project=employer_or_project, role=role,
+                start_date=start_date, end_date=end_date,
+                external_evidence_id=item.evidence_id,
                 source_run_id=source_run_id, created_by=created_by,
             )
             with self._sessions.begin() as session:

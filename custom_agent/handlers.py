@@ -17,7 +17,13 @@ from job_agent.domain import (
     normalize_tailored_resume_claim_ids,
     normalize_text,
 )
-from job_agent.quality import clean_tailored_resume, quality_result, validate_resume_structure
+from job_agent.quality import (
+    clean_tailored_resume,
+    ensure_foundational_resume_sections,
+    normalize_generated_resume_metadata,
+    quality_result,
+    validate_resume_structure,
+)
 from job_agent.model import DEFAULT_ENV_PATH, create_model, invoke_structured
 from job_agent.prompts import (
     JOB_PROMPT,
@@ -156,6 +162,16 @@ class JobAgentStepHandler:
         draft = normalize_tailored_resume_claim_ids(TailoredResume.model_validate(
             self._analyze(TailoredResume, WRITE_RESUME_PROMPT, content)
         ))
+        draft = normalize_generated_resume_metadata(
+            draft,
+            state.resume_analysis.source_entries,
+            source_resume_text=state.resume_text,
+        )
+        draft = ensure_foundational_resume_sections(
+            draft,
+            state.resume_analysis.source_entries,
+            {item.evidence_id: item.exact_text for item in state.resume_analysis.evidence},
+        )
         cleaned, _ = clean_tailored_resume(draft)
         self._validate_generated_resume(cleaned, state)
         return {"tailored_resume": cleaned}
@@ -173,16 +189,12 @@ class JobAgentStepHandler:
             allow_legacy_source_ids=False,
             source_resume_text=state.resume_text,
         )
-        source_safety_codes = {
-            "unknown_source_entry",
-            "legacy_source_entry",
-            "entry_source_mismatch",
-            "invalid_section_membership",
-            "unknown_evidence_id",
-            "claim_without_evidence",
-            "source_metadata_mismatch",
-            "unsupported_header_metadata",
-        }
+        # A generated legacy source ID is a contract violation because it can
+        # bypass source ownership entirely. Other source/metadata mistakes are
+        # kept in the private draft and handled by VERIFY_RESUME so the bounded
+        # revision loop can repair them. They are never projected for review
+        # unless deterministic verification passes.
+        source_safety_codes = {"legacy_source_entry"}
         failures = [
             item for item in issues
             if item.severity == "error" and item.code in source_safety_codes
@@ -264,6 +276,17 @@ class JobAgentStepHandler:
         feedback = list(state.verification.revision_feedback)
         if state.human_feedback:
             feedback.append(state.human_feedback)
+        unsupported_text = {
+            normalize_text(item.claim)
+            for item in state.verification.unsupported_claims
+        }
+        unsupported_summary = any(
+            normalize_text(claim.text) in unsupported_text
+            for section in state.tailored_resume.sections
+            if section.section_type == "summary"
+            for entry in section.entries
+            for claim in entry.bullets
+        )
         content = (
             f"SOURCE OF TRUTH - ORIGINAL RESUME:\n{state.resume_text}\n\n"
             f"GROUNDED EVIDENCE WITH IDS:\n{state.resume_analysis.model_dump_json()}\n\n"
@@ -275,6 +298,29 @@ class JobAgentStepHandler:
         revised = normalize_tailored_resume_claim_ids(TailoredResume.model_validate(
             self._analyze(TailoredResume, REVISE_RESUME_PROMPT, content)
         ))
+        revised = normalize_generated_resume_metadata(
+            revised,
+            state.resume_analysis.source_entries,
+            source_resume_text=state.resume_text,
+        )
+        revised = ensure_foundational_resume_sections(
+            revised,
+            state.resume_analysis.source_entries,
+            {item.evidence_id: item.exact_text for item in state.resume_analysis.evidence},
+        )
+        if unsupported_summary:
+            revised = TailoredResume.model_validate({
+                **revised.model_dump(mode="python"),
+                "sections": [
+                    section.model_dump(mode="python")
+                    for section in revised.sections
+                    if section.section_type != "summary"
+                ],
+                "quality_adjustments": [
+                    *revised.quality_adjustments,
+                    "Removed a summary that remained unsupported after verification.",
+                ],
+            })
         revised, _ = clean_tailored_resume(revised)
         self._validate_generated_resume(revised, state)
         return {

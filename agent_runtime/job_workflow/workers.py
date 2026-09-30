@@ -290,23 +290,27 @@ class EvidenceFreezeWorker:
             raise ValueError("The Job snapshot changed before evidence freezing.")
         selected = self._selection.select(
             evidence=self._evidence.list(status="confirmed", limit=500),
-            links=self._evidence.list_for_application(task.application_id), job=job)
+            links=self._evidence.list_for_application(task.application_id), job=job,
+            token_budget=4_000)
         if not selected:
             raise ValueError("Confirmed, relevant evidence is required before writing.")
         preferences = self._pack_workflow._preferences()
         model_configuration = self._pack_workflow._model_configuration()
+        resume_header_lines = self._pack_workflow._resume_header_lines()
         snapshot = GenerationEvidenceSnapshot(
             generation_snapshot_id=str(uuid5(NAMESPACE_URL, f"generation:{task.task_id}")),
             pack_id=str(uuid5(NAMESPACE_URL, f"pack:{task.root_task_id}")),
             application_id=task.application_id,
             job_snapshot_id=application.current_snapshot_id, items=selected,
+            resume_header_lines=resume_header_lines,
             preference_versions=preferences, prompt_version=PACK_PROMPT_VERSION,
             model_config_id=str(model_configuration["model_id"]),
             model_configuration=model_configuration, effective_tools=[],
             evidence_set_hash=evidence_set_hash(selected,
                 job_snapshot_id=application.current_snapshot_id,
                 preferences=preferences, prompt_version=PACK_PROMPT_VERSION,
-                model_configuration=model_configuration),
+                model_configuration=model_configuration,
+                resume_header_lines=resume_header_lines),
             created_at=self._workspace.current_snapshot(task.application_id).captured_at,
         )
         return AgentTaskResult(summary="Confirmed evidence frozen for this execution.",
@@ -328,8 +332,13 @@ def _writer_state(task: AgentTask, context: ExecutionContext,
             unsupported_claims=[UnsupportedClaim(claim=issue.unsupported_text or "Unverified draft",
                 reason=issue.reason) for issue in report.issues],
             revision_feedback=[issue.revision_instruction for issue in report.issues])
+    source_text = "\n".join([
+        *snapshot.resume_header_lines,
+        *(["EXPERIENCE"] if snapshot.resume_header_lines else []),
+        *(e.exact_text for e in resume_analysis.evidence),
+    ])
     return AgentState(run_id=task.task_id,
-        resume_text="\n".join(e.exact_text for e in resume_analysis.evidence),
+        resume_text=source_text,
         job_description=job.summary, resume_analysis=ResumeAnalysis(
             **resume_analysis.model_dump(mode="python")),
         job_analysis=job, skill_match=match,

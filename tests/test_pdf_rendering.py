@@ -65,3 +65,13 @@ def test_tailored_resume_pdf_is_letter_sized_searchable_and_grounded() -> None:
     assert "Built evidence-grounded application workflows" in text
     assert "evidence-1" not in text
     assert "claim-1" not in text
+
+
+def test_tailored_resume_pdf_does_not_repeat_identical_dates() -> None:
+    resume = sample_resume()
+    project = resume["sections"][2]["entries"][0]
+    project["end_date"] = project["start_date"]
+
+    text = PdfReader(BytesIO(render_tailored_resume_pdf(resume))).pages[0].extract_text()
+
+    assert "2026 - 2026" not in text

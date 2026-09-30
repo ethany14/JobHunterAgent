@@ -31,7 +31,7 @@ from agent_runtime.workspace.types import (
     JobRecord, JobResolution, JobSnapshotRecord, TextArtifactContent, WorkspaceResolution,
 )
 from api.models import Run
-from job_agent.schemas import JobAnalysis, SkillMatch, TailoredResume
+from job_agent.schemas import JobAnalysis, ResumeAnalysis, SkillMatch, TailoredResume
 
 
 def _utc(value: datetime) -> datetime:
@@ -518,6 +518,96 @@ class JobWorkspaceRepository:
                 ).values(event_sequence=sequence))
             session.flush(); return self._artifact(row)
 
+    def project_fit_analysis(
+        self,
+        application_id: str,
+        *,
+        snapshot_id: str,
+        analysis_id: str,
+        resume: ResumeAnalysis,
+        job: JobAnalysis,
+        match: SkillMatch,
+        expected_version: int,
+    ) -> tuple[ApplicationRecord, list[ApplicationArtifactRecord]]:
+        """Atomically publish analysis-only Job and match artifacts."""
+        owner = f"fit-analysis:{analysis_id}"
+        with self._session_factory.begin() as session:
+            app = self._locked_application(session, application_id, expected_version)
+            if app.current_snapshot_id != snapshot_id:
+                raise StaleApplicationError("The Job snapshot changed during analysis.")
+
+            records: list[ApplicationArtifactRow] = []
+            for kind, content in (
+                (ArtifactType.RESUME_ANALYSIS, resume.model_dump(mode="json")),
+                (ArtifactType.JOB_ANALYSIS, job.model_dump(mode="json")),
+                (ArtifactType.MATCH_REPORT, match.model_dump(mode="json")),
+            ):
+                version = (
+                    session.scalar(
+                        select(func.max(ApplicationArtifactRow.version)).where(
+                            ApplicationArtifactRow.application_id == application_id,
+                            ApplicationArtifactRow.artifact_type == kind.value,
+                        )
+                    )
+                    or 0
+                ) + 1
+                row = ApplicationArtifactRow(
+                    artifact_id=str(uuid4()),
+                    application_id=application_id,
+                    workflow_mode="single_custom",
+                    artifact_type=kind.value,
+                    version=version,
+                    status=ArtifactStatus.VERIFIED.value,
+                    content_json=canonical_json(content),
+                    evidence_ids_json="[]",
+                    verification_status="passed",
+                    created_by=owner,
+                    created_at=datetime.now(UTC),
+                )
+                session.add(row)
+                records.append(row)
+
+            now = datetime.now(UTC)
+            sequence = app.event_sequence
+            for row in records:
+                sequence += 1
+                session.add(
+                    self._event(
+                        app,
+                        sequence,
+                        ApplicationEventType.ARTIFACT_CREATED,
+                        {
+                            "artifact_id": row.artifact_id,
+                            "artifact_type": row.artifact_type,
+                            "workflow_mode": "single_custom",
+                        },
+                        now,
+                    )
+                )
+                sequence += 1
+                session.add(
+                    self._event(
+                        app,
+                        sequence,
+                        ApplicationEventType.ARTIFACT_VERIFIED,
+                        {"artifact_id": row.artifact_id},
+                        now,
+                    )
+                )
+            self._conditional_update(
+                session,
+                app,
+                expected_version,
+                {
+                    "version": expected_version + 1,
+                    "event_sequence": sequence,
+                    "updated_at": now,
+                },
+            )
+            session.flush()
+            session.refresh(app)
+            return self._application(app), [self._artifact(row) for row in records]
+
     def project_multi_analysis(self, application_id: str, *, snapshot_id: str,
                                source_task_id: str, job: JobAnalysis,
                                match: SkillMatch) -> tuple[ApplicationArtifactRecord, ApplicationArtifactRecord]:
@@ -620,7 +710,8 @@ class JobWorkspaceRepository:
 
     @staticmethod
     def _validate_artifact(kind: ArtifactType, content: dict[str, Any]) -> dict[str, Any]:
-        schemas = {ArtifactType.JOB_ANALYSIS: JobAnalysis, ArtifactType.MATCH_REPORT: SkillMatch,
+        schemas = {ArtifactType.RESUME_ANALYSIS: ResumeAnalysis,
+                   ArtifactType.JOB_ANALYSIS: JobAnalysis, ArtifactType.MATCH_REPORT: SkillMatch,
             ArtifactType.TAILORED_RESUME: TailoredResume}
         schema = schemas.get(kind, TextArtifactContent)
         try: return schema.model_validate(content).model_dump(mode="json")

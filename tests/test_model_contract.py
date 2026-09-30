@@ -176,9 +176,9 @@ def test_langgraph_node_wrapper_uses_identical_shared_message_contract(tmp_path)
     assert result == analysis()
 
 
-def test_prompt_v4_contains_grounding_structure_and_constraint_rules():
+def test_prompt_v6_contains_grounding_structure_and_constraint_rules():
     normalized_verify_prompt = " ".join(VERIFY_RESUME_PROMPT.split())
-    assert PROMPT_VERSION == "v4"
+    assert PROMPT_VERSION == "v6"
     assert "source_text must copy" in JOB_PROMPT
     assert "requirement_group_id" in JOB_PROMPT
     assert "user_confirmation" in JOB_PROMPT
@@ -188,6 +188,7 @@ def test_prompt_v4_contains_grounding_structure_and_constraint_rules():
     assert "schema_version=2" in WRITE_RESUME_PROMPT
     assert "no more than two concise sentences" in WRITE_RESUME_PROMPT
     assert "stronger claim" in WRITE_RESUME_PROMPT
+    assert "copy entry_id from" in WRITE_RESUME_PROMPT
     assert "A claim with no evidence IDs is unsupported" in normalized_verify_prompt
     assert "unknown evidence ID is unsupported" in normalized_verify_prompt
     assert "untrusted editing" in REVISE_RESUME_PROMPT

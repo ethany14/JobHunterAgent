@@ -87,9 +87,25 @@ def render_tailored_resume_pdf(value: TailoredResume | dict) -> bytes:
             HRFlowable(width="100%", thickness=0.55, color=colors.HexColor("#555555"), spaceBefore=0, spaceAfter=3),
         ]
 
-    def entry_block(entry: ResumeEntry) -> list:
-        heading = " | ".join(_safe(item) for item in (entry.heading, entry.subheading) if item)
-        dates = " - ".join(_safe(item) for item in (entry.start_date, entry.end_date) if item)
+    def entry_block(entry: ResumeEntry, section_type: str) -> list:
+        heading_value = entry.heading
+        if heading_value and heading_value.strip().casefold() in {
+            section_type.casefold(),
+            "experience" if section_type == "experience" else "",
+            "projects" if section_type == "projects" else "",
+            "education" if section_type == "education" else "",
+        }:
+            heading_value = None
+        heading_parts = (
+            (entry.subheading, heading_value)
+            if section_type in {"experience", "education"}
+            else (heading_value, entry.subheading)
+        )
+        heading = " | ".join(_safe(item) for item in heading_parts if item)
+        date_values = [item for item in (entry.start_date, entry.end_date) if item]
+        if len(date_values) == 2 and date_values[0].strip().casefold() == date_values[1].strip().casefold():
+            date_values = date_values[:1]
+        dates = " - ".join(_safe(item) for item in date_values)
         rows = []
         if heading or dates:
             rows.append(Table(
@@ -105,7 +121,7 @@ def render_tailored_resume_pdf(value: TailoredResume | dict) -> bytes:
             ))
         if entry.location:
             rows.append(Paragraph(_safe(entry.location), meta_style))
-        if entry.bullets:
+        if entry.bullets and section_type != "education":
             rows.append(ListFlowable(
                 [ListItem(Paragraph(_safe(claim.text), bullet_style), leftIndent=9) for claim in entry.bullets],
                 bulletType="bullet", bulletFontName="Helvetica", bulletFontSize=5,
@@ -127,7 +143,7 @@ def render_tailored_resume_pdf(value: TailoredResume | dict) -> bytes:
                 story.append(Paragraph(" &nbsp; | &nbsp; ".join(skills), body))
         else:
             for entry in section.entries:
-                block = entry_block(entry)
+                block = entry_block(entry, section.section_type)
                 if block:
                     story.append(KeepTogether(block))
                     story.append(Spacer(1, 1.5))

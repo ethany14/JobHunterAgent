@@ -16,8 +16,6 @@ from agent_runtime.resumes.repository import (
     ResumeDocumentRepository,
     ResumeNotFoundError,
 )
-from api.routes.runs import get_run_service
-from api.schemas.runs import CreateRunRequest
 from api.resume_schemas import (
     PublicResume,
     AnalyzeSavedApplicationRequest,
@@ -207,7 +205,7 @@ async def analyze_saved_application(
     application_id: str,
     payload: AnalyzeSavedApplicationRequest,
     runtime: SessionRuntime = Depends(get_session_runtime),
-    run_service=Depends(get_run_service),
+    fit_service: FitAnalysisService = Depends(get_fit_analysis_service),
 ) -> AnalyzeApplicationResponse:
     if runtime.workspace is None:
         raise RuntimeError("The Job Workspace runtime is not initialized.")
@@ -218,7 +216,7 @@ async def analyze_saved_application(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     application = runtime.workspace.get_application(application_id)
     current, run_id, run_status, artifacts = await WorkspaceAnalysisService(
-        runtime.workspace, run_service
+        runtime.workspace, fit_service, runtime.evidence
     ).analyze(
         application_id,
         snapshot_id=application.current_snapshot_id,

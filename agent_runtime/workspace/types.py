@@ -29,6 +29,7 @@ class ApplicationStatus(StrEnum):
 
 
 class ArtifactType(StrEnum):
+    RESUME_ANALYSIS = "resume_analysis"
     JOB_ANALYSIS = "job_analysis"
     MATCH_REPORT = "match_report"
     TAILORED_RESUME = "tailored_resume"

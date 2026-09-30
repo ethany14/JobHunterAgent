@@ -626,6 +626,37 @@ def test_generated_and_revised_resumes_cannot_use_legacy_sources(step):
         JobAgentStepHandler(QueueAnalyzer([legacy])).execute(step, state)
 
 
+def test_revision_drops_summary_rejected_by_verifier():
+    current = tailored("Unsupported composite summary")
+    verification = VerificationResult(
+        passed=False,
+        unsupported_claims=[UnsupportedClaim(
+            claim="Unsupported composite summary",
+            reason="The cited evidence does not support the complete claim.",
+        )],
+        revision_feedback=["Remove or rewrite the unsupported summary."],
+    )
+    state = AgentState(
+        run_id="drop-unsupported-summary",
+        resume_text=FACT,
+        job_description="Requires Python",
+        step=Step.REVISE_RESUME,
+        status=AgentStatus.REVISING,
+        resume_analysis=normalize_resume_analysis(resume_analysis()),
+        job_analysis=job_analysis(),
+        skill_match=skill_match(),
+        tailored_resume=current,
+        verification=verification,
+    )
+
+    result = JobAgentStepHandler(
+        QueueAnalyzer([tailored("Rewritten composite summary")])
+    ).execute(Step.REVISE_RESUME, state).updates["tailored_resume"]
+
+    assert result.claims_for("summary") == []
+    assert result.claims_for("experience")
+
+
 def test_skill_matching_normalizes_evidence_and_restores_exact_resume_text():
     assessment = SkillAssessment(
         matches=[

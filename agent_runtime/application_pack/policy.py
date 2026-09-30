@@ -58,11 +58,25 @@ class EvidenceSelectionPolicy:
                 continue
             associated = sorted({link.requirement_id for link in linked.get(item.evidence_id, [])
                                  if link.requirement_id} | {req.requirement_id for req in required + preferred})
-            ranked.append((rank, -len(required), item.evidence_id, item, reason, associated))
+            metadata_score = sum(bool(value) for value in (
+                item.current.employer_or_project,
+                item.current.role,
+                item.current.start_date,
+                item.current.end_date,
+            )) + (1 if item.current.category.value != "experience" else 0)
+            source_priority = (
+                0 if item.current.source_type == EvidenceSourceType.RESUME else 1
+            )
+            ranked.append((rank, -len(required), -metadata_score, source_priority,
+                           item.evidence_id, item, reason, associated))
         ranked.sort()
         selected, remaining = [], token_budget
-        for _, _, _, item, reason, associated in ranked:
+        selected_claims: set[str] = set()
+        for _, _, _, _, _, item, reason, associated in ranked:
             version = item.current
+            claim_key = " ".join(version.claim_text.casefold().split())
+            if claim_key in selected_claims:
+                continue
             cost = estimate_tokens({"claim": version.claim_text, "quote": version.exact_quote,
                                     "id": version.evidence_version_id})
             if cost > remaining:
@@ -80,15 +94,18 @@ class EvidenceSelectionPolicy:
                 end_date=version.end_date,
             ))
             remaining -= cost
+            selected_claims.add(claim_key)
         return selected
 
 
 def evidence_set_hash(items: list[EvidenceSnapshotItem], *, job_snapshot_id: str,
                       preferences: list[dict], prompt_version: str,
-                      model_configuration: dict | None = None) -> str:
+                      model_configuration: dict | None = None,
+                      resume_header_lines: list[str] | None = None) -> str:
     payload = {"job_snapshot_id": job_snapshot_id, "prompt_version": prompt_version,
                "evidence": [item.model_dump(mode="json") for item in items],
                "preferences": preferences,
+               "resume_header_lines": resume_header_lines or [],
                "model_configuration": model_configuration or {}}
     return hashlib.sha256(canonical_json(payload).encode()).hexdigest()
 
